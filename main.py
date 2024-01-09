@@ -64,6 +64,11 @@ def get_dat(fileNm):
     gsDatR = conn.read(f"cookiedat43202/{fileNm}.csv", input_format="csv", ttl=600)
     return gsDatR
 
+def add_dat(fileNm,dat):
+    with conn.open(fileNm, "wt") as f:
+        f.write(dat)
+    return
+
 
 def calc_tots():
     total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
@@ -75,8 +80,9 @@ conn = st.connection('gcs', type=FilesConnection)
 
 ebudde = get_dat('ebudde')
 
-# st.table(ebudde)
-gs_nms = ebudde['Girl']
+st.table(ebudde)
+ebudde.columns
+# gs_nms = ebudde['Girl']
 
 ############ HOME PAGE APP ###############
 
@@ -96,7 +102,7 @@ with orders:
 
         with appc1:
             # At this point the URL query string is empty / unchanged, even with data in the text field.
-            gsNm = stp.selectbox("Girl Scount Name:",gs_nms,placeholder='Select your scout',url_key='gsNm',)
+            # gsNm = stp.selectbox("Girl Scount Name:",gs_nms,placeholder='Select your scout',url_key='gsNm')
             ordType = stp.selectbox("Order Type:",options=['Digital Cookie','Paper Order'],url_key='ordType')
             guardianNm = stp.text_input("Guardian accountable for order",key='guardianNm',max_chars=50,url_key='guardNm')
 
@@ -125,7 +131,7 @@ with orders:
         comments = st.text_area("Comments",key='comments')
         # Every form must have a submit button.
         order_data = {
-            "ScoutName":[gsNm],
+            # "ScoutName":[gsNm],
             "OrderType": [ordType], 
             "guardianNm":[guardianNm],
             "PickupNm":[PickupNm],
@@ -157,13 +163,13 @@ with orders:
             max_ordNum = orders.iloc[0,0]
             new_order["OrderNumber"]=max_ordNum+1
             st.table(new_order)
-            appendedOrders = orders + new_order
 
-            df = conn.update(
-                worksheet='orders',
-                data=appendedOrders 
-            )
-            
+            appendedOrders = pd.concat([orders,new_order])
+            st.write(appendedOrders.shape)
+
+            add_dat('orders',appendedOrders)
+            st.cache_data.clear()
+            st.experimental_rerun()  
             st.write(f"Your order has been submitted") #{form_data}")
 
 with dates:
