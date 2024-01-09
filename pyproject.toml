@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "Girl_Scout_Cookie_Tracker"
+version = "0.1.0"
+description = "Track those cookies"
+authors = ["Jennifer Klemisch"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^1.5"
+
+pyyaml = "^6.0.1"
+
+streamlit = "^1.28.2"
+streamlit-searchbox = "^0.1.6"
+st-gsheets-connection = "^0.0.3"
+streamlit-permalink = "^0.3.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
