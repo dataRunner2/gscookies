@@ -5,9 +5,11 @@ from typing import List, Tuple
 import pandas as pd
 import sys
 from pathlib import Path
-from PIL import Image
+# from PIL import Image
 import os
 # from streamlit_gsheets import GSheetsConnection
+
+from st_files_connection import FilesConnection
 import streamlit_permalink as stp
 
 import streamlit.components.v1 as components
@@ -21,7 +23,6 @@ print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 ########## Streamlit Configuration ##########
 # Some Basic Configuration for StreamLit - Must be the first streamlit command
 
-
 st.set_page_config(
     page_title="Troop 43202 Cookies",
     page_icon="path_of_your_favicon",
@@ -29,19 +30,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# st.sidebar.success("Select a demo above.")
-
-# sgLgo = cv.imread('seagen_logo.png')
-# # sgL = Image.open('streamlit_demo\seagen_logo.png')
-# width, height = sgL.size
-# #sgLs = sgL.resize((width/2),(height/2))
-# sgL_thumb = sgL
-# # sgL_thumb.thumbnail((100,100))
-
-
 # SA frorm streamlit cloud to sa account
 # app-sa@gs-cookies-410702.iam.gserviceaccount.com
-
 
 #---------------------------------------
 # Functions
@@ -61,46 +51,55 @@ local_css('style.css')
 #         dataframe = pd.read_csv(file_uploaded)
 #     return dataframe
 
-def get_my_data(sheetNm, gsNm):
-    gsDat = conn.read(
-        worksheet="orders",
-        ttl="10m"
-        )
+def get_my_data(fileNm, gsNm=None):
+    gsDat = pd.read_csv(fileNm)
+    gsDat.dropna(axis=1,how='all',inplace=True)
+    gsDat.dropna(axis=0,how='all',inplace=True)
+
+    if gsNm:
+        gsDat = gsDat[gsDat['gsName'] == gsNm]
     return gsDat
 
+def get_dat(fileNm):
+    gsDatR = conn.read(f"cookiedat43202/{fileNm}.csv", input_format="csv", ttl=600)
+    return gsDatR
 
-# ds_people = get_ds_people()
+
+def calc_tots():
+    total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
+    total_money = total_boxes*6
+    return total_boxes, total_money
+############ DATA CONNECTION ##############
+# conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection('gcs', type=FilesConnection)
+
+ebudde = get_dat('ebudde')
+
+# st.table(ebudde)
+gs_nms = ebudde['Girl']
 
 ############ HOME PAGE APP ###############
-# Main Streamlit App content
-# conn = st.connection("gsheets", type=GSheetsConnection)
-# df = conn.read()
-
 
 st.title("GS Troop 43202 Cookie Tracker")
 st.write('')
 
 orders,myorders,dates,rewards = st.tabs(["Submit Order","My Orders","Important Dates","My Rewards"])
 
-# st.write(st.session_state)
-# if 'appName' not in st.session_state:
-#     st.session_state.appDesc = ''
-#     st.session_state.orgs = ''
-
-# ds_appsD, ds_apps, ds_app_names = get_apps()
-
 with orders:
     st.subheader('Submit a Cookie Order')
     st.warning('Submit seperate orders for paper orders vs. Digital Cookie')
     # st.subheader("Add a New Widget")
-    with stp.form('some-form', clear_on_submit=True):        
+    # st.cache_data.clear()
+    # st.experimental_rerun()
+    with stp.form('submit orders', clear_on_submit=True):
         appc1, appc2, appc3 = st.columns([3,.25,3])
 
         with appc1:
             # At this point the URL query string is empty / unchanged, even with data in the text field.
-            gsNm = stp.selectbox("Girl Scount Name:",options=['Name 1','GS Name 2'],url_key='gsNm') # ,scoutsnms
+            gsNm = stp.selectbox("Girl Scount Name:",gs_nms,placeholder='Select your scout',url_key='gsNm',)
             ordType = stp.selectbox("Order Type:",options=['Digital Cookie','Paper Order'],url_key='ordType')
             guardianNm = stp.text_input("Guardian accountable for order",key='guardianNm',max_chars=50,url_key='guardNm')
+
 
         with appc3:
             PickupNm = stp.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
@@ -110,39 +109,61 @@ with orders:
         st.write('----')
         ck1,ck2,ck3 = st.columns([2,2,2])
         with ck1:
-            adv=st.number_input(label='Adventurefuls',step=1,min_value=0)
-            lu=st.number_input(label='Lemon-Ups',step=1,min_value=0)
-            tree=st.number_input(label='Trefoils',step=1,min_value=0)
+            advf=st.number_input(label='Adventurefuls',step=1,min_value=0)
+            lmup=st.number_input(label='Lemon-Ups',step=1,min_value=0)
+            tre=st.number_input(label='Trefoils',step=1,min_value=0)
         with ck2:
-            do=st.number_input(label='Do-Si-Dos',step=1,min_value=0)
+            dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=0)
             sam=st.number_input(label='Samoas',step=1,min_value=0)
             tags=st.number_input(label='Tagalongs',step=1,min_value=0)
         with ck3:
-            tm=st.number_input(label='Thin Mints',step=1,min_value=0)
-            sm=st.number_input(label="S'Mores",step=1,min_value=0)
-            tt=st.number_input(label='Toffee-Tastic',step=1,min_value=0)
+            tmint=st.number_input(label='Thin Mints',step=1,min_value=0)
+            smr=st.number_input(label="S'Mores",step=1,min_value=0)
+            toff=st.number_input(label='Toffee-Tastic',step=1,min_value=0)
+            opc=st.number_input(label='Operation Cookie Drop',step=1,min_value=0)
 
-        total_boxes = adv+lu+tree+do+sam+tags+tm+sm+tt
-        total_money = total_boxes*6
-        st.text(f'Total boxes in order = {total_boxes}  >  Total amount owed for order = ${total_money} \n your pickup slot is: {pickupT}')
-        comments = st.text_area("Comments",key='comments',height=.5)
+        comments = st.text_area("Comments",key='comments')
         # Every form must have a submit button.
-        form_data = {
-            "gsNm":gsNm,
-            "ordType": ordType, 
-            # # "appLogo": img_array,
-            # "orgs": orgs,
-            # "appUrl": appUrl,
-            # "devUrl": devUrl,
-            # "repoUrl": repoUrl,
-            # "userGuideUrl": userGuideUrl,
-            # "dsPOC": dsPOC,
-            # "source_data": source_data
+        order_data = {
+            "ScoutName":[gsNm],
+            "OrderType": [ordType], 
+            "guardianNm":[guardianNm],
+            "PickupNm":[PickupNm],
+            "PickupPh":[PickupPh],
+            "PickupT":[pickupT],
+            "Adf":[advf],
+            "LmUp":[lmup],
+            "Tre":[tre],
+            "DSD":[dsd],
+            "Sam":[sam],
+            "Tags":[tags],
+            "Tmint":[tmint],
+            "Smr":[smr],
+            "Toff":[toff],
+            "OpC":[opc]
             }
+        new_order = pd.DataFrame.from_dict(order_data)
+
         # submitted = st.form_submit_button()
         if stp.form_submit_button("Submit Order to Cookie Crew"):
-            # URL is updated only when users hit the submit button
-            # submit_widget_data(form_data)
+            total_boxes, total_money=calc_tots()
+            st.text(f'Total boxes in order = {total_boxes}  >  Total amount owed for order = ${total_money} \n your pickup slot is: {pickupT}')
+            new_order["total_boxes"]=total_boxes
+            new_order["total_money"]=total_money
+            # get latest push of orders:
+            # orders = get_my_data('orders')
+            orders = get_dat('orders')
+            orders.sort_values(by='OrderNumber',ascending=False,inplace=True,na_position='last')
+            max_ordNum = orders.iloc[0,0]
+            new_order["OrderNumber"]=max_ordNum+1
+            st.table(new_order)
+            appendedOrders = orders + new_order
+
+            df = conn.update(
+                worksheet='orders',
+                data=appendedOrders 
+            )
+            
             st.write(f"Your order has been submitted") #{form_data}")
 
 with dates:
@@ -164,5 +185,3 @@ with dates:
 
 
 # with myorders:
-
-
