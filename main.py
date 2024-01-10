@@ -41,16 +41,6 @@ def local_css(file_name):
 
 local_css('style.css')
 
-# def update_order(file_uploaded):
-#     if file_uploaded is not None:
-#         # To read file as bytes:
-#         bytes_data = file_uploaded.getvalue()
-#         st.write(bytes_data)
-
-#          # Can be used wherever a "file-like" object is accepted:
-#         dataframe = pd.read_csv(file_uploaded)
-#     return dataframe
-
 def get_my_data(fileNm, gsNm=None):
     gsDat = pd.read_csv(fileNm)
     gsDat.dropna(axis=1,how='all',inplace=True)
@@ -62,11 +52,13 @@ def get_my_data(fileNm, gsNm=None):
 
 def get_dat(fileNm):
     gsDatR = conn.read(f"cookiedat43202/{fileNm}.csv", input_format="csv", ttl=600)
+    # pass
     return gsDatR
 
 def add_dat(fileNm,dat):
     with conn.open(fileNm, "wt") as f:
         f.write(dat)
+    # pass
     return
 
 
@@ -78,25 +70,29 @@ def calc_tots():
 # conn = st.connection("gsheets", type=GSheetsConnection)
 conn = st.connection('gcs', type=FilesConnection)
 
-ebudde = get_dat('ebudde')
+# ebudde = get_dat('ebudde')
 
-st.table(ebudde)
-ebudde.columns
+# pickupSlots = get_dat('pickupSlots')
+
+# st.table(ebudde)
+# ebudde.columns
 # gs_nms = ebudde['Girl']
 
-############ HOME PAGE APP ###############
+## square app tracking - 
+
+# Megan 
+# Madeline Knudsvig - Troop 44044 
+
+############ ORDERS ###############
 
 st.title("GS Troop 43202 Cookie Tracker")
 st.write('')
 
-orders,myorders,dates,rewards = st.tabs(["Submit Order","My Orders","Important Dates","My Rewards"])
+orders,myorders,dates,rewards = st.tabs(["Submit Order","My Orders","Important Dates & Reminders","My Rewards"])
 
 with orders:
     st.subheader('Submit a Cookie Order')
     st.warning('Submit seperate orders for paper orders vs. Digital Cookie')
-    # st.subheader("Add a New Widget")
-    # st.cache_data.clear()
-    # st.experimental_rerun()
     with stp.form('submit orders', clear_on_submit=True):
         appc1, appc2, appc3 = st.columns([3,.25,3])
 
@@ -113,19 +109,24 @@ with orders:
             pickupT = stp.selectbox('Pickup Slot',['Tuesday 5-7','Wednesday 6-9'])
 
         st.write('----')
-        ck1,ck2,ck3 = st.columns([2,2,2])
+        ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
         with ck1:
             advf=st.number_input(label='Adventurefuls',step=1,min_value=0)
-            lmup=st.number_input(label='Lemon-Ups',step=1,min_value=0)
-            tre=st.number_input(label='Trefoils',step=1,min_value=0)
-        with ck2:
-            dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=0)
-            sam=st.number_input(label='Samoas',step=1,min_value=0)
             tags=st.number_input(label='Tagalongs',step=1,min_value=0)
-        with ck3:
+            
+        with ck2:
+            lmup=st.number_input(label='Lemon-Ups',step=1,min_value=0)
             tmint=st.number_input(label='Thin Mints',step=1,min_value=0)
+        with ck3:
+            tre=st.number_input(label='Trefoils',step=1,min_value=0)
             smr=st.number_input(label="S'Mores",step=1,min_value=0)
+            
+        with ck4:
+            dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=0)
             toff=st.number_input(label='Toffee-Tastic',step=1,min_value=0)
+            
+        with ck5:
+            sam=st.number_input(label='Samoas',step=1,min_value=0)
             opc=st.number_input(label='Operation Cookie Drop',step=1,min_value=0)
 
         comments = st.text_area("Comments",key='comments')
@@ -159,6 +160,7 @@ with orders:
             # get latest push of orders:
             # orders = get_my_data('orders')
             orders = get_dat('orders')
+            st.write(orders)
             orders.sort_values(by='OrderNumber',ascending=False,inplace=True,na_position='last')
             max_ordNum = orders.iloc[0,0]
             new_order["OrderNumber"]=max_ordNum+1
@@ -168,8 +170,8 @@ with orders:
             st.write(appendedOrders.shape)
 
             add_dat('orders',appendedOrders)
-            st.cache_data.clear()
-            st.experimental_rerun()  
+            # st.cache_data.clear()
+            # st.experimental_rerun()  
             st.write(f"Your order has been submitted") #{form_data}")
 
 with dates:
