@@ -29,10 +29,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# SA frorm streamlit cloud to sa account
-# app-sa@gs-cookies-410702.iam.gserviceaccount.com
-
 #---------------------------------------
 # Functions
 def local_css(file_name):
