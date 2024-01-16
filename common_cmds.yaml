@@ -1,0 +1,130 @@
+# Get all non-system incides
+GET /_cat/indices/*,-.*?v=true&s=index&h=health,index,docs.count
+
+PUT _index_template/m365_template
+{
+  "index_patterns": ["m365*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "index.default_pipeline": "enhance_m365"
+    },
+    "mappings": {
+      "_source": {
+        "enabled": true
+      },
+      "runtime": {
+		    "day_joined": {
+		      "type": "long",
+		      "script": {
+		        "source": "emit(doc['joinedSeagen'].value.getYear())",
+		        "lang": "painless"
+		      }
+		    }
+		  },
+      "properties": {
+        "projects": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "ignore_above": 256,
+              "type": "keyword"
+            }
+          }
+        },
+        "org_tree": {
+          "store": true,
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "ignore_above": 256,
+              "type": "keyword"
+            }
+          }
+        },
+        "givenName": {
+
+  
+
+import eland as ed
+if environment in ('None', None, 'local'):
+    p = Path.cwd()
+    if p.parts[-1] != 'src':
+        os.chdir('src')
+    print(f"Now... the current directory: {Path.cwd()}")
+from utils import conn_utils as cu
+utils is folder; conn_utils is file
+____
+class conn_es:
+    def conn_es(env:str='', esenv: Literal['prd','dev']='dev', method: Literal['basic', 'key']='basic'):
+        # print(f'current deployment env: {env}\nconnect to elastic environment: {esenv}')
+        elasticUser = os.environ.get('elasticUser')
+        print(f'secrets via os.environ {elasticUser}')
+
+        # Set up Elastic Configuration: dev or prod; basic or key
+        if esenv == 'prd':
+            http_addr = "https://34.127.33.33:9200"
+            ca_cert_file = 'tls-prd.crt'
+            creds_id = 'elastic8prdkey'
+            print(f'Connecting to Prd Elastic Env {http_addr}')
+def load_es(es, index_nm, data_to_load=pd.DataFrame, pipeline=''):
+        print(f"\nWriting {len(data_to_load.index)} documents to ES {es.info().get('cluster_name')} index {index_nm} with the {pipeline} pipeline")
+
+        for i in alive_it(data_to_load.index):
+            es.index(
+                index = index_nm,
+                document = data_to_load.loc[i].to_json()
+            )
+            time.sleep(.0001)
+            # Check the number of documents in your index
+        print(es.count(index = index_nm))
+        sq1 = es.search(index = index_nm, query={"match_all": {}})
+        print(f"There are {sq1['hits']['total']['value']} documents in the index {index_nm}\n")
+
+    def safe_date(date_value):
+        return (
+            pd.to_datetime(date_value).replace(tzinfo=None) if not pd.isna(date_value)
+                else None  # (1970,1,1,0,0)
+        )
+    def make_es_index(es, index_nm: str, mappings={}, settings={}) -> None:
+        """
+        Create an ES index.
+        :param index_name: Name of the index.
+        :param mapping: Mapping of the index
+        """
+        try:         
+            es.indices.create(index=index_nm, mappings=mappings, settings=settings, ignore=400)
+        except:
+            print(f"This index already exists with these fields: \n{es.indices.get_mapping( index_nm ).get(index_nm).get('mappings').get('properties').keys()}")
+____
+
+# Elastic Connection
+esenv = 'dev'
+method = 'basic'
+es = cu.conn_es.conn_es(env = environment, esenv = esenv, method=method)
+resp = es.info()
+
+# Add parent path to system path so streamlit can find css & config toml
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
+
+
+def get_apps():
+    ds_apps = ed.DataFrame(es, es_index_pattern="applications")
+    ds_apps = ed.eland_to_pandas(ds_apps)
+    ds_apps.reset_index(inplace=True, names='docId')
+    ds_apps.set_index(keys=['appName'],inplace=True)
+    ds_appsD = loads(ds_apps.to_json(orient='index'))
+    ds_app_names = list(ds_appsD.keys())
+
+  ds_team_query = {
+        "match": {"department4": "Data Sciences - 5760"}
+    }
+    ds_people_results = es.search(index="m365_auto", query=ds_team_query, size=30,sort="_score")['hits']['hits']
+    ds_people, ds_scores = zip(*[(n["_source"]["displayName"], n["_score"]) for n in ds_people_results])
+    ds_people = list(ds_people)
+    ds_scores = list(ds_scores)
+    # st.write(type(ds_people),list(ds_people),ds_scores)
+    ds_peop_df = pd.DataFrame({'person': ds_people,'score':ds_scores})
+def get_app_dat(option, field):
+    return ds_appsD[option].get(field)
