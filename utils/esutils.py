@@ -1,8 +1,6 @@
 from elasticsearch import Elasticsearch
 import streamlit as st
-import os
 
-environment = os.getenv('ENV')
 
 class esu:
     def conn_es():
@@ -21,7 +19,7 @@ class esu:
         # print(resp["result"])
     
     def get_dat(es, indexnm, field=None):
-        sq1 = es.search(index = indexnm, query={"match_all": {}})
+        sq1 = es.search(index = indexnm, query={"match_all": {}},size=60)
         print(f"There are {sq1['hits']['total']['value']} documents in the index {indexnm}\n")
         if field:
             fresp = sq1['hits']['hits']
@@ -37,3 +35,12 @@ class esu:
         qresp=sq1['hits']['hits']
         # st.table(qresp)
         return qresp
+
+class uts:
+    def get_parent():
+        es = esu.conn_es()
+        scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
+        if len(scout_dat) > 0:
+            parent = scout_dat[0]['_source']['Parent']
+            st.session_state["guardianNm"] = parent
+        return

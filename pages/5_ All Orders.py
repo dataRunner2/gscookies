@@ -3,8 +3,12 @@ import streamlit as st
 import os
 import eland as ed
 from json import loads
+from utils.esutils import esu
+from utils.esutils import uts
 
-es = eu.esu.conn_es()
+es = esu.conn_es()
+
+
 orders = ed.DataFrame(es, es_index_pattern="orders2024")
 orders = ed.eland_to_pandas(orders)
 orders.reset_index(inplace=True, names='docId')
