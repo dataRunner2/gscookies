@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 # from PIL import Image
 import os
-from src.utils import esutils as eu
+from utils import esutils as eu
 import eland as ed
 
 if 'gsNm' not in st.session_state:

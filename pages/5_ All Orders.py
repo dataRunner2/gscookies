@@ -1,4 +1,4 @@
-from src.utils import esutils as eu
+from utils import esutils as eu
 import streamlit as st
 import os
 import eland as ed
@@ -12,7 +12,7 @@ orders.reset_index(inplace=True, names='docId')
 ordersDF = loads(orders.to_json(orient='index'))
 ds_app_names = list(ordersDF.keys())
 
-st.table(orders)
+st.dataframe(orders)
 
 # ds_team_query = {
 #     "match": {"department4": "Data Sciences - 5760"}

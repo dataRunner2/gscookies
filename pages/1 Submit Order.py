@@ -5,12 +5,13 @@ import pandas as pd
 import elasticsearch
 import sys
 from pathlib import Path
+from datetime import datetime
 
 import os
 import streamlit_permalink as stp
-from src.utils import esutils as eu
+from utils import esutils as eu
 import eland as ed
-from streamlit_gsheets import GSheetsConnection
+# from streamlit_gsheets import GSheetsConnection
 
 import streamlit.components.v1 as components
 
@@ -18,16 +19,14 @@ if 'gsNm' not in st.session_state:
     st.session_state['gsNm'] = 'none'
 if 'guardianNm' not in st.session_state:
     st.session_state['guardianNm'] = 'none'
+
 #---------------------------------------
 # Functions
-
+#---------------------------------------
 def calc_tots():
     total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
     total_money = total_boxes*6
     return total_boxes, total_money
-
-es = eu.esu.conn_es()
-gs_nms = eu.esu.get_dat(es,"scouts", "FullName")
 
 def get_parent():
     scout_dat = eu.esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state.gsNm)
@@ -35,7 +34,10 @@ def get_parent():
         parent = scout_dat[0]['_source']['Parent']
         st.session_state.guardianNm = parent
 
-# LOADS THE SCOUT NAME, ADDRESS, PARENT AND REWARD INFO
+#---------------------------------------
+# LOADS THE SCOUT NAME, ADDRESS, PARENT AND REWARD INFO to Elastic
+# Uncomment and re-do if changes to sheet
+#---------------------------------------
 # conn = st.connection("gsinfo", type=GSheetsConnection)
 # df = conn.read()
 # df.dropna(axis=1,how="all",inplace=True)
@@ -55,11 +57,15 @@ def get_parent():
 #     eu.esu.add_es_doc(es,indexnm='scouts', doc=row)
 
 
+#---------------------------------------
+# LOADS THE SCOUT NAME, ADDRESS, PARENT AND REWARD INFO to Elastic
+#---------------------------------------
+es = eu.esu.conn_es()
+gs_nms = eu.esu.get_dat(es,"scouts", "FullName")
 
 st.subheader('Submit a Cookie Order')
 st.warning('Submit seperate orders for paper orders vs. Digital Cookie')
 gsNm = st.selectbox("Girl Scount Name:",gs_nms,placeholder='Select your scout',key='gsNm',index=None, on_change=get_parent())
-st.write(st.session_state.gsNm)
 
 with stp.form('submit orders', clear_on_submit=True):
     appc1, appc2, appc3 = st.columns([3,.25,3])
@@ -68,7 +74,7 @@ with stp.form('submit orders', clear_on_submit=True):
         # At this point the URL query string is empty / unchanged, even with data in the text field.
        
         ordType = stp.selectbox("Order Type:",options=['Digital Cookie','Paper Order'],key='ordType')
-        guardianNm = stp.text_input("Guardian accountable for order",key='guardianNm', placeholder=st.session_state.guardianNm, max_chars=50)
+        guardianNm = stp.text_input("Guardian accountable for order",key='guardianNm', max_chars=50)
 
 
     with appc3:
@@ -123,6 +129,7 @@ with stp.form('submit orders', clear_on_submit=True):
             "OpC": opc,
             "order_qty_boxes": total_boxes,
             "order_amount": order_amount,
+            "submit_dt": datetime.now(),
             "status": "Pending"
             }
         st.text(f'Total boxes in order = {total_boxes}  >  Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}')        # get latest push of orders:

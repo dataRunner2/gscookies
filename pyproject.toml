@@ -5,6 +5,7 @@ description = ""
 authors = ["Kennifer Klemisch"]
 readme = "README.md"
 
+
 [tool.poetry.dependencies]
 python = "^3.11"
 streamlit = "^1.30.0"
@@ -14,6 +15,7 @@ streamlit-calendar = "^1.1.0"
 eland = "^8.11.1"
 streamlit-permalink = "^0.3.0"
 st-gsheets-connection = {git = "https://github.com/streamlit/gsheets-connection"}
+mplcal = {git = "https://github.com/meta4/mplcal"}
 
 
 
