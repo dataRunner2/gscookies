@@ -36,11 +36,6 @@ class esu:
         # st.table(qresp)
         return qresp
 
-class uts:
-    def get_parent():
-        es = esu.conn_es()
-        scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
-        if len(scout_dat) > 0:
-            parent = scout_dat[0]['_source']['Parent']
-            st.session_state["guardianNm"] = parent
-        return
+# class uts:
+#     pass
+#     return

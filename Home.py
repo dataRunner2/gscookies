@@ -13,7 +13,6 @@ import os
 import eland as ed
 from datetime import datetime
 from utils.esutils import esu
-from utils.esutils import uts
 
 
 # from streamlit_gsheets import GSheetsConnection
@@ -63,6 +62,7 @@ print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 # Streamlit Configuration
 #---------------------------------------
 # Some Basic Configuration for StreamLit - Must be the first streamlit command
+gs_nms = esu.get_dat(es,"scouts", "FullName")
 
 st.set_page_config(
     page_title="Troop 43202 Cookies",
@@ -71,7 +71,6 @@ st.set_page_config(
     # initial_sidebar_state="collapsed"
 )
 
-
 def local_css(file_name):
     with open(f'{file_name}') as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -79,15 +78,18 @@ def local_css(file_name):
 local_css('style.css')
 
 # Initialization
+if 'index' not in st.session_state:
+    init_index = 47
+    st.session_state['index'] = init_index
+    nmIndex = init_index
 if 'gsNm' not in st.session_state:
-    st.session_state['gsNm'] = 'no scout selected'
+    st.session_state['gsNm'] = gs_nms[init_index]
 if 'guardianNm' not in st.session_state:
     st.session_state['guardianNm'] = 'scout parent'
-if 'adminpassword' not in st.session_state:
-    st.session_state['adminpassword'] = '-'
+# if 'adminpassword' not in st.session_state:
+#     st.session_state['adminpassword'] = '-'
 if 'adminpassword_correct' not in st.session_state:
     st.session_state['adminpassword_correct'] = False
-
 
 #---------------------------------------
 # Password Configuration
@@ -106,9 +108,9 @@ def check_password():
         if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
             st.session_state["password_correct"] = True
             del st.session_state["password"]  # Don't store the password.
-        elif hmac.compare_digest(st.session_state["adminpassword"], st.secrets["adminpassword"]):
+        elif hmac.compare_digest(st.session_state["password"], st.secrets["adminpassword"]):
             st.session_state["adminpassword_correct"] = True
-            del st.session_state["adminpassword"]  # Don't store the password.
+            del st.session_state["password"]  # Don't store the password.
         else:
             st.session_state["password_correct"] = False
             st.session_state["adminpassword_correct"] = False
@@ -124,6 +126,7 @@ def check_password():
 
     if "password_correct" in st.session_state:
         st.error("😕 Password incorrect")
+        st.session_state.get("password_correct",False)
     return False
 
 if not check_password():
@@ -133,30 +136,34 @@ if not check_password():
 #---------------------------------------
 # Functions
 #---------------------------------------
+def clean_df(df):
+    df.sort_values(['ScoutName','OrderType','submit_dt','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','PickupNm','PickupPh'],inplace=True)
+    df.rename(columns={'Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+    return df
+
 def calc_tots():
     total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
     total_money = total_boxes*6
     return total_boxes, total_money
 
-def get_qry_dat(es,indexnm="orders",field=None,value=None):
-    if not value:
-            value = st.session_state.gsNm
-    sq1 = es.search(index = indexnm, query={"match": {field: value}})
-    qresp=sq1['hits']['hits']
-    st.table(qresp)
-    return qresp
 
+def update_session(gs_nms):
+    # Update index to be the index just selected
+    # nmIndex = gs_nms.index(st.session_state["gsNm"])
+    st.session_state["index"] = gs_nms.index(st.session_state["gsNm"])
+    # nmIndex = st.session_state['index']
+    # Update the scout data (i.e. parent) to be the name just selected
+    scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
+    if len(scout_dat) > 0:
+        parent = scout_dat[0]['_source']['Parent']
+        st.session_state["guardianNm"] = parent
 
 #---------------------------------------
 # Select GS Name
 #---------------------------------------
 
-gs_nms = esu.get_dat(es,"scouts", "FullName")
-def update_parent():
-    uts.get_parent()
 
 
-# home, order, myorders = st.tabs(["Home","Order Cookies","My Orders"])
 def main_page():
     # st.markdown("# Main page 🎈")
     # st.sidebar.markdown("# Home 🎈")
@@ -198,19 +205,19 @@ def main_page():
 def order():
     # st.markdown(f"Submit a Cookie Order for {gsNm}❄️")
     # st.sidebar.markdown("# Order Cookies ❄️")
+    # st.session_state['index'] = index
 
     st.subheader(f'Submit a Cookie Order for {st.session_state["gsNm"]}')
     st.warning('Submit seperate orders for paper orders vs. Digital Cookie\n')
-    gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout',key='gsNm', on_change=update_parent())
+    gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
     with st.form('submit orders', clear_on_submit=True):
         appc1, appc2, appc3 = st.columns([3,.25,3])
 
         with appc1:
             # At this point the URL query string is empty / unchanged, even with data in the text field.
-
             ordType = st.selectbox("Order Type:",options=['Digital Cookie','Paper Order'],key='ordType')
-            guardianNm = st.text_input("Guardian accountable for order",key='guardianNm', max_chars=50)
+            guardianNm = st.text_input("Guardian accountable for order",placeholder=st.session_state["guardianNm"],key='guardianNm', max_chars=50)
 
 
         with appc3:
@@ -220,6 +227,7 @@ def order():
 
         st.write('----')
         ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
+
         with ck1:
             advf=st.number_input(label='Adventurefuls',step=1,min_value=0)
             tags=st.number_input(label='Tagalongs',step=1,min_value=0)
@@ -275,6 +283,7 @@ def order():
             # vent['seq'] = Time.now.strftime('%Y%m%d%H%M%S%L').to_i
             # orders.sort_values(by='OrderNumber',ascending=False,inplace=True,na_position='last')
             new_order = pd.DataFrame.from_dict(order_data, orient='index')
+            new_order = clean_df(new_order)
             st.table(new_order)
 
             # appendedOrders = pd.concat([orders,new_order])
@@ -286,10 +295,10 @@ def order():
             st.balloons()
 
 def myorders():
-    # st.markdown("# Page 3 🎉")
-    # st.sidebar.markdown("# My Orders🎉")
+    # st.session_state['index'] = nmIndex
+    
+    gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
-    gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout',key='gsNm', on_change=update_parent())
     girl_orders = ed.DataFrame(es, es_index_pattern="orders2024")
     girl_orders = ed.eland_to_pandas(girl_orders)
     girl_orders.reset_index(inplace=True, names='docId')
@@ -297,7 +306,8 @@ def myorders():
     # orders.set_index(keys=['appName'],inplace=True)
 
     # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
-    st.table(girl_orders)
+    girl_orders = clean_df(girl_orders)
+    st.dataframe(girl_orders, use_container_width=True)
 
 def allorders():
     orders = ed.DataFrame(es, es_index_pattern="orders2024")
@@ -327,3 +337,5 @@ elif st.session_state["password_correct"]:
 st.sidebar.markdown("Select Page")
 selected_page = st.sidebar.selectbox("----", page_names_to_funcs.keys())
 page_names_to_funcs[selected_page]()
+
+st.sidebar.markdown(st.session_state)
