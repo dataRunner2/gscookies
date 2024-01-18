@@ -120,7 +120,7 @@ def check_password():
         return True
 
     # Show input for password.
-    st.text_input("Who is our leader", type="password", on_change=password_entered, key="password")
+    st.text_input("Who is our leader (capitilized, 5 letters)", type="password", on_change=password_entered, key="password")
 
     if "password_correct" in st.session_state:
         st.error("😕 Password incorrect")
