@@ -13,6 +13,7 @@ import os
 import eland as ed
 from datetime import datetime
 from utils.esutils import esu
+import base64
 
 # Add parent path to system path so streamlit can find css & config toml
 # sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -55,18 +56,8 @@ gs_nms = esu.get_dat(es,"scouts", "FullName")
 # #     rowdat = json.dupmp
 # #     esu.add_es_doc(es,indexnm='scouts', doc=row)
 
-#---------------------------------------
-# Streamlit Configuration
-#---------------------------------------
-def main():
-    # container = st.container()
-    # Some Basic Configuration for StreamLit - Must be the first streamlit command
 
 
-    def local_css(file_name):
-        with open(f'{file_name}') as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-    local_css('style.css')
 
     #---------------------------------------
     # Password Configuration
@@ -76,7 +67,15 @@ def main():
 
     # Megan
     # Madeline Knudsvig - Troop 44044
-
+#---------------------------------------
+# Main App Configuration
+#---------------------------------------
+def main():
+    # container = st.container()
+    # Some Basic Configuration for StreamLit - Must be the first streamlit command
+    #---------------------------------------
+    # Sub Functions
+    #---------------------------------------
     def check_password():
         """Returns `True` if the user had the correct password."""
 
@@ -106,14 +105,6 @@ def main():
             st.session_state.get("password_correct",False)
         return False
 
-    if not check_password():
-        st.stop()  # Do not continue if check_password is not True.
-
-
-    #---------------------------------------
-    # Functions
-    #---------------------------------------
-
     def clean_df(df):
         # st.write(df.columns)
         df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','PickupNm','PickupPh']]
@@ -124,7 +115,6 @@ def main():
         total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
         total_money = total_boxes*6
         return total_boxes, total_money
-
 
     def update_session(gs_nms):
         # Update index to be the index just selected
@@ -140,23 +130,25 @@ def main():
             # container.header(st.session_state["gsNm"])
             st.session_state["scout_dat"] = scout_dat[0]['_source']
 
-
     #---------------------------------------
-    # Select GS Name
+    # Page Functions
     #---------------------------------------
-
-
     def main_page():
-        # st.markdown("# Main page 🎈")
-        # st.sidebar.markdown("# Home 🎈")
-
-        #---------------------------------------
+        st.write('----')
         # Calendar
-        #---------------------------------------
-
-        st.title("GS Troop 43202 Cookie Tracker")
-        st.write('')
-
+        st.header('Important Dates, Links and Reminders')
+        st.subheader('Reminders')
+        st.markdown("""
+                    A few reminders:
+                    - Cookies are $6 per box. There's no Raspberry Rally this year, but the rest of the lineup is the same!
+                    - Cookie Season starts 1/19, and that's when digital storefronts will open and Girl Scouts can begin taking orders on their paper forms. Unfortunately we are not allowed to sell before that date.
+                    - Consider setting up a QR code to link to your Girl Scout's site!
+                    - Girl Scouts - Do not give out personally identifiable information, such as last name or school, but remember that Promise and Law! You will need to wear your uniform when you sell, you are representing your family and your organization! Have fun with it - this is what you make it!
+                    - All in-person orders collected on digital cookie will need to be approved by the parent. After a few days, orders not approved will be automatically rejected and will not count towards sales.
+                    - We are participating in Operation Cookie Drop, which donates boxes to the USO to distribute to service members. These donations will count in increments of $6 as a box your Girl Scout sold, but you will not have physical boxes for these donations. The boxes will be handled at the end of the sale at the Council level.
+                    - You have 5 days in digital cookie to approve all orders
+                    - Monitor your digital cookie orders - submit your orders to us as frequently as you would like
+                    """)
         # jan = mc(2024,1)
         # feb = mc(2024,2)
         # mar = mc(2024,3)
@@ -167,7 +159,7 @@ def main():
         # mar.add_event(19,"Family deadline for turning in Cookie Money")
         # st.pyplot(fig=jan)
 
-        st.header('Important Dates')
+        st.subheader('Important Dates')
         st.write('1/15: Primary caregivers receive Digital Cookie Registration email')
         st.write('1/19: 2024 Cookie Program Launch')
         st.write('1/19-2/4: Initial Orders')
@@ -179,33 +171,30 @@ def main():
         st.write('3/19: Family deadline for turning in Cookie Money')
         st.write('3/22: Troop wrap-up deadline')
 
-        st.subheader('Reminders')
-        st.write('- You have 5 days in digital cookie to approve all orders\n')
-        st.write('- Monitor your digital cookie orders - submit your orders to us as frequently as you would like')
+
 
     def order():
+        st.write('----')
         # st.markdown(f"Submit a Cookie Order for {gsNm}❄️")
         # st.sidebar.markdown("# Order Cookies ❄️")
         # st.session_state['index'] = nmIndex
 
         st.subheader(f'Submit a Cookie Order for {st.session_state["gsNm"]}')
-        st.warning('Submit seperate orders for paper orders vs. Digital Cookie\n')
+        
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout',index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
         with st.form('submit orders', clear_on_submit=True):
             appc1, appc2, appc3 = st.columns([3,.25,3])
-
+            guardianNm = st.write(f'Guardian accountable for order: {st.session_state["guardianNm"]}')
             with appc1:
                 # At this point the URL query string is empty / unchanged, even with data in the text field.
-                ordType = st.selectbox("Order Type:",options=['Digital Cookie','Paper Order'],key='ordType')
-                guardianNm = st.write(f'Guardian accountable for order: {st.session_state["guardianNm"]}')
-
+                ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie','Paper Order'],key='ordType')
+                pickupT = st.selectbox('Pickup Slot',['Tuesday 5-7','Wednesday 6-9'])
 
             with appc3:
                 PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
                 PickupPh = st.text_input("Person picking up cookies phone number",key='pickupph',max_chars=13)
-                pickupT = st.selectbox('Pickup Slot',['Tuesday 5-7','Wednesday 6-9'])
-
+               
             st.write('----')
             ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
@@ -277,6 +266,7 @@ def main():
                 st.balloons()
 
     def myorders():
+        st.write('----')
         # st.session_state['index'] = nmIndex
 
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
@@ -292,6 +282,8 @@ def main():
         st.dataframe(girl_orders, use_container_width=True)
 
     def allorders():
+        st.write('----')
+        st.header('All Orders to Date')
         orders = ed.DataFrame(es, es_index_pattern="orders2024")
         orders = ed.eland_to_pandas(orders)
         orders.reset_index(inplace=True, names='docId')
@@ -299,31 +291,73 @@ def main():
         ordersDF = loads(orders.to_json(orient='index'))
         ds_app_names = list(ordersDF.keys())
         st.dataframe(orders)
+    
+    def pickupSlot():
+        st.write("this page is in work... come back later")
+
     def booths():
         st.write("this page is in work... come back later")
+
+    def dcInstructions():
+        def displayPDF(file):
+            # Opening file from file path
+            with open(file, "rb") as f:
+                base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+
+            # Embedding PDF in HTML
+            pdf_display =  f"""<embed
+            class="pdfobject"
+            type="application/pdf"
+            title="Embedded PDF"
+            src="data:application/pdf;base64,{base64_pdf}"
+            style="overflow: auto; width: 100%; height: 1000px;">"""
+
+            # Displaying File
+            st.markdown(pdf_display, unsafe_allow_html=True)
+        displayPDF('how-to-DigitalCookie.pdf')
+
+    #---------------------------------------
+    # App Content
+    #---------------------------------------
+    def local_css(file_name):
+        with open(f'{file_name}') as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    local_css('style.css')
+    st.title('Troop 43202 Cookie Season')
+
+    if not check_password():
+        st.stop()  # Do not continue if check_password is not True.
 
     if st.session_state["adminpassword_correct"]:
         page_names_to_funcs = {
             "Dates and Links": main_page,
-            "Order Cookies": order,
+            "Order Cookies 🍪": order,
             "My Orders": myorders,
             "Booths": booths,
+            "Digital Cookie Instructions": dcInstructions,
             "All Orders": allorders,
-            
+            "Add Pickup Slots": pickupSlot
         }
-
-
     elif st.session_state["password_correct"]:
             page_names_to_funcs = {
             "Dates and Links": main_page,
-            "Orders": order,
+            "Order Cookies 🍪": order,
             "My Orders": myorders,
-            "Booths": booths
+            "Booths": booths,
+            "Digital Cookie Instructions": dcInstructions
         }
-
-    st.sidebar.markdown("Select Page")
-    selected_page = st.sidebar.selectbox("----", page_names_to_funcs.keys())
+    
+    topc1, topc2 = st.columns([3,7])
+    with topc1:
+        selected_page = st.selectbox("----", page_names_to_funcs.keys())
+    with topc2:
+        bandurl = "https://band.us/band/93124235"
+        st.info("Cookie Sales Start Jan 19th! \nConnect with us on [Band](%s)" % bandurl)
     page_names_to_funcs[selected_page]()
+
+
+    # selected_page = st.sidebar.selectbox("----", page_names_to_funcs.keys())
+    # page_names_to_funcs[selected_page]()
 
     # st.sidebar.markdown(st.session_state)
 
