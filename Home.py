@@ -2,7 +2,7 @@ from json import loads
 import streamlit as st
 from streamlit_calendar import calendar
 # import streamlit_permalink as st.
-
+import time
 from typing import List, Tuple
 import pandas as pd
 from elasticsearch import Elasticsearch  # need to also install with pip3
@@ -105,10 +105,27 @@ def main():
             st.session_state.get("password_correct",False)
         return False
 
-    def clean_df(df):
-        # st.write(df.columns)
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','PickupNm','PickupPh']]
-        df.rename(columns={'order_id':'Order Id','ScoutName':'Scouts Name','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+    def move_column_inplace(df, col, pos):
+        col = df.pop(col)
+        df.insert(pos, col.name, col)
+        
+    def order_view(df):
+        move_column_inplace(df,'ScoutName',0)
+        move_column_inplace(df,'OrderType',1)
+        move_column_inplace(df,'submit_dt',2)
+        move_column_inplace(df,'status',3)
+        move_column_inplace(df,'PickupT',3)
+        move_column_inplace(df,'order_qty_boxes',4)
+        move_column_inplace(df,'order_amount',5)
+        view_df = df.drop(columns=['addEbudde','digC_val'])
+        # df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','PickupNm','PickupPh']]
+
+        view_df.rename(columns={'order_id':'Order Id','OrderType':'Order Type','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','submit_dt':'Order Date','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+        return view_df
+    
+    def allorder_view(df):
+        # cols = df.columns()
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','addEbudde','digC_val','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -118,11 +135,12 @@ def main():
 
     def update_session(gs_nms):
         # Update index to be the index just selected
-
+        time.sleep(1)
         st.session_state["index"] = gs_nms.index(st.session_state["gsNm"])
         st.session_state["updatedindex"] = gs_nms.index(st.session_state["gsNm"])
 
         # Update the scout data (i.e. parent) to be the name just selected
+        # scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value="Ashlynn Klemisch")
         scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
         if len(scout_dat) > 0:
             parent = scout_dat[0]['_source']['Parent']
@@ -172,7 +190,6 @@ def main():
         st.write('3/22: Troop wrap-up deadline')
 
 
-
     def order():
         st.write('----')
         # st.markdown(f"Submit a Cookie Order for {gsNm}❄️")
@@ -189,7 +206,7 @@ def main():
             with appc1:
                 # At this point the URL query string is empty / unchanged, even with data in the text field.
                 ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie','Paper Order'],key='ordType')
-                pickupT = st.selectbox('Pickup Slot',['Tuesday 5-7','Wednesday 6-9'])
+                pickupT = st.selectbox('Pickup Slot',['Initial Order - TBD','Tuesday 5-7','Wednesday 6-9'])
 
             with appc3:
                 PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
@@ -226,12 +243,14 @@ def main():
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
                 # st.write(idTime)
-                orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}_{idTime}')
+                orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}{idTime}')
                 # Every form must have a submit button.
                 order_data = {
-                    "ScoutName": gsNm,
+                    "ScoutName": st.session_state["scout_dat"]["FullName"],
                     "OrderType": ordType,
                     "guardianNm":st.session_state["guardianNm"],
+                    "guardianPh":st.session_state["scout_dat"]["Phone"],
+                    "Email":st.session_state["scout_dat"]["Email"],
                     "PickupNm": PickupNm,
                     "PickupPh": PickupPh,
                     "PickupT": pickupT ,
@@ -249,7 +268,9 @@ def main():
                     "order_amount": order_amount,
                     "submit_dt": datetime.now(),
                     "status": "Pending",
-                    "order_id": orderId
+                    "order_id": orderId,
+                    "digC_val": False,
+                    "addEbudde": False
                     }
                 st.text(f" {total_boxes} boxes were submitted for {gsNm}'s order\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
                 
@@ -257,10 +278,10 @@ def main():
 
                 k=order_data.keys()
                 v=order_data.values()
-                st.write(k)
+                # st.write(k)
                 # new_order = [f"{k}:[{i}]" for k,i in zip(order_data.keys(),order_data.values())]
                 order_details = pd.DataFrame(v, index =k, columns =['Order'])
-                new_order = clean_df(order_details.T)
+                new_order = order_view(order_details.T)
                 st.table(new_order.T)
                 st.success('Your order has been submitted!', icon="✅")
                 st.balloons()
@@ -278,7 +299,7 @@ def main():
         # orders.set_index(keys=['appName'],inplace=True)
 
         # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
-        girl_orders = clean_df(girl_orders)
+        girl_orders = order_view(girl_orders)
         st.dataframe(girl_orders, use_container_width=True)
 
     def allorders():
@@ -287,12 +308,71 @@ def main():
         orders = ed.DataFrame(es, es_index_pattern="orders2024")
         orders = ed.eland_to_pandas(orders)
         orders.reset_index(inplace=True, names='docId')
-        # orders.set_index(keys=['appName'],inplace=True)
-        ordersDF = loads(orders.to_json(orient='index'))
-        ds_app_names = list(ordersDF.keys())
-        st.dataframe(orders)
+        all_orders = pd.DataFrame(orders)
+        all_orders = allorder_view(all_orders)
+        # st.write(all_orders)
+        edited_allorders = st.data_editor(
+            all_orders,
+            column_config={
+                "digC_val": st.column_config.CheckboxColumn(
+                    "Validate in Dig Cookie?",
+                    help="Has this order been validate in Digital Cookie",
+                    default=False,
+                ),
+                "addEbudde": st.column_config.CheckboxColumn(
+                    "Added to Ebudde?",
+                    help="Has this order been added to Ebudde",
+                    default=False,
+                ),
+                "order_amount": st.column_config.NumberColumn(
+                    "Order $",
+                    format="$%d",
+                ),
+                "status": st.column_config.SelectboxColumn(
+                    width="medium",
+                    options=[
+                        "pending",
+                        "ready for pickup",
+                        "money due",
+                        "Completed"
+                    ])
+                        },
+            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
+                    'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
+                    'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
+                    'order_qty_boxes', 'submit_dt'],
+                    hide_index=True,
+            )
+        # st.write(edited_allorders)
+
+        st.write('----')
+        st.subheader('Pending Orders')
+        pendingOrders = all_orders[all_orders['status']=="Pending"]
+        edpendingOrders = st.data_editor(
+            pendingOrders,
+            column_config={
+                "digC_val": st.column_config.CheckboxColumn(
+                    "Validate in Dig Cookie?",
+                    help="Has this order been validate in Digital Cookie",
+                    default=False,
+                ),
+                "addEbudde": st.column_config.CheckboxColumn(
+                    "Added to Ebudde?",
+                    help="Has this order been added to Ebudde",
+                    default=False,
+                )
+            },
+            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
+       'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
+       'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
+       'order_qty_boxes', 'submit_dt'],
+            hide_index=True,
+            )
     
     def pickupSlot():
+        st.write("this page is in work... come back later")
+    
+    def receiveMoney():
         st.write("this page is in work... come back later")
 
     def booths():
@@ -336,6 +416,7 @@ def main():
             "Booths": booths,
             "Digital Cookie Instructions": dcInstructions,
             "All Orders": allorders,
+            "Receive Money":receiveMoney,
             "Add Pickup Slots": pickupSlot
         }
     elif st.session_state["password_correct"]:
