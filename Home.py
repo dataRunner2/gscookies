@@ -317,8 +317,7 @@ def main():
 
         all_orders, all_orders_cln = get_all_orders()
         girl_orders = all_orders[all_orders['ScoutName'] == st.session_state["gsNm"]]
-        st.write(girl_orders.columns)
-        st.session_state
+        # st.session_state
         # orders.set_index(keys=['appName'],inplace=True)
 
         # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
