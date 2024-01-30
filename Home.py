@@ -111,7 +111,7 @@ def main():
         
     def order_view(df):
         col_order = ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','comments','guardianNm','PickupNm','PickupPh',"Email"]
-        non_in_col_order = [c for c in df.columns not in col_order]
+        # non_in_col_order = [c for c in df.columns not in col_order]
         
         # view_df = df.drop(columns=['addEbudde','digC_val'])
         view_df=df.loc[:, col_order].copy()
