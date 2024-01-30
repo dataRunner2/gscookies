@@ -110,22 +110,18 @@ def main():
         df.insert(pos, col.name, col)
         
     def order_view(df):
-        move_column_inplace(df,'ScoutName',0)
-        move_column_inplace(df,'OrderType',1)
-        move_column_inplace(df,'submit_dt',2)
-        move_column_inplace(df,'status',3)
-        move_column_inplace(df,'PickupT',3)
-        move_column_inplace(df,'order_qty_boxes',4)
-        move_column_inplace(df,'order_amount',5)
-        view_df = df.drop(columns=['addEbudde','digC_val'])
-        # df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','PickupNm','PickupPh']]
+        col_order = ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','comments','guardianNm','PickupNm','PickupPh',"Email"]
+        non_in_col_order = [c for c in df.columns not in col_order]
+        
+        # view_df = df.drop(columns=['addEbudde','digC_val'])
+        view_df=df.loc[:, col_order].copy()
 
-        view_df.rename(columns={'order_id':'Order Id','OrderType':'Order Type','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','submit_dt':'Order Date','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+        view_df.rename(columns={'order_id':'Order Id','OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','submit_dt':'Order Date','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
         return view_df
     
     def allorder_view(df):
         # cols = df.columns()
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_id','status','addEbudde','digC_val','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','status','order_ready','order_pickedup','addEbudde','digC_val','order_qty_boxes', 'order_amount','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -148,6 +144,30 @@ def main():
             # container.header(st.session_state["gsNm"])
             st.session_state["scout_dat"] = scout_dat[0]['_source']
 
+    def get_all_orders():
+        orders = ed.DataFrame(es, es_index_pattern="orders2024",es_index_field='order_id')
+        orders = ed.eland_to_pandas(orders)
+        all_orders = pd.DataFrame(orders)
+
+        all_orders_cln = allorder_view(all_orders)
+        return all_orders,all_orders_cln
+    
+    def update_es(edited_allorders,all_orders):
+        
+        st.write('EDITED ROWS:')
+        edited_rows = edited_allorders #['edited_dat']
+        # edited_rows = st.session_state['edited_dat']['edited_rows']
+        st.markdown(f'Initial Edited Rows: {edited_rows}')
+        updated_edit = {}
+        for key, value in edited_rows.items():
+            new_key = all_orders.index[key]
+
+            st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
+            resp = es.update(index="orders2024", id=new_key, doc=value)
+            time.sleep(2)
+            st.toast("Database updated with changes")
+            all_orders, all_orders_cln = get_all_orders()
+        return all_orders_cln
     #---------------------------------------
     # Page Functions
     #---------------------------------------
@@ -181,12 +201,12 @@ def main():
         st.write('1/15: Primary caregivers receive Digital Cookie Registration email')
         st.write('1/19: 2024 Cookie Program Launch')
         st.write('1/19-2/4: Initial Orders')
-        st.write('2/4 - 3/11: In person Delivery of Digital Cookie Orders')
-        st.write('~2/9: Pick up cookies from cookie cupboard - Volutneers Needed')
-        st.write('1/30: Booth site picks begin at 6:30 pm')
-        st.write('2/4: Girl Scout inital orders due to Troop')
-        st.write('2/16-3/16: Booth Sales')
-        st.write('3/19: Family deadline for turning in Cookie Money')
+        st.write('2/4 - Initial Orders must be submitted by 12 Noon')
+        st.write('~2/14: Pick up cookies from cookie cupboard - Volutneers Needed!')
+        st.write('2/16 - 3/16: In person Delivery of Digital Cookie Orders')
+        st.write('1/30: Booth site picks begin at 6:30 pm - sign up for Booths')
+        st.write('3/1 - 3/16: Booth Sales')
+        st.write('3/19: Family deadline for turning in Cookie Money by 12 Noon')
         st.write('3/22: Troop wrap-up deadline')
 
 
@@ -267,14 +287,17 @@ def main():
                     "order_qty_boxes": total_boxes,
                     "order_amount": order_amount,
                     "submit_dt": datetime.now(),
+                    "comments": comments,
                     "status": "Pending",
                     "order_id": orderId,
                     "digC_val": False,
-                    "addEbudde": False
+                    "addEbudde": False,
+                    "order_pickedup": False,
+                    "order_ready": False
                     }
                 st.text(f" {total_boxes} boxes were submitted for {gsNm}'s order\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
                 
-                esu.add_es_doc(es,indexnm="orders2024", doc=order_data)
+                esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
 
                 k=order_data.keys()
                 v=order_data.values()
@@ -292,10 +315,10 @@ def main():
 
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
-        girl_orders = ed.DataFrame(es, es_index_pattern="orders2024")
-        girl_orders = ed.eland_to_pandas(girl_orders)
-        girl_orders.reset_index(inplace=True, names='docId')
-        girl_orders = girl_orders[girl_orders['ScoutName'] == st.session_state["gsNm"]]
+        all_orders, all_orders_cln = get_all_orders()
+        girl_orders = all_orders[all_orders['ScoutName'] == st.session_state["gsNm"]]
+        st.write(girl_orders.columns)
+        st.session_state
         # orders.set_index(keys=['appName'],inplace=True)
 
         # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
@@ -305,15 +328,14 @@ def main():
     def allorders():
         st.write('----')
         st.header('All Orders to Date')
-        orders = ed.DataFrame(es, es_index_pattern="orders2024")
-        orders = ed.eland_to_pandas(orders)
-        orders.reset_index(inplace=True, names='docId')
-        all_orders = pd.DataFrame(orders)
-        all_orders = allorder_view(all_orders)
-        # st.write(all_orders)
+        all_orders, all_orders_cln = get_all_orders()
+
         edited_allorders = st.data_editor(
-            all_orders,
+            all_orders_cln,
             column_config={
+                "_index":st.column_config.TextColumn(
+                    label='Order Id'
+                ),
                 "digC_val": st.column_config.CheckboxColumn(
                     "Validate in Dig Cookie?",
                     help="Has this order been validate in Digital Cookie",
@@ -327,27 +349,23 @@ def main():
                 "order_amount": st.column_config.NumberColumn(
                     "Order $",
                     format="$%d",
-                ),
-                "status": st.column_config.SelectboxColumn(
-                    width="medium",
-                    options=[
-                        "pending",
-                        "ready for pickup",
-                        "money due",
-                        "Completed"
-                    ])
+                )
                         },
-            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
-                    'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
-                    'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
-                    'order_qty_boxes', 'submit_dt'],
-                    hide_index=True,
+            disabled=['order_id', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
+                      'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
+                      'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id','order_qty_boxes', 'submit_dt'],
+            hide_index=False,
+            key='edited_dat'
             )
-        # st.write(edited_allorders)
+        refresh = st.button("Refresh")
+        if refresh:
+            update_es(st.session_state['edited_dat']['edited_rows'],all_orders)
+
 
         st.write('----')
         st.subheader('Pending Orders')
         pendingOrders = all_orders[all_orders['status']=="Pending"]
+        
         edpendingOrders = st.data_editor(
             pendingOrders,
             column_config={
@@ -371,9 +389,39 @@ def main():
     
     def pickupSlot():
         st.write("this page is in work... come back later")
+        st.header("Add a Pickup Timeslot Here")
+        timeslots = esu.get_dat(es, indexnm="timeslots", field='timeslots')
+        st.time_input('timeslot', value="today", format="MM/DD/YYYY")
+        st.button("Add Timeslot")
+        if st.button:
+            esu.add_es_doc(es, indexnm="timeslots",doc=timeslots)
+
     
     def receiveMoney():
         st.write("this page is in work... come back later")
+        st.header("Receive Money")
+        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
+        with st.form("money", clear_on_submit=True):
+            amt = st.text_input("Amount Received")
+            amt_date = st.date_input("Date Received",value="today",format="MM/DD/YYYY")
+            orderRef = st.text_input("Order Reference (optional)")
+            # from orders get all for this scout:
+            # orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}{idTime}')
+               
+            if st.form_submit_button("Submit Order to Cookie Crew"):
+                now = datetime.now()
+                idTime = now.strftime("%m%d%Y%H%M")
+
+                 # Every form must have a submit button.
+                moneyRec_data = {
+                    "ScoutName": st.session_state["scout_dat"]["FullName"],
+                    "AmountReceived": amt,
+                    "amtReceived_dt": amt_date,
+                    "orderRef": orderRef               
+                    }
+
+                esu.add_es_doc(es,indexnm="orders2024", id=None, doc=moneyRec_data)
+
 
     def booths():
         st.write("this page is in work... come back later")
