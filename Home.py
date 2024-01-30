@@ -168,6 +168,7 @@ def main():
             st.toast("Database updated with changes")
             all_orders, all_orders_cln = get_all_orders()
         return all_orders_cln
+    
     #---------------------------------------
     # Page Functions
     #---------------------------------------
@@ -315,6 +316,7 @@ def main():
 
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
+        st.subheader("All submited orders into this app's order form")
         all_orders, all_orders_cln = get_all_orders()
         girl_orders = all_orders[all_orders['ScoutName'] == st.session_state["gsNm"]]
         # st.session_state
@@ -323,6 +325,20 @@ def main():
         # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
         girl_orders = order_view(girl_orders)
         st.dataframe(girl_orders, use_container_width=True)
+
+        st.subheader("Payments Received - EXCLUDING DIGITAL COOKIE")
+        # girl_money = esu.get_dat(es,indexnm="money_received2024")
+        girl_money = ed.DataFrame(es, es_index_pattern="money_received2024")
+        girl_money = ed.eland_to_pandas(girl_money)
+        girl_money = pd.DataFrame(girl_money)
+
+        # st.write(girl_money.columns)
+        girl_money = girl_money[girl_money['ScoutName'] == st.session_state['gsNm']]
+        # st.write(dtype(girl_money['AmountReceived']))
+        # sum_money = girl_money['AmountReceived'].sum()
+        # st.metric(label="Total Amount Received", value=f"${sum_money}")
+        girl_money.rename(inplace=True, columns={'ScoutName': 'Scouts Name','AmountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
+        st.dataframe(girl_money,use_container_width=False)
 
     def allorders():
         st.write('----')
@@ -389,11 +405,11 @@ def main():
     def pickupSlot():
         st.write("this page is in work... come back later")
         st.header("Add a Pickup Timeslot Here")
-        timeslots = esu.get_dat(es, indexnm="timeslots", field='timeslots')
-        st.time_input('timeslot', value="today", format="MM/DD/YYYY")
+        st.write(esu.get_dat(es, indexnm="timeslots", field='timeslots'))
+        new_timeslot = st.time_input('timeslot', value="today", format="MM/DD/YYYY")
         st.button("Add Timeslot")
         if st.button:
-            esu.add_es_doc(es, indexnm="timeslots",doc=timeslots)
+            esu.add_es_doc(es, indexnm="timeslots",doc=new_timeslot)
 
     
     def receiveMoney():
@@ -407,7 +423,7 @@ def main():
             # from orders get all for this scout:
             # orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}{idTime}')
                
-            if st.form_submit_button("Submit Order to Cookie Crew"):
+            if st.form_submit_button("Submit Money to Cookie Crew"):
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
 
@@ -416,10 +432,10 @@ def main():
                     "ScoutName": st.session_state["scout_dat"]["FullName"],
                     "AmountReceived": amt,
                     "amtReceived_dt": amt_date,
-                    "orderRef": orderRef               
+                    "orderRef": orderRef         
                     }
 
-                esu.add_es_doc(es,indexnm="orders2024", id=None, doc=moneyRec_data)
+                esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
 
 
     def booths():
@@ -457,14 +473,14 @@ def main():
 
     if st.session_state["adminpassword_correct"]:
         page_names_to_funcs = {
-            "Dates and Links": main_page,
+            "Dates and Information": main_page,
             "Order Cookies 🍪": order,
             "My Orders": myorders,
             "Booths": booths,
-            "Digital Cookie Instructions": dcInstructions,
             "All Orders": allorders,
             "Receive Money":receiveMoney,
-            "Add Pickup Slots": pickupSlot
+            "Add Pickup Slots": pickupSlot,
+            "Digital Cookie Instructions": dcInstructions
         }
     elif st.session_state["password_correct"]:
             page_names_to_funcs = {
@@ -480,7 +496,9 @@ def main():
         selected_page = st.selectbox("----", page_names_to_funcs.keys())
     with topc2:
         bandurl = "https://band.us/band/93124235"
-        st.info("Cookie Sales Start Jan 19th! \nConnect with us on [Band](%s)" % bandurl)
+        st.info("Inital Orders due to us by 2/4")
+        st.info("We hope your cookie selling is going great!")
+        st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
     page_names_to_funcs[selected_page]()
 
 
