@@ -5,7 +5,7 @@ import streamlit as st
 class esu:
     def conn_es():
         # Found in the 'Manage Deployment' page
-        CLOUD_ID = "Cookies2024Trp43202:dXMtd2VzdDEuZ2NwLmNsb3VkLmVzLmlvOjQ0MyQ0ZGY4YWU4MTJiN2Y0MmQyODIwMjA0OThmNzAxNGE2ZiRlNWM0MTBjNTNlYTg0ODlkOTViYTMxNjVjNGI2ZDM0MA=="
+        CLOUD_ID = "trp43202_v1:dXMtd2VzdDEuZ2NwLmNsb3VkLmVzLmlvOjQ0MyRmMGE1OTk0YjI0YmY0YmRhOGM3OGIzZTNlZDdhMDVmZCQ2MmEyZWZjOGIxNDg0NmI1ODZkNmYxODBlOWY3MDY1NA=="
         # if environment in (None,'local'):
         api_key = st.secrets["es_key"]
         conn = Elasticsearch(cloud_id=CLOUD_ID, api_key=api_key)
