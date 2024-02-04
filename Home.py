@@ -207,9 +207,8 @@ def main():
         st.write('1/19: 2024 Cookie Program Launch')
         st.write('1/19-2/4: Initial Orders')
         st.write('2/4 - Initial Orders must be submitted by 12 Noon')
-        st.write('~2/14: Pick up cookies from cookie cupboard - Volutneers Needed!')
-        st.write('2/16 - 3/16: In person Delivery of Digital Cookie Orders')
-        st.write('1/30: Booth site picks begin at 6:30 pm - sign up for Booths')
+        st.write('~2/23: Pick up cookies from cookie cupboard - Volutneers Needed!')
+        st.write('2/25 - 3/16: In person Delivery of Digital Cookie Orders')
         st.write('3/1 - 3/16: Booth Sales')
         st.write('3/19: Family deadline for turning in Cookie Money by 12 Noon')
         st.write('3/22: Troop wrap-up deadline')
@@ -350,9 +349,9 @@ def main():
         girl_money["AmountReceived"] = pd.to_numeric(girl_money["AmountReceived"])
         sum_money = girl_money['AmountReceived'].sum()
         st.metric(label="Total Amount Received", value=f"${sum_money}")
-        paper_money_due = girl_money[girl_money['OrderType'] == "st.session_state['gsNm']"]
-        girl_money['Order Type'].sum()
-        st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
+        # paper_money_due = girl_money[girl_money['OrderType'] == "st.session_state['gsNm']"]
+        # girl_money['Order Type'].sum()
+        # st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
         girl_money.sort_values(by="amtReceived_dt")
         girl_money.rename(inplace=True, columns={'ScoutName': 'Scouts Name','AmountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
         girl_money.reset_index(inplace=True, drop=True)
@@ -392,7 +391,7 @@ def main():
                     "Order $",
                     format="$%d",
                 )
-                        },
+            },
             disabled=['order_id', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
                       'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
                       'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id','order_qty_boxes', 'submit_dt'],
@@ -431,10 +430,11 @@ def main():
     
         st.write('----')
         st.subheader('Booth Orders')
-        pendingOrders = all_orders[all_orders['OrderType']=="Booth"]
-        
+        BoothOrders = all_orders[all_orders['OrderType']=="Booth"]
+        BoothOrders = BoothOrders.loc[:, ['ScoutName','OrderType','submit_dt','suOrder','order_qty_boxes', 'order_amount','status','order_ready','order_pickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','addEbudde','PickupNm','PickupPh','Email']]
+       
         edpendingOrders = st.data_editor(
-            pendingOrders,
+            BoothOrders,
             column_config={
                 "digC_val": st.column_config.CheckboxColumn(
                     "Validate in Dig Cookie?",
