@@ -463,22 +463,22 @@ def main():
             ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
             with ck1:
-                advf=st.number_input(label='Adventurefuls',step=1,min_value=0, value=48)
-                tags=st.number_input(label='Tagalongs',step=1,min_value=0, value=48)
+                advf=st.number_input(label='Adventurefuls',step=1,min_value=0, value=6) # 48 for first weekend
+                tags=st.number_input(label='Tagalongs',step=1,min_value=0, value=6) # 48 for first weekend
 
             with ck2:
-                lmup=st.number_input(label='Lemon-Ups',step=1,value=12)
-                tmint=st.number_input(label='Thin Mints',step=1,value=60)
+                lmup=st.number_input(label='Lemon-Ups',step=1,value=3) # 12
+                tmint=st.number_input(label='Thin Mints',step=1,value=18) # 60 for first weekend
             with ck3:
-                tre=st.number_input(label='Trefoils',step=1,value=12)
-                smr=st.number_input(label="S'Mores",step=1,value=12)
+                tre=st.number_input(label='Trefoils',step=1,value=3) #12
+                smr=st.number_input(label="S'Mores",step=1,value=3) #12
 
             with ck4:
-                dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=12)
-                toff=st.number_input(label='Toffee-Tastic',step=1,value=12)
+                dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=3) #12
+                toff=st.number_input(label='Toffee-Tastic',step=1,value=3) #12
 
             with ck5:
-                sam=st.number_input(label='Samoas',step=1,value=60)
+                sam=st.number_input(label='Samoas',step=1,value=18) # 60 for first weekend
 
 
             comments = st.text_area("Comments", key='comments')
@@ -519,14 +519,6 @@ def main():
                     }
                 
                 esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
-
-                k=order_data.keys()
-                v=order_data.values()
-                # st.write(k)
-                # new_order = [f"{k}:[{i}]" for k,i in zip(order_data.keys(),order_data.values())]
-                # order_details = pd.DataFrame(v, index =k, columns =['Order'])
-                # new_order = order_view(order_details.T)
-                # st.table(new_order.T)
                 st.success('Your order has been submitted!', icon="✅")
 
     def pickupSlot():
