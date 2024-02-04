@@ -299,7 +299,7 @@ def main():
                     "order_pickedup": False,
                     "order_ready": False
                     }
-                st.text(f" {total_boxes} boxes were submitted for {gsNm}'s order\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
+                st.text(f" {total_boxes} boxes were submitted\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
                 
                 esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
 
