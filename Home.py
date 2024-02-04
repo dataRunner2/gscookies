@@ -137,7 +137,9 @@ def main():
 
         # Update the scout data (i.e. parent) to be the name just selected
         # scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value="Ashlynn Klemisch")
+        
         scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
+        # all_orders, all_orders_cln = get_all_orders()
         if len(scout_dat) > 0:
             parent = scout_dat[0]['_source']['Parent']
             st.session_state["guardianNm"] = parent
@@ -145,8 +147,10 @@ def main():
             st.session_state["scout_dat"] = scout_dat[0]['_source']
 
     def get_all_orders():
-        orders = ed.DataFrame(es, es_index_pattern="orders2024",es_index_field='order_id')
+        orders = ed.DataFrame(es, es_index_pattern="orders2024")
         orders = ed.eland_to_pandas(orders)
+        # orders.reset_index(names="index",inplace=True,drop=True)
+        
         all_orders = pd.DataFrame(orders)
 
         all_orders_cln = allorder_view(all_orders)
@@ -313,18 +317,25 @@ def main():
     def myorders():
         st.write('----')
         # st.session_state['index'] = nmIndex
-
-        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
+        st.write(st.session_state['gsNm'])
+        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', key='gsNm')
 
         st.subheader("All submited orders into this app's order form")
         all_orders, all_orders_cln = get_all_orders()
-        girl_orders = all_orders[all_orders['ScoutName'] == st.session_state["gsNm"]]
-        # st.session_state
-        # orders.set_index(keys=['appName'],inplace=True)
-
-        # girl_orders = get_qry_dat(es,"orders2024",field='ScoutName',value=gsNm)
+        all_orders.reset_index(names="index",inplace=True,drop=True)
+        girl_orders = all_orders[all_orders['ScoutName'] == gsNm]
+       
         girl_orders = order_view(girl_orders)
-        st.dataframe(girl_orders, use_container_width=True)
+        girl_orders.reset_index(inplace=True, drop=True)
+        girl_orders.loc['Total']= girl_orders.sum(numeric_only=True, axis=0)
+        girl_orders.fillna(0)
+        girl_orders = girl_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+        st.dataframe(girl_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
+                     column_config={
+                        "Order Amount": st.column_config.NumberColumn(
+                            "Order Amt.",
+                            format="$%d",
+                        )})
 
         st.subheader("Payments Received - EXCLUDING DIGITAL COOKIE")
         # girl_money = esu.get_dat(es,indexnm="money_received2024")
@@ -332,21 +343,29 @@ def main():
         girl_money = ed.eland_to_pandas(girl_money)
         girl_money = pd.DataFrame(girl_money)
 
+
         # st.write(girl_money.columns)
         girl_money = girl_money[girl_money['ScoutName'] == st.session_state['gsNm']]
         # st.write(dtype(girl_money['AmountReceived']))
-        # sum_money = girl_money['AmountReceived'].sum()
-        # st.metric(label="Total Amount Received", value=f"${sum_money}")
+        girl_money["AmountReceived"] = pd.to_numeric(girl_money["AmountReceived"])
+        sum_money = girl_money['AmountReceived'].sum()
+        st.metric(label="Total Amount Received", value=f"${sum_money}")
+        girl_money.sort_values(by="amtReceived_dt")
         girl_money.rename(inplace=True, columns={'ScoutName': 'Scouts Name','AmountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
+        girl_money.reset_index(inplace=True, drop=True)
         st.dataframe(girl_money,use_container_width=False)
 
     def allorders():
         st.write('----')
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
+        all_orders_cln.loc['Total']= all_orders_cln.sum(numeric_only=True, axis=0) 
+        # all_orders_cln.fillna(0)
+        # all_orders_cln = all_orders_cln.astype({"order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        #  "qty_boxes": 'int',
 
         edited_allorders = st.data_editor(
-            all_orders_cln,
+            all_orders_cln.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))),
             column_config={
                 "_index":st.column_config.TextColumn(
                     label='Order Id'
@@ -413,7 +432,6 @@ def main():
 
     
     def receiveMoney():
-        st.write("this page is in work... come back later")
         st.header("Receive Money")
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
         with st.form("money", clear_on_submit=True):
