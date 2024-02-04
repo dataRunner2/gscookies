@@ -121,7 +121,7 @@ def main():
     
     def allorder_view(df):
         # cols = df.columns()
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','status','order_ready','order_pickedup','addEbudde','digC_val','order_qty_boxes', 'order_amount','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','suOrder','addEbudde','digC_val','order_qty_boxes', 'order_amount','status','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -350,6 +350,9 @@ def main():
         girl_money["AmountReceived"] = pd.to_numeric(girl_money["AmountReceived"])
         sum_money = girl_money['AmountReceived'].sum()
         st.metric(label="Total Amount Received", value=f"${sum_money}")
+        paper_money_due = girl_money[girl_money['OrderType'] == "st.session_state['gsNm']"]
+        girl_money['Order Type'].sum()
+        st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
         girl_money.sort_values(by="amtReceived_dt")
         girl_money.rename(inplace=True, columns={'ScoutName': 'Scouts Name','AmountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
         girl_money.reset_index(inplace=True, drop=True)
@@ -360,8 +363,8 @@ def main():
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
         all_orders_cln.loc['Total']= all_orders_cln.sum(numeric_only=True, axis=0) 
-        # all_orders_cln.fillna(0)
-        # all_orders_cln = all_orders_cln.astype({"order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        all_orders_cln.fillna(0)
+        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
         #  "qty_boxes": 'int',
 
         edited_allorders = st.data_editor(
@@ -378,6 +381,11 @@ def main():
                 "addEbudde": st.column_config.CheckboxColumn(
                     "Added to Ebudde?",
                     help="Has this order been added to Ebudde",
+                    default=False,
+                ),
+                "suOrder": st.column_config.TextColumn(
+                    "Service Unit Order",
+                    help="Itital, or #-date",
                     default=False,
                 ),
                 "order_amount": st.column_config.NumberColumn(
@@ -421,6 +429,106 @@ def main():
             hide_index=True,
             )
     
+        st.write('----')
+        st.subheader('Booth Orders')
+        pendingOrders = all_orders[all_orders['OrderType']=="Booth"]
+        
+        edpendingOrders = st.data_editor(
+            pendingOrders,
+            column_config={
+                "digC_val": st.column_config.CheckboxColumn(
+                    "Validate in Dig Cookie?",
+                    help="Has this order been validate in Digital Cookie",
+                    default=False,
+                ),
+                "addEbudde": st.column_config.CheckboxColumn(
+                    "Added to Ebudde?",
+                    help="Has this order been added to Ebudde",
+                    default=False,
+                )
+            },
+            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
+       'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
+       'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
+       'order_qty_boxes', 'submit_dt'],
+            hide_index=True,
+            )
+        
+    def submitBoothOrder():
+        with st.form('submit orders', clear_on_submit=True):
+            Booth = st.text_input(f'Booth - Location and Date:')
+
+
+            st.write('----')
+            ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
+
+            with ck1:
+                advf=st.number_input(label='Adventurefuls',step=1,min_value=0, value=48)
+                tags=st.number_input(label='Tagalongs',step=1,min_value=0, value=48)
+
+            with ck2:
+                lmup=st.number_input(label='Lemon-Ups',step=1,value=12)
+                tmint=st.number_input(label='Thin Mints',step=1,value=60)
+            with ck3:
+                tre=st.number_input(label='Trefoils',step=1,value=12)
+                smr=st.number_input(label="S'Mores",step=1,value=12)
+
+            with ck4:
+                dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=12)
+                toff=st.number_input(label='Toffee-Tastic',step=1,value=12)
+
+            with ck5:
+                sam=st.number_input(label='Samoas',step=1,value=60)
+
+
+            comments = st.text_area("Comments", key='comments')
+
+
+            # submitted = st.form_submit_button()
+            if st.form_submit_button("Submit Order to Cookie Crew"):
+                opc=0
+                total_boxes, order_amount=calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc)
+                now = datetime.now()
+                idTime = now.strftime("%m%d%Y%H%M")
+                # st.write(idTime)
+                orderId = (f'{Booth.replace(" ","").replace(".","_").lower()}{idTime}')
+                # Every form must have a submit button.
+                order_data = {
+                    "ScoutName": Booth,
+                    "OrderType": "Booth",
+                    "Adf": advf,
+                    "LmUp": lmup,
+                    "Tre": tre,
+                    "DSD": dsd,
+                    "Sam": sam,
+                    "Tags": tags,
+                    "Tmint": tmint,
+                    "Smr": smr,
+                    "Toff": toff,
+                    "OpC": opc,
+                    "order_qty_boxes": total_boxes,
+                    "order_amount": order_amount,
+                    "submit_dt": datetime.now(),
+                    "comments": comments,
+                    "status": "Pending",
+                    "order_id": orderId,
+                    "digC_val": False,
+                    "addEbudde": False,
+                    "order_pickedup": False,
+                    "order_ready": False
+                    }
+                
+                esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
+
+                k=order_data.keys()
+                v=order_data.values()
+                # st.write(k)
+                # new_order = [f"{k}:[{i}]" for k,i in zip(order_data.keys(),order_data.values())]
+                # order_details = pd.DataFrame(v, index =k, columns =['Order'])
+                # new_order = order_view(order_details.T)
+                # st.table(new_order.T)
+                st.success('Your order has been submitted!', icon="✅")
+
     def pickupSlot():
         st.write("this page is in work... come back later")
         st.header("Add a Pickup Timeslot Here")
@@ -496,6 +604,7 @@ def main():
             "My Orders": myorders,
             "Booths": booths,
             "All Orders": allorders,
+            "Add Booth Orders": submitBoothOrder,
             "Receive Money":receiveMoney,
             "Add Pickup Slots": pickupSlot,
             "Digital Cookie Instructions": dcInstructions
@@ -515,7 +624,7 @@ def main():
     with topc2:
         bandurl = "https://band.us/band/93124235"
         st.info("Inital Orders due to us by 2/4")
-        st.info("We hope your cookie selling is going great!")
+        st.info("We expect to pick up our inital order on 2/23 or 2/24, Sign-up to help get cookies coming out soon.")
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
     page_names_to_funcs[selected_page]()
 
