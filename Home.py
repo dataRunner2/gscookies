@@ -1,7 +1,13 @@
 from json import loads
 import streamlit as st
 from streamlit_calendar import calendar
-# import streamlit_permalink as st.
+import streamlit.components.v1 as components
+from pandas.api.types import (
+    is_categorical_dtype,
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_object_dtype,
+)
 import time
 from typing import List, Tuple
 import pandas as pd
@@ -154,25 +160,86 @@ def main():
         all_orders = pd.DataFrame(orders)
 
         all_orders_cln = allorder_view(all_orders)
-        return all_orders,all_orders_cln
+        if "all_orders" not in st.session_state:
+            st.session_state['all_orders'] = all_orders
+        return all_orders, all_orders_cln
     
-    def update_es(edited_allorders,all_orders):
-        
+    def update_es(edited_content, all_orders):
+        edited_allorders = st.session_state['edited_dat']['edited_rows']
         st.write('EDITED ROWS:')
-        edited_rows = edited_allorders #['edited_dat']
+        # edited_rows = edited_allorders #['edited_dat']
         # edited_rows = st.session_state['edited_dat']['edited_rows']
-        st.markdown(f'Initial Edited Rows: {edited_rows}')
-        updated_edit = {}
-        for key, value in edited_rows.items():
+        st.markdown(f'Initial Edited Rows: {edited_allorders}')
+
+        for key, value in edited_allorders.items():
             new_key = all_orders.index[key]
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
             resp = es.update(index="orders2024", id=new_key, doc=value)
             time.sleep(2)
-            st.toast("Database updated with changes")
-            all_orders, all_orders_cln = get_all_orders()
-        return all_orders_cln
-    
+        st.toast("Database updated with changes")
+        get_all_orders()  # this should updadte the session state with all orders
+            
+    def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Adds a UI on top of a dataframe to let viewers filter columns
+        Args:
+            df (pd.DataFrame): Original dataframe
+        Returns   pd.DataFrame: Filtered dataframe
+        """
+        # modify = st.checkbox("Add filters")
+
+        # if not modify:
+        #     return df
+        
+        df = df.copy()
+        modification_container = st.container()
+        with modification_container:
+            to_filter_columns = st.multiselect("Filter dataframe on", df.columns)
+            for column in to_filter_columns:
+                left, right = st.columns((1, 20))
+                left.write("↳")
+                # Treat columns with < 10 unique values as categorical
+                if is_categorical_dtype(df[column]) or df[column].nunique() < 10:
+                    user_cat_input = right.multiselect(
+                        f"Values for {column}",
+                        df[column].unique(),
+                        default=list(df[column].unique()),
+                    )
+                    df = df[df[column].isin(user_cat_input)]
+                elif is_numeric_dtype(df[column]):
+                    _min = float(df[column].min())
+                    _max = float(df[column].max())
+                    step = (_max - _min) / 100
+                    user_num_input = right.slider(
+                    f"Values for {column}",
+                    min_value=_min,
+                    max_value=_max,
+                    value=(_min, _max),
+                    step=step,
+                    )
+                    df = df[df[column].between(*user_num_input)]
+                elif is_datetime64_any_dtype(df[column]):
+                    user_date_input = right.date_input(
+                        f"Values for {column}",
+                        value=(
+                            df[column].min(),
+                            df[column].max(),
+                        ),
+                    )
+                    if len(user_date_input) == 2:
+                        user_date_input = tuple(map(pd.to_datetime, user_date_input))
+                        start_date, end_date = user_date_input
+                        df = df.loc[df[column].between(start_date, end_date)]
+                else:
+                    user_text_input = right.text_input(
+                        f"Substring or regex in {column}",
+                    )
+                    if user_text_input:
+                        df = df[df[column].astype(str).str.contains(user_text_input)]
+            df.loc['Total']= df.sum(numeric_only=True, axis=0) 
+        return df
+
     #---------------------------------------
     # Page Functions
     #---------------------------------------
@@ -181,16 +248,18 @@ def main():
         # Calendar
         st.header('Important Dates, Links and Reminders')
         st.subheader('Reminders')
+        st.warning("!! You will continue to use this app to submit orders to us through 3/17 !!")
         st.markdown("""
                     A few reminders:
                     - Cookies are $6 per box. There's no Raspberry Rally this year, but the rest of the lineup is the same!
-                    - Cookie Season starts 1/19, and that's when digital storefronts will open and Girl Scouts can begin taking orders on their paper forms. Unfortunately we are not allowed to sell before that date.
                     - Consider setting up a QR code to link to your Girl Scout's site!
-                    - Girl Scouts - Do not give out personally identifiable information, such as last name or school, but remember that Promise and Law! You will need to wear your uniform when you sell, you are representing your family and your organization! Have fun with it - this is what you make it!
+                    - Do not give out your personally identifiable information, such as last name or school, but remember that Promise and Law! 
+                    - You will need to wear your uniform when you sell, you are representing your family and your organization!
                     - All in-person orders collected on digital cookie will need to be approved by the parent. After a few days, orders not approved will be automatically rejected and will not count towards sales.
                     - We are participating in Operation Cookie Drop, which donates boxes to the USO to distribute to service members. These donations will count in increments of $6 as a box your Girl Scout sold, but you will not have physical boxes for these donations. The boxes will be handled at the end of the sale at the Council level.
                     - You have 5 days in digital cookie to approve all orders
-                    - Monitor your digital cookie orders - submit your orders to us as frequently as you would like
+                    - Monitor your digital cookie orders - submit your orders to us via this site as frequently as you would like
+                    - Have fun with it - this is what you make it!
                     """)
         # jan = mc(2024,1)
         # feb = mc(2024,2)
@@ -313,6 +382,13 @@ def main():
                 st.success('Your order has been submitted!', icon="✅")
                 st.balloons()
 
+# booth signups - 
+    # TB - 6 girls cadadies and up; and 3 adults
+    # add notes section
+    # add drop down girl name; parent attending
+
+# booth 
+
     def myorders():
         st.write('----')
         # st.session_state['index'] = nmIndex
@@ -326,32 +402,63 @@ def main():
        
         girl_orders = order_view(girl_orders)
         girl_orders.reset_index(inplace=True, drop=True)
-        girl_orders.loc['Total']= girl_orders.sum(numeric_only=True, axis=0)
         girl_orders.fillna(0)
         girl_orders = girl_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-        st.dataframe(girl_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
+        
+
+        st.write("Paper Orders")
+        paper_orders = girl_orders[girl_orders['Order Type']=='Paper Order'].copy()
+        paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
+        paper_orders = paper_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+        st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
                      column_config={
                         "Order Amount": st.column_config.NumberColumn(
                             "Order Amt.",
                             format="$%d",
                         )})
+        total_due_po = paper_orders.loc['Total','Order Amount']
 
-        st.subheader("Payments Received - EXCLUDING DIGITAL COOKIE")
+        st.write("Digital Orders")
+        digital_orders = girl_orders[girl_orders['Order Type']=='Digital Cookie'].copy()
+        digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
+        digital_orders = digital_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+        st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
+                     column_config={
+                        "Order Amount": st.column_config.NumberColumn(
+                            "Order Amt.",
+                            format="$%d",
+                        )})
+        
+        # metrics
+        st.write('----')
         # girl_money = esu.get_dat(es,indexnm="money_received2024")
         girl_money = ed.DataFrame(es, es_index_pattern="money_received2024")
         girl_money = ed.eland_to_pandas(girl_money)
         girl_money = pd.DataFrame(girl_money)
 
+        tot_boxes_pending = girl_orders[girl_orders['status']=='Pending'].copy()
+        tot_boxes_pending = tot_boxes_pending[['status','Qty Boxes']]
+        tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
+        total_pending = tot_boxes_pending.loc['Total','Qty Boxes'].astype('int')
 
-        # st.write(girl_money.columns)
+        tot_boxes_ready = girl_orders[girl_orders['status']=='Ready for Pickup'].copy()
+        tot_boxes_ready = tot_boxes_ready[['status','Qty Boxes']]
+        tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
+        total_ready = tot_boxes_ready.loc['Total','Qty Boxes'].astype('int')
+
+
+        mc1, mc2,mc3,mc4 = st.columns([2,2,2,2])
         girl_money = girl_money[girl_money['ScoutName'] == st.session_state['gsNm']]
         # st.write(dtype(girl_money['AmountReceived']))
         girl_money["AmountReceived"] = pd.to_numeric(girl_money["AmountReceived"])
         sum_money = girl_money['AmountReceived'].sum()
-        st.metric(label="Total Amount Received", value=f"${sum_money}")
-        # paper_money_due = girl_money[girl_money['OrderType'] == "st.session_state['gsNm']"]
-        # girl_money['Order Type'].sum()
+        with mc1: st.metric(label="Total Amount Received", value=f"${sum_money}")
+        with mc2: st.metric(label="Total Due for Paper Orders", value=f"${total_due_po}")
+        with mc3: st.metric(label='Pending Boxes', value=total_pending)
+        with mc4: st.metric(label='Boxes Ready for Pickup', value=total_ready)
         # st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
+
+        st.subheader("Payments Received - EXCLUDING DIGITAL COOKIE")
         girl_money.sort_values(by="amtReceived_dt")
         girl_money.rename(inplace=True, columns={'ScoutName': 'Scouts Name','AmountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
         girl_money.reset_index(inplace=True, drop=True)
@@ -361,98 +468,82 @@ def main():
         st.write('----')
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
-        all_orders_cln.loc['Total']= all_orders_cln.sum(numeric_only=True, axis=0) 
-        all_orders_cln.fillna(0)
-        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
-        #  "qty_boxes": 'int',
-
-        edited_allorders = st.data_editor(
-            all_orders_cln.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))),
-            column_config={
-                "_index":st.column_config.TextColumn(
-                    label='Order Id'
-                ),
-                "digC_val": st.column_config.CheckboxColumn(
-                    "Validate in Dig Cookie?",
-                    help="Has this order been validate in Digital Cookie",
-                    default=False,
-                ),
-                "addEbudde": st.column_config.CheckboxColumn(
-                    "Added to Ebudde?",
-                    help="Has this order been added to Ebudde",
-                    default=False,
-                ),
-                "suOrder": st.column_config.TextColumn(
-                    "Service Unit Order",
-                    help="Itital, or #-date",
-                    default=False,
-                ),
-                "order_amount": st.column_config.NumberColumn(
-                    "Order $",
-                    format="$%d",
-                )
-            },
-            disabled=['order_id', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
-                      'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
-                      'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id','order_qty_boxes', 'submit_dt'],
-            hide_index=False,
-            key='edited_dat'
-            )
-        refresh = st.button("Refresh")
-        if refresh:
-            update_es(st.session_state['edited_dat']['edited_rows'],all_orders)
-
-
-        st.write('----')
-        st.subheader('Pending Orders')
-        pendingOrders = all_orders[all_orders['status']=="Pending"]
         
-        edpendingOrders = st.data_editor(
-            pendingOrders,
-            column_config={
-                "digC_val": st.column_config.CheckboxColumn(
-                    "Validate in Dig Cookie?",
-                    help="Has this order been validate in Digital Cookie",
-                    default=False,
-                ),
-                "addEbudde": st.column_config.CheckboxColumn(
-                    "Added to Ebudde?",
-                    help="Has this order been added to Ebudde",
-                    default=False,
-                )
-            },
-            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
-       'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
-       'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
-       'order_qty_boxes', 'submit_dt'],
-            hide_index=True,
-            )
-    
-        st.write('----')
-        st.subheader('Booth Orders')
-        BoothOrders = all_orders[all_orders['OrderType']=="Booth"]
-        BoothOrders = BoothOrders.loc[:, ['ScoutName','OrderType','submit_dt','suOrder','order_qty_boxes', 'order_amount','status','order_ready','order_pickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','addEbudde','PickupNm','PickupPh','Email']]
-       
-        edpendingOrders = st.data_editor(
-            BoothOrders,
-            column_config={
-                "digC_val": st.column_config.CheckboxColumn(
-                    "Validate in Dig Cookie?",
-                    help="Has this order been validate in Digital Cookie",
-                    default=False,
-                ),
-                "addEbudde": st.column_config.CheckboxColumn(
-                    "Added to Ebudde?",
-                    help="Has this order been added to Ebudde",
-                    default=False,
-                )
-            },
-            disabled=['docId', 'Adf', 'DSD', 'LmUp', 'OpC', 'OrderType', 'PickupNm',
-       'PickupPh', 'PickupT', 'Sam', 'ScoutName', 'Smr', 'Tags', 'Tmint',
-       'Toff', 'Tre', 'guardianNm', 'order_amount', 'order_id',
-       'order_qty_boxes', 'submit_dt'],
-            hide_index=True,
-            )
+        all_orders_cln.fillna(0)
+        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int','addEbudde':'bool','digC_val':'bool'})
+        # girl_orders_only = all_orders_cln[all_orders_cln['OrderType'] != "Booth"]
+        
+        # girl_orders_only.reset_index(inplace=True)
+        # make girl orders - remove booths
+        # st.data_editor((all_orders_cln))
+        edited_content = filter_dataframe(all_orders_cln)
+        with st.form("data_editor_form"):
+            # edited_content = filter_dataframe(all_orders_cln)
+            edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed")
+            submit_button = st.form_submit_button("Save Updates")
+
+        if submit_button:
+            st.session_state["refresh"] = True
+            try:
+                # Write to database
+                update_es(edited_dat, edited_content)
+                # time.sleep(1)
+                # Refresh data from Elastic
+                all_orders, all_orders_cln = get_all_orders()
+            except:
+                st.warning("Error updating Elastic")
+                st.write(st.session_state['edited_dat'])
+                # st.rerun()
+        st.session_state
+        # if st.button('Save and Refresh'):
+        #     
+
+        # if st.session_state.get("refresh", False):
+        #     edited_content = st.session_state['edited_dat']['edited_rows']
+        # edited_content = st.session_state['edited_dat']['edited_rows']
+
+        # filter_dataframe(st.data_editor(
+        #     all_orders_cln.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))),
+            
+        #     column_config={
+        #         "_index":st.column_config.TextColumn(
+        #             label='Order Id'
+        #         ),
+        #         "digC_val": st.column_config.CheckboxColumn(
+        #             "Validate in Dig Cookie?",
+        #             help="Has this order been validate in Digital Cookie",
+        #             width='small',
+        #             default=False,
+        #         ),
+        #         "addEbudde": st.column_config.CheckboxColumn(
+        #             "In Ebudde?",
+        #             help="Has this order been added to Ebudde",
+        #             width='small',
+        #             default=False,
+        #         ),
+        #         "suOrder": st.column_config.TextColumn(
+        #             "Service Unit Order",
+        #             help="Intital, or #-date",
+        #             width='small',
+        #             # default=False,
+        #         ),
+        #         "order_amount": st.column_config.NumberColumn(
+        #             "Order $",
+        #             format="$%d",
+        #         )
+        #     },
+        #     hide_index=False,
+        #     key='edited_dat',
+        #     # on_change=update_es(all_orders),
+        #     ))
+        # refresh = st.button("Refresh")
+        # if st.button('Save and Refresh'):
+        #     st.session_state["refresh"] = True
+
+        # if st.session_state.get("refresh", False):
+        #     edited_content = st.session_state['edited_dat']['edited_rows']
+            
+
         
     def submitBoothOrder():
         with st.form('submit orders', clear_on_submit=True):
@@ -615,8 +706,7 @@ def main():
         selected_page = st.selectbox("----", page_names_to_funcs.keys())
     with topc2:
         bandurl = "https://band.us/band/93124235"
-        st.info("Inital Orders due to us by 2/4")
-        st.info("We expect to pick up our inital order on 2/23 or 2/24, Sign-up to help get cookies coming out soon.")
+        st.info("We will to pick up our inital order on 2/25 or 2/24 @ 3:45 at a warehouse in Kent. Sign-up to help get cookies coming out soon.")
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
     page_names_to_funcs[selected_page]()
 
@@ -646,5 +736,7 @@ if __name__ == '__main__':
         st.session_state['adminpassword_correct'] = False
     if "scout_dat" not in st.session_state:
         st.session_state['scout_dat'] = False
+    if "edited_dat" not in st.session_state:
+        st.session_state['edited_dat'] = {}
 
     main()
