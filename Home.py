@@ -21,6 +21,8 @@ from datetime import datetime
 from utils.esutils import esu
 import base64
 
+index_orders = 'orders_2024'
+
 # Add parent path to system path so streamlit can find css & config toml
 # sys.path.append(str(Path(__file__).resolve().parent.parent))
 print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
@@ -153,7 +155,7 @@ def main():
             st.session_state["scout_dat"] = scout_dat[0]['_source']
 
     def get_all_orders():
-        orders = ed.DataFrame(es, es_index_pattern="orders2024")
+        orders = ed.DataFrame(es, es_index_pattern=index_orders)
         orders = ed.eland_to_pandas(orders)
         # orders.reset_index(names="index",inplace=True,drop=True)
         
@@ -175,7 +177,7 @@ def main():
             new_key = all_orders.index[key]
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
-            resp = es.update(index="orders2024", id=new_key, doc=value)
+            resp = es.update(index=index_orders, id=new_key, doc=value)
             time.sleep(2)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
@@ -494,7 +496,7 @@ def main():
                 st.warning("Error updating Elastic")
                 st.write(st.session_state['edited_dat'])
                 # st.rerun()
-        st.session_state
+        # st.session_state
         # if st.button('Save and Refresh'):
         #     
 
