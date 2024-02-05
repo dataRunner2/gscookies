@@ -21,7 +21,7 @@ from datetime import datetime
 from utils.esutils import esu
 import base64
 
-index_orders = 'orders_2024'
+index_orders = 'orders2024'
 
 # Add parent path to system path so streamlit can find css & config toml
 # sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -177,7 +177,7 @@ def main():
             new_key = all_orders.index[key]
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
-            resp = es.update(index=index_orders, id=new_key, doc=value)
+            resp = es.update(index="orders2024_dev", id=new_key, doc=value)
             time.sleep(2)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
