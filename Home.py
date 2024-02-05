@@ -178,7 +178,7 @@ def main():
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
             resp = es.update(index="orders2024_dev", id=new_key, doc=value)
-            time.sleep(2)
+            time.sleep(1)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
             
