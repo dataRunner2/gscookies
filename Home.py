@@ -129,7 +129,7 @@ def main():
     
     def allorder_view(df):
         # cols = df.columns()
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','suOrder','addEbudde','digC_val','order_qty_boxes', 'order_amount','status','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','addEbudde','digC_val','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -160,8 +160,11 @@ def main():
         # orders.reset_index(names="index",inplace=True,drop=True)
         
         all_orders = pd.DataFrame(orders)
-
         all_orders_cln = allorder_view(all_orders)
+
+        all_orders_cln.loc[all_orders_cln.order_ready == True, 'status'] = 'Order Ready to Pickup'
+        all_orders_cln.loc[all_orders_cln.order_pickedup == True, 'status'] = 'Order Pickedup'
+        # df.loc[df.ID == 103, 'FirstName'] = "Matt"
         if "all_orders" not in st.session_state:
             st.session_state['all_orders'] = all_orders
         return all_orders, all_orders_cln
@@ -177,7 +180,7 @@ def main():
             new_key = all_orders.index[key]
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
-            resp = es.update(index="orders2024_dev", id=new_key, doc=value)
+            resp = es.update(index="orders2024", id=new_key, doc=value,)
             time.sleep(1)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
@@ -210,8 +213,8 @@ def main():
                     )
                     df = df[df[column].isin(user_cat_input)]
                 elif is_numeric_dtype(df[column]):
-                    _min = float(df[column].min())
-                    _max = float(df[column].max())
+                    _min = (df[column].min())
+                    _max = (df[column].max())
                     step = (_max - _min) / 100
                     user_num_input = right.slider(
                     f"Values for {column}",
@@ -274,13 +277,8 @@ def main():
         # st.pyplot(fig=jan)
 
         st.subheader('Important Dates')
-        st.write('1/15: Primary caregivers receive Digital Cookie Registration email')
-        st.write('1/19: 2024 Cookie Program Launch')
-        st.write('1/19-2/4: Initial Orders')
-        st.write('2/4 - Initial Orders must be submitted by 12 Noon')
-        st.write('~2/23: Pick up cookies from cookie cupboard - Volutneers Needed!')
         st.write('2/25 - 3/16: In person Delivery of Digital Cookie Orders')
-        st.write('3/1 - 3/16: Booth Sales')
+        st.write('3/1 - 3/16: Booth Sales - Sign up on Band')
         st.write('3/19: Family deadline for turning in Cookie Money by 12 Noon')
         st.write('3/22: Troop wrap-up deadline')
 
@@ -301,7 +299,7 @@ def main():
             with appc1:
                 # At this point the URL query string is empty / unchanged, even with data in the text field.
                 ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie','Paper Order'],key='ordType')
-                pickupT = st.selectbox('Pickup Slot',['Initial Order - TBD']) #,'Tuesday 5-7','Wednesday 6-9'])
+                pickupT = st.selectbox('Pickup Slot', 'Thurs Feb 29 10am-7:30pm','Fri Mar 1 10am-8:30pm','Sat Mar 2 10am-4:30pm','Mon Mar 4 10am-4:30pm','Tues Mar 5 10am-4:30pm','Mon Mar 6 10am-4:30pm','Mon Mar 7 10am-8:30pm')
 
             with appc3:
                 PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
@@ -471,9 +469,8 @@ def main():
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
         
-        all_orders_cln.fillna(0)
+        # all_orders_cln.fillna(0)
         all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int','addEbudde':'bool','digC_val':'bool'})
-        # girl_orders_only = all_orders_cln[all_orders_cln['OrderType'] != "Booth"]
         
         # girl_orders_only.reset_index(inplace=True)
         # make girl orders - remove booths
@@ -481,7 +478,22 @@ def main():
         edited_content = filter_dataframe(all_orders_cln)
         with st.form("data_editor_form"):
             # edited_content = filter_dataframe(all_orders_cln)
-            edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed")
+            edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed",
+            column_config={
+                "addEbudde": st.column_config.CheckboxColumn(
+                    "In Ebudde?",
+                    help="Has this order been added to Ebudde",
+                    width='small',
+                    disabled=False
+                    # default=False,
+                ),
+                "digC_val": st.column_config.CheckboxColumn(
+                    "Validated in Digital Cookie?",
+                    width='small',
+                    # default=False
+                )
+            }
+            )
             submit_button = st.form_submit_button("Save Updates")
 
         if submit_button:
@@ -699,7 +711,7 @@ def main():
             "Dates and Links": main_page,
             "Order Cookies 🍪": order,
             "My Orders": myorders,
-            "Booths": booths,
+            # "Booths": booths,
             "Digital Cookie Instructions": dcInstructions
         }
     
@@ -708,7 +720,6 @@ def main():
         selected_page = st.selectbox("----", page_names_to_funcs.keys())
     with topc2:
         bandurl = "https://band.us/band/93124235"
-        st.info("We will to pick up our inital order on 2/25 or 2/24 @ 3:45 at a warehouse in Kent. Sign-up to help get cookies coming out soon.")
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
     page_names_to_funcs[selected_page]()
 
