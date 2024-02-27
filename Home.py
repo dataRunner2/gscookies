@@ -441,7 +441,7 @@ def main():
         tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
         total_pending = tot_boxes_pending.loc['Total','Qty Boxes'].astype('int')
 
-        tot_boxes_ready = girl_orders[girl_orders['status']=='Ready for Pickup'].copy()
+        tot_boxes_ready = girl_orders[girl_orders['status']=='Order Ready for Pickup'].copy()
         tot_boxes_ready = tot_boxes_ready[['status','Qty Boxes']]
         tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
         total_ready = tot_boxes_ready.loc['Total','Qty Boxes'].astype('int')
