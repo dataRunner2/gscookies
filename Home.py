@@ -129,7 +129,7 @@ def main():
     
     def allorder_view(df):
         # cols = df.columns()
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','addEbudde','digC_val','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','digC_val','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -299,7 +299,7 @@ def main():
             with appc1:
                 # At this point the URL query string is empty / unchanged, even with data in the text field.
                 ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie','Paper Order'],key='ordType')
-                pickupT = st.selectbox('Pickup Slot', ['Thurs Feb 29 10am-7:30pm','Fri Mar 1 10am-8:30pm','Sat Mar 2 10am-4:30pm','Mon Mar 4 10am-4:30pm','Tues Mar 5 10am-4:30pm','Mon Mar 6 10am-4:30pm','Mon Mar 7 10am-8:30pm'])
+                pickupT = st.selectbox('Pickup Slot', ['Tues Feb 27 9-12','Wed Feb 28 10-4:30','Thurs Feb 29 10am-5:30pm','Fri Mar 1 10am-8:30pm','Sat Mar 2 10am-4:30pm','Mon Mar 4 10am-4:30pm','Tues Mar 5 10am-4:30pm','Mon Mar 6 10am-4:30pm','Mon Mar 7 10am-8:30pm'])
 
             with appc3:
                 PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
@@ -470,27 +470,21 @@ def main():
         all_orders, all_orders_cln = get_all_orders()
         
         # all_orders_cln.fillna(0)
-        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int','addEbudde':'bool','digC_val':'bool'})
+        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
         
-        # girl_orders_only.reset_index(inplace=True)
-        # make girl orders - remove booths
-        # st.data_editor((all_orders_cln))
         edited_content = filter_dataframe(all_orders_cln)
         with st.form("data_editor_form"):
-            # edited_content = filter_dataframe(all_orders_cln)
             edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed",
             column_config={
-                "addEbudde": st.column_config.CheckboxColumn(
-                    "In Ebudde?",
+                "inEbudde": st.column_config.CheckboxColumn(
+                    "Ebudde Ver",
                     help="Has this order been added to Ebudde",
                     width='small',
                     disabled=False
-                    # default=False,
                 ),
                 "digC_val": st.column_config.CheckboxColumn(
                     "Validated in Digital Cookie?",
                     width='small',
-                    # default=False
                 )
             }
             )
@@ -618,7 +612,7 @@ def main():
                     "status": "Pending",
                     "order_id": orderId,
                     "digC_val": False,
-                    "addEbudde": False,
+                    "inEbudde": False,
                     "order_pickedup": False,
                     "order_ready": False
                     }
@@ -659,6 +653,7 @@ def main():
                     }
 
                 esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
+                st.toast("Database updated with changes")
 
 
     def booths():
