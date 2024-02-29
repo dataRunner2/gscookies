@@ -116,20 +116,20 @@ def main():
     def move_column_inplace(df, col, pos):
         col = df.pop(col)
         df.insert(pos, col.name, col)
-        
+
     def order_view(df):
         col_order = ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','comments','guardianNm','PickupNm','PickupPh',"Email"]
         # non_in_col_order = [c for c in df.columns not in col_order]
-        
+
         # view_df = df.drop(columns=['addEbudde','digC_val'])
         view_df=df.loc[:, col_order].copy()
 
         view_df.rename(columns={'order_id':'Order Id','OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','submit_dt':'Order Date','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
         return view_df
-    
+
     def allorder_view(df):
         # cols = df.columns()
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','digC_val','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -145,7 +145,7 @@ def main():
 
         # Update the scout data (i.e. parent) to be the name just selected
         # scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value="Ashlynn Klemisch")
-        
+
         scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
         # all_orders, all_orders_cln = get_all_orders()
         if len(scout_dat) > 0:
@@ -158,7 +158,7 @@ def main():
         orders = ed.DataFrame(es, es_index_pattern=index_orders)
         orders = ed.eland_to_pandas(orders)
         # orders.reset_index(names="index",inplace=True,drop=True)
-        
+
         all_orders = pd.DataFrame(orders)
         all_orders_cln = allorder_view(all_orders)
 
@@ -168,7 +168,7 @@ def main():
         if "all_orders" not in st.session_state:
             st.session_state['all_orders'] = all_orders
         return all_orders, all_orders_cln
-    
+
     def update_es(edited_content, all_orders):
         edited_allorders = st.session_state['edited_dat']['edited_rows']
         st.write('EDITED ROWS:')
@@ -184,7 +184,7 @@ def main():
             time.sleep(1)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
-            
+
     def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         """
         Adds a UI on top of a dataframe to let viewers filter columns
@@ -196,7 +196,7 @@ def main():
 
         # if not modify:
         #     return df
-        
+
         df = df.copy()
         modification_container = st.container()
         with modification_container:
@@ -242,7 +242,7 @@ def main():
                     )
                     if user_text_input:
                         df = df[df[column].astype(str).str.contains(user_text_input)]
-            df.loc['Total']= df.sum(numeric_only=True, axis=0) 
+            df.loc['Total']= df.sum(numeric_only=True, axis=0)
         return df
 
     #---------------------------------------
@@ -258,7 +258,7 @@ def main():
                     A few reminders:
                     - Cookies are $6 per box. There's no Raspberry Rally this year, but the rest of the lineup is the same!
                     - Consider setting up a QR code to link to your Girl Scout's site!
-                    - Do not give out your personally identifiable information, such as last name or school, but remember that Promise and Law! 
+                    - Do not give out your personally identifiable information, such as last name or school, but remember that Promise and Law!
                     - You will need to wear your uniform when you sell, you are representing your family and your organization!
                     - All in-person orders collected on digital cookie will need to be approved by the parent. After a few days, orders not approved will be automatically rejected and will not count towards sales.
                     - We are participating in Operation Cookie Drop, which donates boxes to the USO to distribute to service members. These donations will count in increments of $6 as a box your Girl Scout sold, but you will not have physical boxes for these donations. The boxes will be handled at the end of the sale at the Council level.
@@ -290,7 +290,7 @@ def main():
         # st.session_state['index'] = nmIndex
 
         st.subheader(f'Submit a Cookie Order for {st.session_state["gsNm"]}')
-        
+
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout',index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
         with st.form('submit orders', clear_on_submit=True):
@@ -304,30 +304,30 @@ def main():
             with appc3:
                 PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
                 PickupPh = st.text_input("Person picking up cookies phone number",key='pickupph',max_chars=13)
-               
+
             st.write('----')
             ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
             with ck1:
-                advf=st.number_input(label='Adventurefuls',step=1,min_value=0)
-                tags=st.number_input(label='Tagalongs',step=1,min_value=0)
+                advf=st.number_input(label='Adventurefuls',step=1,min_value=-5, value=0)
+                tags=st.number_input(label='Tagalongs',step=1,min_value=-5, value=0)
 
             with ck2:
-                lmup=st.number_input(label='Lemon-Ups',step=1,min_value=0)
-                tmint=st.number_input(label='Thin Mints',step=1,min_value=0)
+                lmup=st.number_input(label='Lemon-Ups',step=1,min_value=-5, value=0)
+                tmint=st.number_input(label='Thin Mints',step=1,min_value=-5, value=0)
             with ck3:
-                tre=st.number_input(label='Trefoils',step=1,min_value=0)
-                smr=st.number_input(label="S'Mores",step=1,min_value=0)
+                tre=st.number_input(label='Trefoils',step=1,min_value=-5, value=0)
+                smr=st.number_input(label="S'Mores",step=1,min_value=-5, value=0)
 
             with ck4:
-                dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=0)
-                toff=st.number_input(label='Toffee-Tastic',step=1,min_value=0)
+                dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=-5, value=0)
+                toff=st.number_input(label='Toffee-Tastic',step=1,min_value=-5, value=0)
 
             with ck5:
-                sam=st.number_input(label='Samoas',step=1,min_value=0)
-                opc=st.number_input(label='Operation Cookie Drop',step=1,min_value=0)
+                sam=st.number_input(label='Samoas',step=1,min_value=-5, value=0)
+                opc=st.number_input(label='Operation Cookie Drop',step=1,min_value=-5, value=0)
 
-            comments = st.text_area("Comments", key='comments')
+            comments = st.text_area("Note to us or your ref comment", key='comments')
 
 
             # submitted = st.form_submit_button()
@@ -369,7 +369,7 @@ def main():
                     "order_ready": False
                     }
                 st.text(f" {total_boxes} boxes were submitted\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
-                
+
                 esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
 
                 k=order_data.keys()
@@ -382,12 +382,12 @@ def main():
                 st.success('Your order has been submitted!', icon="✅")
                 st.balloons()
 
-# booth signups - 
+# booth signups -
     # TB - 6 girls cadadies and up; and 3 adults
     # add notes section
     # add drop down girl name; parent attending
 
-# booth 
+# booth
 
     def myorders():
         st.write('----')
@@ -399,18 +399,18 @@ def main():
         all_orders, all_orders_cln = get_all_orders()
         all_orders.reset_index(names="index",inplace=True,drop=True)
         girl_orders = all_orders[all_orders['ScoutName'] == gsNm]
-       
+
         girl_orders = order_view(girl_orders)
         girl_orders.reset_index(inplace=True, drop=True)
         girl_orders.fillna(0)
         girl_orders = girl_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-        
+
 
         st.write("Paper Orders")
         paper_orders = girl_orders[girl_orders['Order Type']=='Paper Order'].copy()
         paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
         paper_orders = paper_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-        st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
+        st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
                      column_config={
                         "Order Amount": st.column_config.NumberColumn(
                             "Order Amt.",
@@ -422,13 +422,13 @@ def main():
         digital_orders = girl_orders[girl_orders['Order Type']=='Digital Cookie'].copy()
         digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
         digital_orders = digital_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-        st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True, 
+        st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
                      column_config={
                         "Order Amount": st.column_config.NumberColumn(
                             "Order Amt.",
                             format="$%d",
                         )})
-        
+
         # metrics
         st.write('----')
         # girl_money = esu.get_dat(es,indexnm="money_received2024")
@@ -446,8 +446,13 @@ def main():
         tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
         total_ready = tot_boxes_ready.loc['Total','Qty Boxes'].astype('int')
 
+        # tot_boxes = girl_orders[girl_orders['status']=='Order Ready for Pickup'].copy()
+        tot_boxes = girl_orders[['status','Qty Boxes']]
+        tot_boxes.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
+        total_boxes = tot_boxes_ready.loc['Total','Qty Boxes'].astype('int')
 
-        mc1, mc2,mc3,mc4 = st.columns([2,2,2,2])
+
+        mc1, mc2,mc3,mc4,mc5 = st.columns([2,2,2,2,2])
         girl_money = girl_money[girl_money['ScoutName'] == st.session_state['gsNm']]
         # st.write(dtype(girl_money['AmountReceived']))
         girl_money["AmountReceived"] = pd.to_numeric(girl_money["AmountReceived"])
@@ -456,6 +461,7 @@ def main():
         with mc2: st.metric(label="Total Due for Paper Orders", value=f"${total_due_po}")
         with mc3: st.metric(label='Pending Boxes', value=total_pending)
         with mc4: st.metric(label='Boxes Ready for Pickup', value=total_ready)
+        with mc5: st.metric(label="Total Boxes",value=total_boxes)
         # st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
 
         st.subheader("Payments Received - EXCLUDING DIGITAL COOKIE")
@@ -468,10 +474,10 @@ def main():
         st.write('----')
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
-        
+
         # all_orders_cln.fillna(0)
         all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
-        
+
         edited_content = filter_dataframe(all_orders_cln)
         with st.form("data_editor_form"):
             edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed",
@@ -501,58 +507,8 @@ def main():
             except:
                 st.warning("Error updating Elastic")
                 st.write(st.session_state['edited_dat'])
-                # st.rerun()
-        # st.session_state
-        # if st.button('Save and Refresh'):
-        #     
 
-        # if st.session_state.get("refresh", False):
-        #     edited_content = st.session_state['edited_dat']['edited_rows']
-        # edited_content = st.session_state['edited_dat']['edited_rows']
 
-        # filter_dataframe(st.data_editor(
-        #     all_orders_cln.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))),
-            
-        #     column_config={
-        #         "_index":st.column_config.TextColumn(
-        #             label='Order Id'
-        #         ),
-        #         "digC_val": st.column_config.CheckboxColumn(
-        #             "Validate in Dig Cookie?",
-        #             help="Has this order been validate in Digital Cookie",
-        #             width='small',
-        #             default=False,
-        #         ),
-        #         "addEbudde": st.column_config.CheckboxColumn(
-        #             "In Ebudde?",
-        #             help="Has this order been added to Ebudde",
-        #             width='small',
-        #             default=False,
-        #         ),
-        #         "suOrder": st.column_config.TextColumn(
-        #             "Service Unit Order",
-        #             help="Intital, or #-date",
-        #             width='small',
-        #             # default=False,
-        #         ),
-        #         "order_amount": st.column_config.NumberColumn(
-        #             "Order $",
-        #             format="$%d",
-        #         )
-        #     },
-        #     hide_index=False,
-        #     key='edited_dat',
-        #     # on_change=update_es(all_orders),
-        #     ))
-        # refresh = st.button("Refresh")
-        # if st.button('Save and Refresh'):
-        #     st.session_state["refresh"] = True
-
-        # if st.session_state.get("refresh", False):
-        #     edited_content = st.session_state['edited_dat']['edited_rows']
-            
-
-        
     def submitBoothOrder():
         with st.form('submit orders', clear_on_submit=True):
             Booth = st.text_input(f'Booth - Location and Date:')
@@ -580,7 +536,7 @@ def main():
                 sam=st.number_input(label='Samoas',step=1,value=18) # 60 for first weekend
 
 
-            comments = st.text_area("Comments", key='comments')
+            comments = st.text_area("Comments to us or your ref notes", key='comments')
 
 
             # submitted = st.form_submit_button()
@@ -616,7 +572,7 @@ def main():
                     "order_pickedup": False,
                     "order_ready": False
                     }
-                
+
                 esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
                 st.success('Your order has been submitted!', icon="✅")
 
@@ -629,7 +585,7 @@ def main():
         if st.button:
             esu.add_es_doc(es, indexnm="timeslots",doc=new_timeslot)
 
-    
+
     def receiveMoney():
         st.header("Receive Money")
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
@@ -639,7 +595,7 @@ def main():
             orderRef = st.text_input("Order Reference (optional)")
             # from orders get all for this scout:
             # orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}{idTime}')
-               
+
             if st.form_submit_button("Submit Money to Cookie Crew"):
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
@@ -649,11 +605,37 @@ def main():
                     "ScoutName": st.session_state["scout_dat"]["FullName"],
                     "AmountReceived": amt,
                     "amtReceived_dt": amt_date,
-                    "orderRef": orderRef         
+                    "orderRef": orderRef
                     }
 
                 esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
                 st.toast("Database updated with changes")
+
+    def inventory():
+        st.write('----')
+        st.header('THIS PAGE IS STILL IN WORK')
+        all_orders, all_orders_cln = get_all_orders()
+        all_orders.reset_index(names="index",inplace=True,drop=True)
+
+        all_orders = order_view(all_orders)
+        all_orders.reset_index(inplace=True, drop=True)
+        all_orders.fillna(0)
+        all_orders = all_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+        all_orders.loc['Total']= all_orders.sum(numeric_only=True, axis=0)
+        st.write(all_orders)
+
+        all_total = all_orders.iloc[-1,:]
+        st.write(all_total)
+
+        pending_ready = all_orders.loc[:, ['order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']]
+        pending_ready.loc['Total']= pending_ready.sum(numeric_only=True, axis=0)
+        st.write(pending_ready)
+
+        pickedup = all_orders[all_orders['status']=='Order Pickedup'].copy()
+        pickedup = pickedup.loc[:, ['order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']]
+        pickedup.loc['Total']= pickedup.sum(numeric_only=True, axis=0)
+        st.write(pickedup)
+
 
 
     def booths():
@@ -696,6 +678,7 @@ def main():
             "My Orders": myorders,
             "Booths": booths,
             "All Orders": allorders,
+            "Inventory": inventory,
             "Add Booth Orders": submitBoothOrder,
             "Receive Money":receiveMoney,
             "Add Pickup Slots": pickupSlot,
@@ -709,7 +692,7 @@ def main():
             # "Booths": booths,
             "Digital Cookie Instructions": dcInstructions
         }
-    
+
     topc1, topc2 = st.columns([3,7])
     with topc1:
         selected_page = st.selectbox("----", page_names_to_funcs.keys())
