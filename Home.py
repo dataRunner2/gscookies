@@ -118,17 +118,14 @@ def main():
         df.insert(pos, col.name, col)
 
     def order_view(df):
-        col_order = ['ScoutName','OrderType','submit_dt','order_id','status','PickupT','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','comments','guardianNm','PickupNm','PickupPh',"Email"]
-        # non_in_col_order = [c for c in df.columns not in col_order]
+        col_order = ['ScoutName','OrderType','submit_dt','status','comments','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
 
-        # view_df = df.drop(columns=['addEbudde','digC_val'])
         view_df=df.loc[:, col_order].copy()
 
-        view_df.rename(columns={'order_id':'Order Id','OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','submit_dt':'Order Date','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+        view_df.rename(columns={'OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
         return view_df
 
     def allorder_view(df):
-        # cols = df.columns()
         df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         return df
 
@@ -157,14 +154,13 @@ def main():
     def get_all_orders():
         orders = ed.DataFrame(es, es_index_pattern=index_orders)
         orders = ed.eland_to_pandas(orders)
-        # orders.reset_index(names="index",inplace=True,drop=True)
 
         all_orders = pd.DataFrame(orders)
         all_orders_cln = allorder_view(all_orders)
 
         all_orders_cln.loc[all_orders_cln.order_ready == True, 'status'] = 'Order Ready to Pickup'
         all_orders_cln.loc[all_orders_cln.order_pickedup == True, 'status'] = 'Order Pickedup'
-        # df.loc[df.ID == 103, 'FirstName'] = "Matt"
+
         if "all_orders" not in st.session_state:
             st.session_state['all_orders'] = all_orders
         return all_orders, all_orders_cln
@@ -172,8 +168,6 @@ def main():
     def update_es(edited_content, all_orders):
         edited_allorders = st.session_state['edited_dat']['edited_rows']
         st.write('EDITED ROWS:')
-        # edited_rows = edited_allorders #['edited_dat']
-        # edited_rows = st.session_state['edited_dat']['edited_rows']
         st.markdown(f'Initial Edited Rows: {edited_allorders}')
 
         for key, value in edited_allorders.items():
@@ -399,22 +393,28 @@ def main():
         all_orders, all_orders_cln = get_all_orders()
         all_orders.reset_index(names="index",inplace=True,drop=True)
         girl_orders = all_orders[all_orders['ScoutName'] == gsNm]
+        girl_orders.sort_values(by=['OrderType','submit_dt'],ascending=[False, True], inplace=True)
+        girl_orders['Date'] = pd.to_datetime(girl_orders['submit_dt']).dt.date
+
 
         girl_orders = order_view(girl_orders)
         girl_orders.reset_index(inplace=True, drop=True)
         girl_orders.fillna(0)
-        girl_orders = girl_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-
 
         st.write("Paper Orders")
         paper_orders = girl_orders[girl_orders['Order Type']=='Paper Order'].copy()
         paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
         paper_orders = paper_orders.astype({"Order Amount": 'int64', "Qty Boxes": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+
         st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
                      column_config={
                         "Order Amount": st.column_config.NumberColumn(
                             "Order Amt.",
                             format="$%d",
+                        ),
+                        "submit_dt": st.column_config.DateColumn(
+                            "Order Date",
+                            format="MM-DD-YY",
                         )})
         total_due_po = paper_orders.loc['Total','Order Amount']
 
@@ -508,7 +508,88 @@ def main():
                 st.warning("Error updating Elastic")
                 st.write(st.session_state['edited_dat'])
 
+    def print_pull():
+        st.write('----')
+        st.header('All Orders to Date')
+        pull_orders, pull_cln = get_all_orders()
 
+        # all_orders_cln.fillna(0)
+        pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        pull_cln = pull_cln[pull_cln['order_pickedup'] == False]
+        
+        pull_cln=pull_cln.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','status']]
+        pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
+        pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        
+        pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
+        with st.expander('Filter'):
+            order_content = filter_dataframe(pull_cln)
+        st.dataframe(order_content, use_container_width=True,
+                     column_config={
+                        "Amt": st.column_config.NumberColumn(
+                            format="$%d",
+                            width='small'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        )})
+        st.write('')
+        st.write('Pickup Signature: __________________')
+        st.write('----')
+        st.dataframe(order_content, use_container_width=True,
+                     column_config={
+                        "Amt": st.column_config.NumberColumn(
+                            format="$%d",
+                            width='small'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        )})
+
+    def booth_checkin():
+        st.write('----')
+
+        data_orders, data_cln = get_all_orders()
+
+        booth_dat = data_cln[data_cln['OrderType'] == 'Booth']
+        booth_names = booth_dat['ScoutName']
+        booth_name = st.selectbox("Booth:", booth_names, placeholder='Select the Booth', key='boothNm')
+        
+
+        # all_orders_cln.fillna(0)
+        booth = booth_dat.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        booth=booth.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','status']]
+        booth.rename(inplace=True, columns={'ScoutName': 'Booth','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
+        booth = booth.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        booth.loc['Total']= booth.sum(numeric_only=True, axis=0)
+        booth = booth[booth['Booth'] == booth_name]
+        with st.expander('Filter'):
+            order_content = filter_dataframe(booth)
+        st.write(order_content)
+        st.dataframe(order_content, use_container_width=True,
+                     column_config={
+                        "Amt": st.column_config.NumberColumn(
+                            format="$%d",
+                            width='small'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        )})
+        
+        if st.form_submit_button("Submit Booth Money"):
+                now = datetime.now()
+                idTime = now.strftime("%m%d%Y%H%M")
+
+                # Every form must have a submit button.
+                moneyRec_data = {
+                    "Booth": st.session_state["scout_dat"]["FullName"],
+                    "AmountReceived": amt,
+                    "amtReceived_dt": amt_date,
+                    "orderRef": booth_name
+                    }
+
+                esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
+                st.toast("Database updated with changes")
     def submitBoothOrder():
         with st.form('submit orders', clear_on_submit=True):
             Booth = st.text_input(f'Booth - Location and Date:')
@@ -600,7 +681,7 @@ def main():
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
 
-                 # Every form must have a submit button.
+                # Every form must have a submit button.
                 moneyRec_data = {
                     "ScoutName": st.session_state["scout_dat"]["FullName"],
                     "AmountReceived": amt,
@@ -676,8 +757,10 @@ def main():
             "Dates and Information": main_page,
             "Order Cookies 🍪": order,
             "My Orders": myorders,
-            "Booths": booths,
+            # "Booths": booths,
+            # "Booth Checkin": booth_checkin,
             "All Orders": allorders,
+            "Pull Orders": print_pull,
             "Inventory": inventory,
             "Add Booth Orders": submitBoothOrder,
             "Receive Money":receiveMoney,
