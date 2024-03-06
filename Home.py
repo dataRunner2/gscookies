@@ -123,10 +123,21 @@ def main():
         view_df=df.loc[:, col_order].copy()
 
         view_df.rename(columns={'OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','ScoutName':'Scouts Name','order_qty_boxes':'Qty Boxes','order_amount':'Order Amount','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+        view_df['Date'] = pd.to_datetime(view_df['submit_dt']).dt.date
+        mv_dt_column = view_df.pop('Date')
+
+        view_df.insert(3, 'Date', mv_dt_column) 
         return view_df
 
     def allorder_view(df):
         df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df = df.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
+        df.rename(inplace=True, columns={'ScoutName': 'Scout','order_qty_boxes':'Qty','order_amount':'Amt'})
+        df.index.name ="id"
+        df['Date'] = pd.to_datetime(df['submit_dt']).dt.date
+        df.drop(columns='submit_dt',inplace=True)
+        mv_dt_column = df.pop('Date')
+        df.insert(3, 'Date', mv_dt_column) 
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -387,15 +398,13 @@ def main():
         st.write('----')
         # st.session_state['index'] = nmIndex
         st.write(st.session_state['gsNm'])
-        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', key='gsNm')
+        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm')
 
         st.subheader("All submited orders into this app's order form")
         all_orders, all_orders_cln = get_all_orders()
         all_orders.reset_index(names="index",inplace=True,drop=True)
         girl_orders = all_orders[all_orders['ScoutName'] == gsNm]
         girl_orders.sort_values(by=['OrderType','submit_dt'],ascending=[False, True], inplace=True)
-        girl_orders['Date'] = pd.to_datetime(girl_orders['submit_dt']).dt.date
-
 
         girl_orders = order_view(girl_orders)
         girl_orders.reset_index(inplace=True, drop=True)
@@ -412,7 +421,7 @@ def main():
                             "Order Amt.",
                             format="$%d",
                         ),
-                        "submit_dt": st.column_config.DateColumn(
+                        "Date": st.column_config.DateColumn(
                             "Order Date",
                             format="MM-DD-YY",
                         )})
@@ -476,12 +485,21 @@ def main():
         all_orders, all_orders_cln = get_all_orders()
 
         # all_orders_cln.fillna(0)
-        all_orders_cln = all_orders_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
-
-        edited_content = filter_dataframe(all_orders_cln)
+        all_orders_cln.pop('suOrder')
+        all_orders_cln=all_orders_cln[all_orders_cln['Scout'].str.contains('zz scout not selected')==False]
+        all_orders_cln.sort_values(by=['OrderType','Date','Scout'],ascending=[False, False, False],inplace=True)
+        
+        with st.expander('Filter'):
+            edited_content = filter_dataframe(all_orders_cln)
         with st.form("data_editor_form"):
             edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed",
             column_config={
+                'id': st.column_config.Column(
+                    width='small',
+                ),
+                'status': st.column_config.Column(
+                    width='small'
+                ),
                 "inEbudde": st.column_config.CheckboxColumn(
                     "Ebudde Ver",
                     help="Has this order been added to Ebudde",
@@ -524,7 +542,7 @@ def main():
         pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
         with st.expander('Filter'):
             order_content = filter_dataframe(pull_cln)
-        st.dataframe(order_content, use_container_width=True,
+        st.dataframe(order_content, use_container_width=True, hide_index=True,
                      column_config={
                         "Amt": st.column_config.NumberColumn(
                             format="$%d",
@@ -545,6 +563,7 @@ def main():
                         "Date": st.column_config.DateColumn(
                             format="MM-DD-YY",
                         )})
+        st.write('Reminder - All funds due back to us by 3/19 at Noon')
 
     def booth_checkin():
         st.write('----')
@@ -758,7 +777,7 @@ def main():
             "Order Cookies 🍪": order,
             "My Orders": myorders,
             # "Booths": booths,
-            # "Booth Checkin": booth_checkin,
+            "Booth Checkin": booth_checkin,
             "All Orders": allorders,
             "Pull Orders": print_pull,
             "Inventory": inventory,
@@ -799,11 +818,12 @@ if __name__ == '__main__':
         layout="wide",
         # initial_sidebar_state="collapsed"
     )
+    index = 'orders2024'
     # Initialization
     if 'index' not in st.session_state:
         st.session_state['index'] = 47
     if 'gsNm' not in st.session_state:
-        st.session_state['gsNm'] = gs_nms[st.session_state['index']]
+        st.session_state['gsNm'] = gs_nms[-1]
     if 'guardianNm' not in st.session_state:
         st.session_state['guardianNm'] = 'scout parent'
     if 'adminpassword_correct' not in st.session_state:
