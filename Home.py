@@ -126,7 +126,7 @@ def main():
         view_df['Date'] = pd.to_datetime(view_df['submit_dt']).dt.date
         mv_dt_column = view_df.pop('Date')
 
-        view_df.insert(3, 'Date', mv_dt_column) 
+        view_df.insert(3, 'Date', mv_dt_column)
         return view_df
 
     def allorder_view(df):
@@ -137,7 +137,7 @@ def main():
         df['Date'] = pd.to_datetime(df['submit_dt']).dt.date
         df.drop(columns='submit_dt',inplace=True)
         mv_dt_column = df.pop('Date')
-        df.insert(3, 'Date', mv_dt_column) 
+        df.insert(3, 'Date', mv_dt_column)
         return df
 
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
@@ -147,20 +147,23 @@ def main():
 
     def update_session(gs_nms):
         # Update index to be the index just selected
-        time.sleep(1)
+        time.sleep(2)
         st.session_state["index"] = gs_nms.index(st.session_state["gsNm"])
-        st.session_state["updatedindex"] = gs_nms.index(st.session_state["gsNm"])
+        # st.session_state["updatedindex"] = gs_nms.index(st.session_state["gsNm"])
 
         # Update the scout data (i.e. parent) to be the name just selected
         # scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value="Ashlynn Klemisch")
 
         scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
-        # all_orders, all_orders_cln = get_all_orders()
+
         if len(scout_dat) > 0:
+            sc_fn = scout_dat[0].get("_source").get("FullName")
+            st.subheader(f'Submit a Cookie Order for {sc_fn}')
             parent = scout_dat[0]['_source']['Parent']
             st.session_state["guardianNm"] = parent
-            # container.header(st.session_state["gsNm"])
             st.session_state["scout_dat"] = scout_dat[0]['_source']
+        else:
+            st.write('Scout Parent information not updated - please contact Jennifer')
 
     def get_all_orders():
         orders = ed.DataFrame(es, es_index_pattern=index_orders)
@@ -294,9 +297,12 @@ def main():
         # st.sidebar.markdown("# Order Cookies ❄️")
         # st.session_state['index'] = nmIndex
 
-        st.subheader(f'Submit a Cookie Order for {st.session_state["gsNm"]}')
+        st.subheader(f'Submit a Cookie Order')
+        
+        if 'index' not in st.session_state:
+            st.session_state['index'] = len(gs_nms)
 
-        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout',index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
+        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
         with st.form('submit orders', clear_on_submit=True):
             appc1, appc2, appc3 = st.columns([3,.25,3])
@@ -387,16 +393,10 @@ def main():
                 st.success('Your order has been submitted!', icon="✅")
                 st.balloons()
 
-# booth signups -
-    # TB - 6 girls cadadies and up; and 3 adults
-    # add notes section
-    # add drop down girl name; parent attending
-
-# booth
-
     def myorders():
         st.write('----')
-        # st.session_state['index'] = nmIndex
+        if 'index' not in st.session_state:
+            st.session_state['index'] = len(gs_nms)
         st.write(st.session_state['gsNm'])
         gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm')
 
@@ -488,7 +488,7 @@ def main():
         all_orders_cln.pop('suOrder')
         all_orders_cln=all_orders_cln[all_orders_cln['Scout'].str.contains('zz scout not selected')==False]
         all_orders_cln.sort_values(by=['OrderType','Date','Scout'],ascending=[False, False, False],inplace=True)
-        
+
         with st.expander('Filter'):
             edited_content = filter_dataframe(all_orders_cln)
         with st.form("data_editor_form"):
@@ -532,13 +532,13 @@ def main():
         pull_orders, pull_cln = get_all_orders()
 
         # all_orders_cln.fillna(0)
-        pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+        # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
         pull_cln = pull_cln[pull_cln['order_pickedup'] == False]
-        
-        pull_cln=pull_cln.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','status']]
-        pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
-        pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
-        
+
+        pull_cln=pull_cln.loc[:, ['Scout','OrderType','Date','Qty', 'Amt','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','status']]
+        # pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
+        # pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
+
         pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
         with st.expander('Filter'):
             order_content = filter_dataframe(pull_cln)
@@ -573,7 +573,7 @@ def main():
         booth_dat = data_cln[data_cln['OrderType'] == 'Booth']
         booth_names = booth_dat['ScoutName']
         booth_name = st.selectbox("Booth:", booth_names, placeholder='Select the Booth', key='boothNm')
-        
+
 
         # all_orders_cln.fillna(0)
         booth = booth_dat.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
@@ -594,7 +594,7 @@ def main():
                         "Date": st.column_config.DateColumn(
                             format="MM-DD-YY",
                         )})
-        
+
         if st.form_submit_button("Submit Booth Money"):
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
@@ -609,6 +609,7 @@ def main():
 
                 esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
                 st.toast("Database updated with changes")
+
     def submitBoothOrder():
         with st.form('submit orders', clear_on_submit=True):
             Booth = st.text_input(f'Booth - Location and Date:')
@@ -737,7 +738,6 @@ def main():
         st.write(pickedup)
 
 
-
     def booths():
         st.write("this page is in work... come back later")
 
@@ -801,6 +801,7 @@ def main():
     with topc2:
         bandurl = "https://band.us/band/93124235"
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
+        st.warning("Note - All Cookie Money Due 3/19")
     page_names_to_funcs[selected_page]()
 
 
@@ -820,8 +821,6 @@ if __name__ == '__main__':
     )
     index = 'orders2024'
     # Initialization
-    if 'index' not in st.session_state:
-        st.session_state['index'] = 47
     if 'gsNm' not in st.session_state:
         st.session_state['gsNm'] = gs_nms[-1]
     if 'guardianNm' not in st.session_state:
