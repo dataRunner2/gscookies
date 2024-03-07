@@ -554,7 +554,7 @@ def main():
         st.write('')
         st.write('Pickup Signature: __________________')
         st.write('----')
-        st.dataframe(order_content, use_container_width=True,
+        st.dataframe(order_content, use_container_width=True, hide_index=True,
                      column_config={
                         "Amt": st.column_config.NumberColumn(
                             format="$%d",
