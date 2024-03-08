@@ -537,20 +537,20 @@ def main(gs_nms):
 
     def orderManagement():
 
-        start_data = {'A': [None, None], 'B': [3, 8], 'C': [None, None]}
-        st.write(start_data)
+        # start_data = {'A': [None, None], 'B': [3, 8], 'C': [None, None]}
+        # st.write(start_data)
 
-        if 'start_df' not in ss:
-            ss.start_df = pd.DataFrame(start_data)
-            ss.start_df['A'] = pd.to_numeric(ss.start_df['A'], errors='coerce').astype('Int64')
-            st.write(ss.start_df)
+        # if 'start_df' not in ss:
+        #     ss.start_df = pd.DataFrame(start_data)
+        #     ss.start_df['A'] = pd.to_numeric(ss.start_df['A'], errors='coerce').astype('Int64')
+        #     st.write(ss.start_df)
 
-        edited_df = de(ss.start_df, num_rows='dynamic')
+        # edited_df = de(ss.start_df, num_rows='dynamic')
 
-        if not ss.start_df.equals(edited_df):
-            ss.start_df = edited_df
-            ss.start_df.loc[ss.start_df['A'].notna(), 'C'] = ss.start_df['A'] + ss.start_df['B']
-            rr()
+        # if not ss.start_df.equals(edited_df):
+        #     ss.start_df = edited_df
+        #     ss.start_df.loc[ss.start_df['A'].notna(), 'C'] = ss.start_df['A'] + ss.start_df['B']
+        #     rr()
         st.write('----')
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
