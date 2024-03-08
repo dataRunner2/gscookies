@@ -146,15 +146,9 @@ def main(gs_nms):
         total_money = total_boxes*6
         return total_boxes, total_money
 
-    def update_session(gs_nms):
-        # Update index to be the index just selected
-        time.sleep(2)
-        # st.session_state["index"] = gs_nms.index(st.session_state["gsNm"])
-        # st.session_state["updatedindex"] = gs_nms.index(st.session_state["gsNm"])
-
-        # Update the scout data (i.e. parent) to be the name just selected
-        # scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value="Ashlynn Klemisch")
-
+    def update_session(gs_nms,gs_nm='zz scout not selected'):
+        # st.write(f'gs_nm:{gs_nm}; gsNmkey: {st.session_state["gsNm"]}')
+        time.sleep(1)
         scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
 
         if len(scout_dat) > 0:
@@ -292,30 +286,18 @@ def main(gs_nms):
         st.write('3/22: Troop wrap-up deadline')
 
     def girl_orders():
-        # st.write(gs_nms)
-        index=gs_nms.index('zz scout not selected')
-        # if 'index' not in st.session_state:
-        #     st.session_state['index'] = len(gs_nms)-2
-        #     st.write(st.session_state['index'])
-            # st.write(st.session_state['gsNm'])
-        # index=st.session_state['index'],
+        noscout=gs_nms.index('zz scout not selected')
+
         # selection box can not default to none because the form defaults will fail. 
-        gsNm = st.selectbox("Select Girl Scount:", gs_nms, placeholder='Select your scout', index=index, key='gsNm',on_change=update_session(gs_nms))
+        gsNm = st.selectbox("Select Girl Scount:", gs_nms, index=noscout, key='gsNm', on_change=update_session(gs_nms))
         # st.write('----')
         orderck, summary = st.tabs(['Order Cookies','Summary of Orders'])
 
         with orderck:
             # st.write('----')
-            st.markdown(f"Submit a Cookie Order for {gsNm}❄️")
-            # st.sidebar.markdown("# Order Cookies ❄️")
-            # st.session_state['index'] = nmIndex
-            
-            # st.subheader(f'Submit a Cookie Order')
-            
-            # if 'index' not in st.session_state:
-            #     st.session_state['index'] = len(gs_nms)
+            if gsNm == st.session_state["scout_dat"]["FullName"]:
+                st.markdown(f"Ready to submit a Cookie Order for {gsNm}❄️")
 
-            # gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', index=st.session_state['index'], key='gsNm', on_change=update_session(gs_nms))
 
             with st.form('submit orders', clear_on_submit=True):
                 appc1, appc2, appc3 = st.columns([3,.25,3])
@@ -494,11 +476,11 @@ def main(gs_nms):
             st.dataframe(girl_money,use_container_width=False)
 
     def receiveMoney():
+        noscout=gs_nms.index('zz scout not selected')
+
         st.header("Receive Money")
-        # if 'index' not in st.session_state:
-        #     st.session_state['index'] = len(gs_nms) 
-        #     st.write(st.session_state['gsNm'])
-        gsNm = st.selectbox("Girl Scount Name:", gs_nms, placeholder='Select your scout', key='gsNm', on_change=update_session(gs_nms))
+        st.write('----')
+        gsNm = st.selectbox("Receive Money from (scount):", gs_nms, index=noscout, key='gsNm', on_change=update_session(gs_nms))
         st.write(gsNm)
         with st.form("money", clear_on_submit=True):
             amt = st.text_input("Amount Received")
@@ -835,7 +817,7 @@ if __name__ == '__main__':
     index = 'orders2024'
     # Initialization
     if 'gsNm' not in st.session_state:
-        st.session_state['gsNm'] = gs_nms[-1]
+        st.session_state['gsNm'] = gs_nms.index('zz scout not selected')
     if 'guardianNm' not in st.session_state:
         st.session_state['guardianNm'] = 'scout parent'
     if 'adminpassword_correct' not in st.session_state:
