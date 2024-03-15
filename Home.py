@@ -514,8 +514,11 @@ def main(gs_nms):
 
     def receiveMoney():
         noscouti=gs_nms.index('zz scout not selected')
+        if 'gsNm' not in ss:
+            st.session_state['gsNm'] = gs_nms[noscouti]
+            update_session(gs_nms)
+            rr()
         noscout = gs_nms[noscouti]
-        # st.session_state['gsNm'] = gs_nms[noscouti]
 
         st.header("Receive Money")
         st.write('----')
