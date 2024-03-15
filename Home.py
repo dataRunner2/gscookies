@@ -150,7 +150,7 @@ def main(gs_nms):
         return view_df
 
     def allorder_view(df):
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','suOrder','inEbudde','order_ready','order_pickedup','PickupT','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','inEbudde','order_ready','order_pickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         df = df.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
         df.rename(inplace=True, columns={'ScoutName': 'Scout','order_qty_boxes':'Qty','order_amount':'Amt'})
         df.index.name ="id"
@@ -431,9 +431,20 @@ def main(gs_nms):
             girl_orders = order_view(girl_orders)
             girl_orders.reset_index(inplace=True, drop=True)
             girl_orders.fillna(0)
+            girl_ord_md=girl_orders[['Scouts Name','Order Type','Date','status','Comments']]
+
+            just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','Operation Cookies']]
+            just_cookies['Qty']= just_cookies.sum(axis=1)
+            just_cookies['Amt']=just_cookies['Qty']*6
+            col = just_cookies.pop('Qty')
+            just_cookies.insert(0, col.name, col)
+            col = just_cookies.pop('Amt')
+            just_cookies.insert(0, col.name, col)
+            cookie_orders = pd.concat([girl_ord_md, just_cookies], axis=1)
+            # st.write(cookie_orders)
 
             st.write("Paper Orders")
-            paper_orders = girl_orders[girl_orders['Order Type']=='Paper Order'].copy()
+            paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
             paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
             paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
 
@@ -448,12 +459,9 @@ def main(gs_nms):
                                 format="MM-DD-YY",
                             )})
             total_due_po = paper_orders.loc['Total','Amt']
-            st.write(total_due_po)
-            cookie_totals = paper_orders[['Qty','Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic']]
-            st.write(cookie_totals)
 
             st.write("Digital Orders")
-            digital_orders = girl_orders[girl_orders['Order Type']=='Digital Cookie'].copy()
+            digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie'].copy()
             digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
             digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
             st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
@@ -470,12 +478,12 @@ def main(gs_nms):
             girl_money = ed.eland_to_pandas(girl_money)
             girl_money = pd.DataFrame(girl_money)
 
-            tot_boxes_pending = girl_orders[girl_orders['status']=='Pending'].copy()
+            tot_boxes_pending = cookie_orders[cookie_orders['status']=='Pending'].copy()
             tot_boxes_pending = tot_boxes_pending[['status','Qty']]
             tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
             total_pending = tot_boxes_pending.loc['Total','Qty'].astype('int')
 
-            tot_boxes_ready = girl_orders[girl_orders['status']=='Order Ready for Pickup'].copy()
+            tot_boxes_ready = cookie_orders[cookie_orders['status']=='Order Ready for Pickup'].copy()
             tot_boxes_ready = tot_boxes_ready[['status','Qty']]
             tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
             total_ready = tot_boxes_ready.loc['Total','Qty'].astype('int')
@@ -551,20 +559,29 @@ def main(gs_nms):
         #     ss.start_df = edited_df
         #     ss.start_df.loc[ss.start_df['A'].notna(), 'C'] = ss.start_df['A'] + ss.start_df['B']
         #     rr()
-        st.write('----')
+        # st.write('----')
         st.header('All Orders to Date')
         all_orders, all_orders_cln = get_all_orders()
 
-        # all_orders_cln.fillna(0)
-        all_orders_cln.pop('suOrder')
-        all_orders_cln=all_orders_cln[all_orders_cln['Scout'].str.contains('zz scout not selected')==False]
-        all_orders_cln.sort_values(by=['OrderType','Date','Scout'],ascending=[False, False, False],inplace=True)
+        start_dat = all_orders_cln.copy()
+
+        # start_dat = start_dat[start_dat['Scout'].str.contains('zz scout not selected')==False]
+        # start_dat.sort_values(by=['OrderType','Date','Scout'],ascending=[False, False, False],inplace=True)
+
+        # if 'start_dat' not in ss:
+        #     ss.start_dat = pd.DataFrame(start_dat)
+        #     ss.start_dat['Adv'] = pd.to_numeric(ss.start_dat['Adv'], errors='coerce').astype('Int')
+        #     ss.start_dat['LmUp'] = pd.to_numeric(ss.start_dat['LmUp'], errors='coerce').astype('Int')
 
         with st.expander('Filter'):
             edited_content = filter_dataframe(all_orders_cln)
+
         with st.form("data_editor_form"):
-            edited_dat = st.data_editor(edited_content, key='edited_dat', width=1500, height=500, use_container_width=False, num_rows="fixed",
-            column_config={
+
+            edited_dat = st.data_editor(
+                edited_content, key='edited_dat', 
+                width=1500, use_container_width=False, num_rows="fixed",
+                column_config={
                 'id': st.column_config.Column(
                     width='small',
                 ),
@@ -583,7 +600,17 @@ def main(gs_nms):
                 )
             }
             )
+            # st.write(start_dat)
             submit_button = st.form_submit_button("Save Updates")
+
+        # USE DEV index to test this - make sure it's only affecting the rows I think itis
+        # if not ss.start_dat.equals(edited_dat):
+        #     st.write('start data is Not equal to edited')
+        #     ss.start_dat = edited_dat
+        #     ss.start_dat.loc[,'Qty'] = ss.start_dat['Adv'] + ss.start_dat['LmUp'] 
+        #     # st.write(ss.start_dat)
+        #     rr()
+            
 
         if submit_button:
             st.session_state["refresh"] = True
