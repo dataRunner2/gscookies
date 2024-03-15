@@ -445,6 +445,7 @@ def main(gs_nms):
 
             st.write("Paper Orders")
             paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
+            paper_orders.pop('status')
             paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
             paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
 
@@ -463,6 +464,7 @@ def main(gs_nms):
             st.write("Digital Orders")
             digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie'].copy()
             digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
+            digital_orders.pop('status')
             digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
             st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
                         column_config={
