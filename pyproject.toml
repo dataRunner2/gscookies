@@ -1,25 +1,23 @@
-[tool.poetry]
-name = "GSCOOKIES"
+[project]
+name = "gscookies"
 version = "0.1.0"
 description = ""
-authors = ["Kennifer Klemisch"]
+authors = [
+    {name = "Jennifer Klemisch",email = "jenniferklemisch@gmail.com"}
+]
 readme = "README.md"
-
-
-[tool.poetry.dependencies]
-python = "^3.11"
-streamlit = "^1.30.0"
-elasticsearch = "^8.11.1"
-pandas = "^1.5"
-streamlit-calendar = "^1.1.0"
-eland = "^8.11.1"
-streamlit-permalink = "^0.3.0"
-st-gsheets-connection = {git = "https://github.com/streamlit/gsheets-connection"}
-mplcal = {git = "https://github.com/meta4/mplcal"}
-
+package-mode = false
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit (>=1.41.1,<2.0.0)",
+    "elasticsearch (>=8.17.0,<9.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "streamlit-permalink (>=0.5.2,<0.6.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "streamlit-authenticator (>=0.4.1,<0.5.0)"
+]
 
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-

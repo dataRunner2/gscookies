@@ -1,7 +1,7 @@
 from json import loads
 import streamlit as st
 from streamlit import session_state as ss,  data_editor as de, rerun as rr
-from streamlit_calendar import calendar
+# from streamlit_calendar import calendar
 import streamlit.components.v1 as components
 from pandas.api.types import (
     is_categorical_dtype,
@@ -12,17 +12,21 @@ from pandas.api.types import (
 import time
 from typing import List, Tuple
 import pandas as pd
-from elasticsearch import Elasticsearch  # need to also install with pip3
 import sys
 from pathlib import Path
 import hmac
 import os
-import eland as ed
 from datetime import datetime
-from utils.esutils import esu
 import base64
+import streamlit_authenticator as stauth
+# import eland as ed
+from utils.esutils import esu
+from elasticsearch import Elasticsearch  # need to also install with pip3
 
-index_orders = 'orders2024'
+index_orders = 'orders2025'
+index_scouts = 'scouts'
+index_id = 'id'
+index_money = 'money_received2025'
 
 # formatting to try
             # from streamlit_extras.add_vertical_space import add_vertical_space
@@ -51,12 +55,20 @@ print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 # # https://docs.google.com/spreadsheets/d/1-Hl4peFJjdvpXkvoPN6eEsDoljCoIFLO/edit#gid=921650825 # parent forms
 # gsDatR = conn.read(f"cookiedat43202/{fileNm}.csv", input_format="csv", ttl=600)
 
-environment = os.getenv('ENV')
-
 # print(f'The folder contents are: {os.listdir()}\n')
 # print(f"Now... the current directory: {Path.cwd()}")
 # from utils.mplcal import MplCalendar as mc
-
+from dotenv import load_dotenv, find_dotenv
+find_dotenv()
+load_dotenv()
+# Get the base directory
+basepath = Path()
+basedir = str(basepath.cwd())
+# Load the environment variables
+envars = basepath.cwd() / '.env'
+load_dotenv(envars)
+# Read an environment variable.
+SECRET_KEY = os.getenv('API_SECRET')
 # @st.cache_data
 es = esu.conn_es()
 
@@ -84,26 +96,59 @@ gs_nms = esu.get_dat(es,"scouts", "FullName")
 # #     rowdat = json.dupmp
 # #     esu.add_es_doc(es,indexnm='scouts', doc=row)
 
+def init_ss():
+    if 'authenticated' not in ss:
+        ss.authenticated = False
+        # if 'gsNm' not in st.session_state:
+        # st.session_state['gsNm'] = gs_nms.index('zz scout not selected')
+    if 'guardianNm' not in st.session_state:
+        st.session_state['guardianNm'] = 'scout parent'
+    if 'adminpassword_correct' not in st.session_state:
+        st.session_state['adminpassword_correct'] = False
+    if "scout_dat" not in st.session_state:
+        st.session_state['scout_dat'] = False
+    if "edited_dat" not in st.session_state:
+        st.session_state['edited_dat'] = {}
 
 
 
-    #---------------------------------------
-    # Password Configuration
-    #---------------------------------------
+#---------------------------------------
+# Password Configuration
+#---------------------------------------
 
-    ## square app tracking -
+## square app tracking -
 
-    # Megan
-    # Madeline Knudsvig - Troop 44044
+# Megan
+# Madeline Knudsvig - Troop 44044
+import yaml
+from yaml.loader import SafeLoader
+
+
+
 #---------------------------------------
 # Main App Configuration
 #---------------------------------------
 def main(gs_nms):
+    ss
     # container = st.container()
     # Some Basic Configuration for StreamLit - Must be the first streamlit command
     #---------------------------------------
     # Sub Functions
     #---------------------------------------
+    
+        
+    #     name, authentication_status, username = authenticator.login(location='main')
+
+        # if st.session_state["authentication_status"]:
+        #     authenticator.logout('Logout', 'main')
+        #     st.write(f'Welcome *{st.session_state["name"]}*')
+        #     st.title('Some content')
+        # elif st.session_state["authentication_status"] == False:
+        #     st.error('Username/password is incorrect')
+        # elif st.session_state["authentication_status"] == None:
+        #     st.warning('Please enter your username and password')
+
+        
     def check_password():
         """Returns `True` if the user had the correct password."""
 
@@ -116,22 +161,32 @@ def main(gs_nms):
                 st.session_state["adminpassword_correct"] = True
                 del st.session_state["password"]  # Don't store the password.
             else:
+                st.error("😕 Password incorrect")
                 st.session_state["password_correct"] = False
                 st.session_state["adminpassword_correct"] = False
-
-        # Return True if the password is validated.
-        if st.session_state.get("password_correct", False):
-            return True
-        elif st.session_state.get("adminpassword_correct",False):
-            return True
+                del st.session_state["password"]  # Don't store the password.
 
         # Show input for password.
         st.text_input("Who is our leader (capitilized, 5 letters)", type="password", on_change=password_entered, key="password")
+            
 
-        if "password_correct" in st.session_state:
-            st.error("😕 Password incorrect")
-            st.session_state.get("password_correct",False)
-        return False
+        with open('config.yaml') as file:
+            config = yaml.load(file, Loader=SafeLoader)
+        authenticator = stauth.Authenticate(
+            config['credentials'],
+            config['cookie']['name'],
+            config['cookie']['key'],
+            config['cookie']['expiry_days']
+        )
+        try:
+            user_email, user_username,user_name = authenticator.register_user # (pre_authorized=config['pre-authorized']['emails'])
+            if user_name:
+                st.success('User registered successfully')
+                ss.authenticated = True
+        except Exception as e:
+            ss.authenticated = False
+            st.error(e)
+
 
     def move_column_inplace(df, col, pos):
         col = df.pop(col)
@@ -181,10 +236,11 @@ def main(gs_nms):
             print(scout_dat)
 
     def get_all_orders():
-        orders = ed.DataFrame(es, es_index_pattern=index_orders)
-        orders = ed.eland_to_pandas(orders)
+        # orders = ed.DataFrame(es, es_index_pattern=index_orders)
+        # orders = ed.eland_to_pandas(orders)
+        all_orders = pd.DataFrame()
 
-        all_orders = pd.DataFrame(orders)
+        # all_orders = pd.DataFrame(orders)
         all_orders_cln = allorder_view(all_orders)
 
         all_orders_cln.loc[all_orders_cln.order_ready == True, 'status'] = 'Order Ready to Pickup'
@@ -476,9 +532,10 @@ def main(gs_nms):
             # metrics
             st.write('----')
             # girl_money = esu.get_dat(es,indexnm="money_received2024")
-            girl_money = ed.DataFrame(es, es_index_pattern="money_received2024")
-            girl_money = ed.eland_to_pandas(girl_money)
-            girl_money = pd.DataFrame(girl_money)
+            # girl_money = ed.DataFrame(es, es_index_pattern = index_money) #="money_received2024")
+            # girl_money = ed.eland_to_pandas(girl_money)
+            girl_money = pd.DataFrame()
+            # girl_money = pd.DataFrame(girl_money)
 
             tot_boxes_pending = cookie_orders[cookie_orders['status']=='Pending'].copy()
             tot_boxes_pending = tot_boxes_pending[['status','Qty']]
@@ -845,28 +902,33 @@ def main(gs_nms):
     local_css('style.css')
     st.title('Troop 43202 Cookie Season')
 
+
     if not check_password():
         st.stop()  # Do not continue if check_password is not True.
 
-    if st.session_state["adminpassword_correct"]:
-        page_names_to_funcs = {
-            "Dates and Information": main_page,
-            "Order Cookies 🍪": girl_orders,
-            "Order Management": orderManagement,
-            "Receive Money":receiveMoney,
-            "Pull Orders": print_pull,
-            "Add Booth Orders": submitBoothOrder,
-            # "Inventory": inventory,
-            # "Booth Checkin": booth_checkin,
-            # "Add Pickup Slots": pickupSlot,
-            # "Digital Cookie Instructions": dcInstructions
-        }
-    elif st.session_state["password_correct"]:
+    if ss.adminpassword_correct or ss.password_correct:
+        authenticate()
+        
+    if ss.authenticated:    
+        if ss.adminpassword_correct:
             page_names_to_funcs = {
-            "Dates and Links": main_page,
-            "Order Cookies 🍪": girl_orders,
-            # "Digital Cookie Instructions": dcInstructions
-        }
+                "Dates and Information": main_page,
+                "Order Cookies 🍪": girl_orders,
+                "Order Management": orderManagement,
+                "Receive Money":receiveMoney,
+                "Pull Orders": print_pull,
+                "Add Booth Orders": submitBoothOrder,
+                # "Inventory": inventory,
+                # "Booth Checkin": booth_checkin,
+                # "Add Pickup Slots": pickupSlot,
+                # "Digital Cookie Instructions": dcInstructions
+            }
+        elif st.session_state["password_correct"]:
+                page_names_to_funcs = {
+                "Dates and Links": main_page,
+                "Order Cookies 🍪": girl_orders,
+                # "Digital Cookie Instructions": dcInstructions
+            }
 
     topc1, topc2 = st.columns([3,7])
     with topc1:
@@ -892,17 +954,7 @@ if __name__ == '__main__':
         layout="wide",
         # initial_sidebar_state="collapsed"
     )
-    index = 'orders2024'
     # Initialization
-    # if 'gsNm' not in st.session_state:
-        # st.session_state['gsNm'] = gs_nms.index('zz scout not selected')
-    if 'guardianNm' not in st.session_state:
-        st.session_state['guardianNm'] = 'scout parent'
-    if 'adminpassword_correct' not in st.session_state:
-        st.session_state['adminpassword_correct'] = False
-    if "scout_dat" not in st.session_state:
-        st.session_state['scout_dat'] = False
-    if "edited_dat" not in st.session_state:
-        st.session_state['edited_dat'] = {}
+    init_ss()
 
     main(gs_nms)

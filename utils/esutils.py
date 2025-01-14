@@ -1,14 +1,31 @@
 from elasticsearch import Elasticsearch
 import streamlit as st
+import json
+import os
+environment = os.getenv('ENV')
 
+# elastic_url = 'https://gs-cookies-2025-c01bb8.es.us-east-1.aws.elastic.cloud:443'
+# api_key = ("urMz1PyBTveamanICpHGzg", "YUlpbFRaUUJtOE9UV2U2SlpKYnE6dXJNejFQeUJUdmVhbWFuSUNwSEd6Zw==")
+
+# es = Elasticsearch(
+#     hosts=[elastic_url],  # Replace with your Elasticsearch server URL
+#     api_key=api_key,  # Add if authentication is required
+#     request_timeout=30  # Optional: Adjust timeout (in seconds) if needed
+# )
 
 class esu:
     def conn_es():
         # Found in the 'Manage Deployment' page
-        CLOUD_ID = "trp43202_v1:dXMtd2VzdDEuZ2NwLmNsb3VkLmVzLmlvOjQ0MyRmMGE1OTk0YjI0YmY0YmRhOGM3OGIzZTNlZDdhMDVmZCQ2MmEyZWZjOGIxNDg0NmI1ODZkNmYxODBlOWY3MDY1NA=="
-        # if environment in (None,'local'):
-        api_key = st.secrets["es_key"]
-        conn = Elasticsearch(cloud_id=CLOUD_ID, api_key=api_key)
+        elastic_url = 'https://gs-cookies-2025-c01bb8.es.us-east-1.aws.elastic.cloud:443'
+        # Less common way to connect
+        # CLOUD_ID = "GS_Cookies_2025:dXMtZWFzdC0xLmF3cy5lbGFzdGljLmNsb3VkJGMwMWJiODZkOTI4YzQ3NGVhYjdjZmNjNWY2YzNmMzZjLmVzJGMwMWJiODZkOTI4YzQ3NGVhYjdjZmNjNWY2YzNmMzZjLmti"
+
+        api_key= (os.getenv('api_key_nm'),os.getenv('api_key'))
+        conn = Elasticsearch(
+            hosts=[elastic_url],
+            api_key=os.getenv('api_key'),
+            request_timeout=30
+        )
 
         # Successful response!
         print(conn.info())
