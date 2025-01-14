@@ -3,7 +3,7 @@ name = "gscookies"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Jennifer Klemisch",email = "jenniferklemisch@gmail.com"}
+    {name = "Jennifer Klemisch"}
 ]
 readme = "README.md"
 package-mode = false
