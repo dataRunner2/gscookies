@@ -19,6 +19,7 @@ import os
 from datetime import datetime
 import base64
 import streamlit_authenticator as stauth
+from utils import params
 # import eland as ed
 from utils.esutils import esu
 from elasticsearch import Elasticsearch  # need to also install with pip3
@@ -123,7 +124,45 @@ def init_ss():
 import yaml
 from yaml.loader import SafeLoader
 
+def register_user(location='main',key='newuser',clear_on_submit:bool=True):
+    
+    if location not in ['main', 'sidebar']:
+        raise ValueError("Location must be one of 'main' or 'sidebar'")
+    if location == 'main':
+        register_user_form = st.form(key=key) #, clear_on_submit=clear_on_submit)
+    elif location == 'sidebar':
+        register_user_form = st.sidebar.form(key=key, clear_on_submit=clear_on_submit)
+    
+    register_user_form.subheader('Register user')
+    password_instructions = os.getenv('password_instructions')
+    col1, col2, col3, col4 = register_user_form.columns(4)
+    with col1:
+        st.text_input('First name',key='parnt_firstnm')
+        st.text_input('Username',key='username')
+    with col2:
+        st.text_input('Last name',key='parnt_lastnm')
+        password = st.text_input('Password', key='usrpass',type='password', help=password_instructions)
+    with col3:
+        st.text_input('Email',key='parnt_email')
+        passcopy = st.text_input('Repeat password', type='password')
+    with col4:
+        hint = st.text_input('Password hint')
+    
+    if password != passcopy:
+        st.warning('Passwords do not match')
+    
+    new_user_doc = {
+        "username":ss.username,
+        "parent_firstname":ss.parnt_firstnm,
+        "parent_lastname": ss.parnt_lastnm,
+        "parent_email": ss.parnt_email,
+        "parent_password_hint": hint,
+        "parent_password": password
+    }
+    if register_user_form.form_submit_button('Register'):
+        esu.add_es_doc(es,indexnm=index_scouts,id=None, doc=new_user_doc)
 
+    return None, None, None
 
 #---------------------------------------
 # Main App Configuration
@@ -169,23 +208,23 @@ def main(gs_nms):
         # Show input for password.
         st.text_input("Who is our leader (capitilized, 5 letters)", type="password", on_change=password_entered, key="password")
             
-
-        with open('config.yaml') as file:
-            config = yaml.load(file, Loader=SafeLoader)
-        authenticator = stauth.Authenticate(
-            config['credentials'],
-            config['cookie']['name'],
-            config['cookie']['key'],
-            config['cookie']['expiry_days']
-        )
-        try:
-            user_email, user_username,user_name = authenticator.register_user # (pre_authorized=config['pre-authorized']['emails'])
-            if user_name:
-                st.success('User registered successfully')
-                ss.authenticated = True
-        except Exception as e:
-            ss.authenticated = False
-            st.error(e)
+        register_user()
+        # with open('config.yaml') as file:
+        #     config = yaml.load(file, Loader=SafeLoader)
+        # authenticator = stauth.Authenticate(
+        #     config['credentials'],
+        #     config['cookie']['name'],
+        #     config['cookie']['key'],
+        #     config['cookie']['expiry_days']
+        # )
+        # try:
+        #     user_email, user_username,user_name = authenticator.register_user # (pre_authorized=config['pre-authorized']['emails'])
+        #     if user_name:
+        #         st.success('User registered successfully')
+        #         ss.authenticated = True
+        # except Exception as e:
+        #     ss.authenticated = False
+        #     st.error(e)
 
 
     def move_column_inplace(df, col, pos):
@@ -223,7 +262,7 @@ def main(gs_nms):
     def update_session(gs_nms):
         # st.write(f'gs_nm:{gs_nm}; gsNmkey: {st.session_state["gsNm"]}')
         time.sleep(1)
-        scout_dat = esu.get_qry_dat(es,indexnm="scouts",field='FullName',value=st.session_state["gsNm"])
+        scout_dat = esu.get_qry_dat(es,indexnm=index_scouts,field='FullName',value=st.session_state["gsNm"])
 
         if len(scout_dat) > 0 and type('str'):
             sc_fn = scout_dat[0].get("_source").get("FullName")
@@ -259,7 +298,7 @@ def main(gs_nms):
             new_key = all_orders.index[key]
 
             st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
-            resp = es.update(index="orders2024", id=new_key, doc=value,)
+            resp = es.update(index=index_orders, id=new_key, doc=value,)
             time.sleep(1)
         st.toast("Database updated with changes")
         get_all_orders()  # this should updadte the session state with all orders
