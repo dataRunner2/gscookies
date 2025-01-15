@@ -1,12 +1,12 @@
-[project]
+[tool.poetry]
 name = "gscookies"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Jennifer Klemisch"}
-]
+authors = ["Jennifer Klemisch"]
 readme = "README.md"
 package-mode = false
+
+[dependencies]
 requires-python = ">=3.11"
 dependencies = [
     "streamlit (>=1.41.1,<2.0.0)",
