@@ -1,20 +1,17 @@
-[tool.poetry]
+[project]
 name = "gscookies"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
-authors = ["Jennifer Klemisch"]
+authors = [
+    {name = "Jennifer Klemisch",email = "jenniferklemisch@gmail.com"}
+]
 readme = "README.md"
-package-mode = false
-
-[dependencies]
-requires-python = ">=3.11"
+requires-python = ">3.9.7"
+package-mode=false
 dependencies = [
-    "streamlit (>=1.41.1,<2.0.0)",
-    "elasticsearch (>=8.17.0,<9.0.0)",
     "pandas (>=2.2.3,<3.0.0)",
-    "streamlit-permalink (>=0.5.2,<0.6.0)",
-    "python-dotenv (>=1.0.1,<2.0.0)",
-    "streamlit-authenticator (>=0.4.1,<0.5.0)"
+    "elasticsearch (>=8.17.0,<9.0.0)",
+    "streamlit (>=1.41.1,<2.0.0)"
 ]
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
+import datetime
 
 def init_ss():
     pass
@@ -43,7 +44,7 @@ def main():
                 "orderRef": orderRef
                 }
 
-            esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
+            esu.add_es_doc(es,indexnm=ss.index_money, id=None, doc=moneyRec_data)
             st.toast("Database updated with changes")
 
 if __name__ == '__main__':

@@ -12,26 +12,14 @@ from pandas.api.types import (
 import time
 from typing import List, Tuple
 import pandas as pd
-import sys
 from pathlib import Path
-import hmac
-import os
-import yaml
-from yaml.loader import SafeLoader
-
 from datetime import datetime
 import base64
-import streamlit_authenticator as stauth
-from utils import params
+
 # import eland as ed
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup 
 from elasticsearch import Elasticsearch  # need to also install with pip3
-
-index_orders = 'orders2025'
-index_scouts = 'scouts'
-index_id = 'id'
-index_money = 'money_received2025'
 
 
 # Add parent path to system path so streamlit can find css & config toml
@@ -46,18 +34,6 @@ print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 # print(f'The folder contents are: {os.listdir()}\n')
 # print(f"Now... the current directory: {Path.cwd()}")
 # from utils.mplcal import MplCalendar as mc
-from dotenv import load_dotenv, find_dotenv
-find_dotenv()
-load_dotenv()
-# Get the base directory
-basepath = Path()
-basedir = str(basepath.cwd())
-# Load the environment variables
-envars = basepath.cwd() / '.env'
-load_dotenv(envars)
-# Read an environment variable.
-env = os.getenv('env')
-
 
 #---------------------------------------
 # LOADS THE SCOUT NAME, ADDRESS, PARENT AND REWARD INFO to Elastic
@@ -114,15 +90,10 @@ def move_column_inplace(df, col, pos):
     df.insert(pos, col.name, col)
 
 
-def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
-    total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
-    total_money = total_boxes*6
-    return total_boxes, total_money
-
 def update_session(gs_nms):
     # st.write(f'gs_nm:{gs_nm}; gsNmkey: {st.session_state["gsNm"]}')
     time.sleep(1)
-    scout_dat = esu.get_qry_dat(es,indexnm=index_scouts,field='FullName',value=st.session_state["gsNm"])
+    scout_dat = esu.get_qry_dat(es,indexnm=ss.index_scouts,field='FullName',value=st.session_state["gsNm"])
 
     if len(scout_dat) > 0 and type('str'):
         sc_fn = scout_dat[0].get("_source").get("FullName")
@@ -327,7 +298,7 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                         }
                     st.text(f" {total_boxes} boxes were submitted\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
 
-                    esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
+                    esu.add_es_doc(es,indexnm=ss.index_orders, id=orderId, doc=order_data)
 
                     k=order_data.keys()
                     v=order_data.values()
@@ -402,8 +373,8 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
             # metrics
             st.write('----')
-            # girl_money = esu.get_dat(es,indexnm="money_received2024")
-            # girl_money = ed.DataFrame(es, es_index_pattern = index_money) #="money_received2024")
+            # girl_money = esu.get_dat(es,indexnm=ss.index_money)
+            # girl_money = ed.DataFrame(es, es_index_pattern = index_money) #=ss.index_money)
             # girl_money = ed.eland_to_pandas(girl_money)
             girl_money = pd.DataFrame()
             # girl_money = pd.DataFrame(girl_money)
@@ -465,7 +436,6 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 #---------------------------------------
 def main():
     st.session_state
-    st.write(env)
     # @st.cache_data
     es=get_connected()
 
@@ -473,27 +443,58 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-    # container = st.container()
-    # Some Basic Configuration for StreamLit - Must be the first streamlit command
-    #---------------------------------------
-    # Sub Functions
-    #---------------------------------------
 
-    gs_nms = esu.get_dat(es,"scouts", field='username',value='scouts')
-    st.write(gs_nms)
-    page_names_to_funcs = {
-                "Dates and Links": general_info,
-                "Order Cookies 🍪": girl_orders,
-                # "Digital Cookie Instructions": dcInstructions
-            }
+    
+    st.write(ss.gs_nms)
+
+    st.write('----')
+    # Calendar
+    st.header('Important Dates, Links and Reminders')
+    st.subheader('Reminders')
+    st.warning("!! You will continue to use this app to submit orders to us through 3/17 !!")
+    st.markdown("""
+                A few reminders:
+                - Cookies are $6 per box. There's no Raspberry Rally this year, but the rest of the lineup is the same!
+                - Consider setting up a QR code to link to your Girl Scout's site!
+                - Do not give out your personally identifiable information, such as last name or school, but remember that Promise and Law!
+                - You will need to wear your uniform when you sell, you are representing your family and your organization!
+                - All in-person orders collected on digital cookie will need to be approved by the parent. After a few days, orders not approved will be automatically rejected and will not count towards sales.
+                - We are participating in Operation Cookie Drop, which donates boxes to the USO to distribute to service members. These donations will count in increments of $6 as a box your Girl Scout sold, but you will not have physical boxes for these donations. The boxes will be handled at the end of the sale at the Council level.
+                - You have 5 days in digital cookie to approve all orders
+                - Monitor your digital cookie orders - submit your orders to us via this site as frequently as you would like
+                - Have fun with it - this is what you make it!
+                """)
+    # jan = mc(2024,1)
+    # feb = mc(2024,2)
+    # mar = mc(2024,3)
+    # jan.add_event(15, "Digital Cookie Emails to Volunteers")
+    # jan.add_event(19,"In-person Sales Begin")
+    # feb.add_event(4,"Initial Orders Submitted")
+    # feb.add_event(16,"Booth Sales")
+    # mar.add_event(19,"Family deadline for turning in Cookie Money")
+    # st.pyplot(fig=jan)
+
+    st.subheader('Important Dates')
+    st.write('2/25 - 3/16: In person Delivery of Digital Cookie Orders')
+    st.write('3/1 - 3/16: Booth Sales - Sign up on Band')
+    st.write('3/19: Family deadline for turning in Cookie Money by 12 Noon')
+    st.write('3/22: Troop wrap-up deadline')
+
+    # st.write(gs_nms)
+    # page_names_to_funcs = {
+    #             "Dates and Links": general_info,
+    #             "Order Cookies 🍪": girl_orders,
+    #             # "Digital Cookie Instructions": dcInstructions
+    #         }
     topc1, topc2 = st.columns([3,7])
     with topc1:
-        selected_page = st.selectbox("----", page_names_to_funcs.keys())
+        pass
+        # selected_page = st.selectbox("----", page_names_to_funcs.keys())
     with topc2:
         bandurl = "https://band.us/band/93124235"
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
         st.warning("Note - All Cookie Money Due 3/19")
-    page_names_to_funcs[selected_page]()
+    # page_names_to_funcs[selected_page]()
 
 
     # selected_page = st.sidebar.selectbox("----", page_names_to_funcs.keys())

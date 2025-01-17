@@ -7,11 +7,12 @@ from pathlib import Path
 from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
+import datetime
 
 def booth_checkin():
     st.write('----')
 
-    data_orders, data_cln = get_all_orders()
+    data_orders, data_cln = au.get_all_orders()
 
     booth_dat = data_cln[data_cln['OrderType'] == 'Booth']
     booth_names = booth_dat['ScoutName']
@@ -26,7 +27,7 @@ def booth_checkin():
     booth.loc['Total']= booth.sum(numeric_only=True, axis=0)
     booth = booth[booth['Booth'] == booth_name]
     with st.expander('Filter'):
-        order_content = filter_dataframe(booth)
+        order_content = au.filter_dataframe(booth)
     st.write(order_content)
     st.dataframe(order_content, use_container_width=True,
                     column_config={
@@ -50,7 +51,7 @@ def booth_checkin():
                 "orderRef": booth_name
                 }
 
-            esu.add_es_doc(es,indexnm="money_received2024", id=None, doc=moneyRec_data)
+            esu.add_es_doc(es,indexnm=ss.index_money, id=None, doc=moneyRec_data)
             st.toast("Database updated with changes")
 
 def submitBoothOrder():
@@ -117,7 +118,7 @@ def submitBoothOrder():
                 "order_ready": False
                 }
 
-            esu.add_es_doc(es,indexnm="orders2024", id=orderId, doc=order_data)
+            esu.add_es_doc(es,indexnm=ss.index_orders, id=orderId, doc=order_data)
             st.success('Your order has been submitted!', icon="✅")
 
 def pickupSlot():

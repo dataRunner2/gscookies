@@ -28,24 +28,33 @@ class setup:
             # menu_items = {"About": "Developed for Girl Scout Troop 43202, by Jennifer Klemisch"}
         )
 
+        env = st.secrets['general']['ENV']
         st.title('Troop 43202 Cookie Season')
+        st.subheader(env)
         sgL = Image.open(Path(p, 'samoas.jpg'))
 
-        st.sidebar.page_link("pages/parent_home.py", label='Cookie Portal')
-        st.divider()
         if 'is_admin' not in ss:
             ss.is_admin = False
 
+        st.sidebar.page_link("pages/parent_home.py", label='Cookie Portal')
+        st.sidebar.divider()
+
         if ss.is_admin:   
-            if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
+            # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
             st.sidebar.page_link('pages/order_management',label='Order Management')
             st.sidebar.page_link('pages/print_new_orders',label='Print Orders')
             st.sidebar.page_link('pages/receive_money',label='Receive Money')
+
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 class apputils:
+    def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
+        total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
+        total_money = total_boxes*6
+        return total_boxes, total_money
+
     def order_view(df):
         col_order = ['ScoutName','OrderType','submit_dt','status','comments','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
 
