@@ -66,7 +66,6 @@ def reset_login_form():
 # @st.cache_data
 def get_connected():
     es = esu.conn_es()
-    st.write(es.info())
     return es
 
 def validate_form(data):
@@ -137,10 +136,12 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
             "username":new_username,
             "parent_firstname":parnt_firstnm.title(),
             "parent_lastname": parnt_lastnm.title(),
+            "parent_FullName": f'{parnt_firstnm.title()} {parnt_lastnm.title()}',
+            "parent_NameId": f'{parnt_firstnm.lower()}_{parnt_lastnm.lower()}',
             "parent_email": parnt_email.lower(),
             "parent_phone": parnt_phone,
             "parent_password": usrpass,
-            "passcopy": passcopy
+            "passcopy": passcopy            
         }
 
         # Validate the form
@@ -162,9 +163,10 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
                 for i, section in enumerate(st.session_state.sections):
                     st.subheader(f"{i + 1} Scout")
                     c3_1,c3_2,c3_3,c3_4 = st.columns(4)
-                    section['fn'] = c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)
-                    section['ln'] = c3_2.text_input('Girl Scout Last Name',placeholder=parnt_lastnm, key=f'sct_ln_{i}')
+                    section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title()
+                    section['ln'] = (c3_2.text_input('Girl Scout Last Name',placeholder=parnt_lastnm, key=f'sct_ln_{i}')).title()
                     section['FullName'] = section['fn'] + " " + section['ln']
+                    section['nameId'] = section['fn'][:3].title() + section['ln'].title()
 
                     st.subheader('Award Selection')
                     st.write('Note: Cookie Dough is now **Program Credits** - this name change better reflects what the funds can be used for.')
@@ -186,9 +188,8 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
                         section['a500_choice'] = st.selectbox(label='Award Prize or Program Credits',key=f'a500_sct_{i}', options=['Award Prize','Program Credits'])
                     st.divider()
             # Iterate through sections
-        
     
-                st.markdown('By creating this account and ordering cookies, I understand that I am financially responsible for any cookies that I order. I also agree that I will return all funds by the due date')
+                st.checkbox('By creating this account and ordering cookies, I understand that I am financially responsible for any cookies that I order. I also agree that I will return all funds by the due date')
 
                 submitted = st.form_submit_button("Submit", on_click=handle_form_submission)
 
@@ -197,7 +198,7 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
         st.write(ss.form_data)
         ss.form_data['scout_details'] = ss.sections
         st.write(ss.form_data)
-        esu.add_es_doc(es,indexnm=index_scouts,id=None, doc=ss.form_data)
+        esu.add_es_doc(es,indexnm=ss.index_scouts,id=None, doc=ss.form_data)
 
 
 def get_compliment():
@@ -225,7 +226,7 @@ def get_compliment():
     ]
 
     comp = random.choice(compliments)
-    st.write(f"Welcome {ss.scout_dat.get('parent_firstname')} - {comp}")
+    st.success(comp)
         
 
     
@@ -254,25 +255,25 @@ def main():
                     qry_dat = esu.get_trm_qry_dat(es,indexnm=ss.index_scouts, field='username.keyword', value=ss.username)
                     if len(qry_dat)> 0:
                         scout_dat=qry_dat[0]['_source']
-                        
                         if (scout_dat.get('parent_password') == ss.login_usrpass) and (scout_dat.get('username') == ss.login_username):
                             ss.authenticated = True
-                            st.success("Login successful!")
                             scout_dat.pop("parent_password", None)
                             ss.scout_dat = scout_dat.copy()
-                            ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
-                            st.write(f'Your registered scouts are: {", ".join(ss.gs_nms)}')
-                            st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
                         else:
                             st.error("Invalid username or password")
                     else:
                         st.error("Invalid username")
 
     if ss.authenticated:
+       
+        ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
+        st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {", ".join(ss.gs_nms)}")
+        st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
         get_compliment()
         # Navigate to another page if authenticated
         st.success("You are authenticated!")
-        st.page_link(label="Go to Cookie Portal", page="pages/parent_home.py")
+        with st.container(border=True):
+            st.page_link(label="Click Here to Go to the Cookie Portal", use_container_width=True,page="pages/portal_home.py")
 
 
 if __name__ == '__main__':

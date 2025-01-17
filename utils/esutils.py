@@ -1,6 +1,8 @@
 from elasticsearch import Elasticsearch
+from io import StringIO
 import streamlit as st
 from streamlit import session_state as ss
+import pandas as pd
 import json
 import os
 environment = os.getenv('ENV')
@@ -32,6 +34,7 @@ class esu:
         print(conn.info())
         return conn
 
+    
     def add_es_doc(es,indexnm,id=None, doc=""):
         resp = es.index(index=indexnm, id=id, document=doc)
         # print(resp["result"])
@@ -44,8 +47,17 @@ class esu:
             fresp = [n["_source"][field] for n in fresp]
         else:
             fresp=sq1['hits']['hits']
+
         return fresp
     
+    def qry_sql(es,indexnm):
+        response = es.esql.query(
+            query=f"FROM {indexnm} | LIMIT 500",
+            format="csv",
+        )
+        df = pd.read_csv(StringIO(response.body))
+        return df
+
     def get_qry_dat(es,indexnm,field=None,value=None):
         if not value:
               value = st.session_state.gsNm

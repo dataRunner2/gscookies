@@ -1,6 +1,7 @@
 from json import loads
 import streamlit as st
 import pandas as pd
+
 import sys
 from pathlib import Path
 import time
@@ -27,24 +28,35 @@ class setup:
             initial_sidebar_state = initial_sidebar_state
             # menu_items = {"About": "Developed for Girl Scout Troop 43202, by Jennifer Klemisch"}
         )
-
-        env = st.secrets['general']['ENV']
-        st.title('Troop 43202 Cookie Season')
-        st.subheader(env)
+        # Inject custom CSS to hide the sidebar
+        hide_menu_style = """
+            <style>
+            [data-testid="stSidebarNav"] {
+                display: none;
+            }
+            </style>
+        """
+        st.markdown(hide_menu_style, unsafe_allow_html=True)
+        # env = st.secrets['general']['ENV']
+        
+        st.header('Troop 43202 Cookie Tracker')
+        st.title(page_title)
         sgL = Image.open(Path(p, 'samoas.jpg'))
 
         if 'is_admin' not in ss:
             ss.is_admin = False
 
-        st.sidebar.page_link("pages/parent_home.py", label='Cookie Portal')
+        st.sidebar.page_link("Home.py", label='Login')
+        st.sidebar.page_link("pages/portal_home.py", label='Cookie Portal')
+        st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies')
         st.sidebar.divider()
 
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            st.sidebar.page_link('pages/order_management',label='Order Management')
-            st.sidebar.page_link('pages/print_new_orders',label='Print Orders')
-            st.sidebar.page_link('pages/receive_money',label='Receive Money')
+            st.sidebar.page_link('pages/order_management.py',label='Order Management')
+            st.sidebar.page_link('pages/print_new_orders.py',label='Print Orders')
+            st.sidebar.page_link('pages/receive_money.py',label='Receive Money')
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -56,11 +68,11 @@ class apputils:
         return total_boxes, total_money
 
     def order_view(df):
-        col_order = ['ScoutName','OrderType','submit_dt','status','comments','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
+        col_order = ['ScoutName','OrderType','order_id','submit_dt','status','comments','order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
 
         view_df=df.loc[:, col_order].copy()
 
-        view_df.rename(columns={'OrderType':'Order Type','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','ScoutName':'Scouts Name','order_qty_boxes':'Qty','order_amount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
+        view_df.rename(columns={'OrderType':'Order Type','order_id':'Order Id','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','PickupT':'Pickup Date/Time','ScoutName':'Scouts Name','order_qty_boxes':'Qty','order_amount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic','OpC':'Operation Cookies'},inplace=True)
         view_df['Date'] = pd.to_datetime(view_df['submit_dt']).dt.date
         mv_dt_column = view_df.pop('Date')
 
@@ -68,9 +80,9 @@ class apputils:
         return view_df
 
     def allorder_view(df):
-        df=df.loc[:, ['ScoutName','OrderType','submit_dt','order_qty_boxes', 'order_amount','status','inEbudde','order_ready','order_pickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
+        df=df.loc[:, ['ScoutId','OrderType','order_id','submit_dt','order_qty_boxes', 'order_amount','status','addEbudde','order_ready','order_pickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','Email']]
         df = df.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
-        df.rename(inplace=True, columns={'ScoutName': 'Scout','order_qty_boxes':'Qty','order_amount':'Amt'})
+        df.rename(inplace=True, columns={'ScoutId': 'Scout','order_id':'Order Id','order_qty_boxes':'Qty','order_amount':'Amt'})
         df.index.name ="id"
         df['Date'] = pd.to_datetime(df['submit_dt']).dt.date
         df.drop(columns='submit_dt',inplace=True)
@@ -78,12 +90,10 @@ class apputils:
         df.insert(3, 'Date', mv_dt_column)
         return df
 
-    def get_all_orders():
-        # orders = ed.DataFrame(es, es_index_pattern=index_orders)
-        # orders = ed.eland_to_pandas(orders)
-        all_orders = pd.DataFrame()
+    def get_all_orders(es):
+        all_orders = esu.qry_sql(es, indexnm=ss.index_orders)
+        st.write(all_orders)
 
-        # all_orders = pd.DataFrame(orders)
         all_orders_cln = apputils.allorder_view(all_orders)
 
         all_orders_cln.loc[all_orders_cln.order_ready == True, 'status'] = 'Order Ready to Pickup'

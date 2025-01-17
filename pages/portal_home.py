@@ -74,7 +74,6 @@ def init_ss():
 # @st.cache_data
 def get_connected():
     es = esu.conn_es()
-    st.write(es.info())
     return es
 #---------------------------------------
 # Password Configuration
@@ -435,7 +434,6 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 # Main App Configuration
 #---------------------------------------
 def main():
-    st.session_state
     # @st.cache_data
     es=get_connected()
 
@@ -443,9 +441,6 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-
-    
-    st.write(ss.gs_nms)
 
     st.write('----')
     # Calendar
@@ -505,7 +500,8 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Cookie Portal")
+    setup.config_site(page_title="Cookie Portal Home",initial_sidebar_state='expanded')
+    setup.is_admin()
     # Initialization
     init_ss()
     main()

@@ -17,13 +17,27 @@ from elasticsearch import Elasticsearch  # need to also install with pip3
 def init_ss():
     pass
 
+# @st.cache_data
+def get_connected():
+    es = esu.conn_es()
+    return es
+
+def refresh():
+    # st.rerun()
+    pass
+
 def main():
+    es=get_connected()
     st.sidebar.write(ss)
     gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
 
 
     # selection box can not default to none because the form defaults will fail. 
     gsNm = st.selectbox("Select Girl Scount:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
+    # st.write(ss['scout_dat']['scout_details'])
+    selected_sct = [item for item in ss['scout_dat']['scout_details'] if item["fn"] == gsNm][0]
+    st.write(selected_sct)
+    nmId = selected_sct['nameId']
     # # st.write('----')
     orderck, summary = st.tabs(['Order Cookies','Summary of Orders'])
 
@@ -64,7 +78,7 @@ def main():
                 sam=st.number_input(label='Samoas',step=1,min_value=-5, value=0)
                 opc=st.number_input(label='Operation Cookie Drop',step=1,min_value=-5, value=0)
 
-            comments = st.text_area("Note to us or your ref comment", key='comments')
+            comments = st.text_area("Use this field to identify which order(s) in your records these cookies fulfill", key='comments')
 
 
             # submitted = st.form_submit_button()
@@ -73,14 +87,15 @@ def main():
                 now = datetime.now()
                 idTime = now.strftime("%m%d%Y%H%M")
                 # st.write(idTime)
-                orderId = (f'{st.session_state["scout_dat"]["Concat"].replace(" ","").replace(".","_").lower()}{idTime}')
+                orderId = (f'{nmId}_{idTime}')
                 # Every form must have a submit button.
                 order_data = {
-                    "ScoutName": st.session_state["scout_dat"]["FullName"],
+                    "ScoutId":nmId,
+                    "ScoutName": selected_sct["FullName"],
                     "OrderType": ordType,
-                    "guardianNm":st.session_state["guardianNm"],
-                    "guardianPh":st.session_state["scout_dat"]["Phone"],
-                    "Email":st.session_state["scout_dat"]["Email"],
+                    "guardianNm": ss['scout_dat']["parent_FullName"],
+                    "guardianPh": ss['scout_dat']["parent_phone"],
+                    "Email": ss['scout_dat']["parent_email"],
                     "PickupNm": PickupNm,
                     "PickupPh": PickupPh,
                     "PickupT": pickupT ,
@@ -105,9 +120,10 @@ def main():
                     "order_pickedup": False,
                     "order_ready": False
                     }
-                st.text(f" {total_boxes} boxes were submitted\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}")        # get latest push of orders:
+                
+                esu.add_es_doc(es,indexnm=ss.index_orders, id=orderId, doc=order_data)
 
-                esu.add_es_doc(es,indexnm=ss.orders_index, id=orderId, doc=order_data)
+                st.warning(f" {total_boxes} boxes were submitted\n Total amount owed for order = ${order_amount} \n your pickup slot is: {pickupT}\n your order id is {orderId}")        # get latest push of orders:                
 
                 k=order_data.keys()
                 v=order_data.values()
@@ -121,20 +137,22 @@ def main():
 
     # def myorders(gs_nms):
     with summary:
-        st.write('----')
+        st.button('Refresh',on_click=refresh())
         
         st.markdown(f"{gsNm} Cookie Order Summary")
        
         # st.subheader("All submited orders into this app's order form")
-        all_orders, all_orders_cln = au.get_all_orders()
-        all_orders.reset_index(names="index",inplace=True,drop=True)
-        girl_orders = all_orders[all_orders['ScoutName'] == gsNm]
+        all_orders, all_orders_cln = au.get_all_orders(es)
+        
+        all_orders_cln.reset_index(names="index",inplace=True,drop=True)
+        st.write(all_orders.columns)
+        girl_orders = all_orders[all_orders['ScoutId'] == nmId]
         girl_orders.sort_values(by=['OrderType','submit_dt'],ascending=[False, True], inplace=True)
-
+        st.write(girl_orders.columns)
         girl_orders = au.order_view(girl_orders)
         girl_orders.reset_index(inplace=True, drop=True)
         girl_orders.fillna(0)
-        girl_ord_md=girl_orders[['Scouts Name','Order Type','Date','status','Comments']]
+        girl_ord_md=girl_orders[['Scouts Name','Order Id','Order Type','Date','status','Comments']]
 
         just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','Operation Cookies']]
         just_cookies['Qty']= just_cookies.sum(axis=1)
@@ -217,7 +235,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Login")
+    setup.config_site(page_title="Order Cookies")
     # Initialization
     init_ss()
 
