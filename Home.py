@@ -267,7 +267,7 @@ def main():
     if ss.authenticated:
        
         ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
-        st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {", ".join(ss.gs_nms)}")
+        st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {', '.join(ss.gs_nms)}")
         st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
         get_compliment()
         # Navigate to another page if authenticated
