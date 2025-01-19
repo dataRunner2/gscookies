@@ -11,17 +11,23 @@ from utils.app_utils import apputils as au, setup
 def init_ss():
     pass
 
+def get_connected():
+    es = esu.conn_es()
+    return es
 
 def main():
     st.write('----')
+    es =  get_connected()
     st.header('All Orders to Date')
-    pull_orders, pull_cln = au.get_all_orders()
+    st.warning('split table per scout')
+    
+    pull_orders, pull_cln = au.get_all_orders(es)
 
     # all_orders_cln.fillna(0)
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
-    pull_cln = pull_cln[pull_cln['order_pickedup'] == False]
+    pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
 
-    pull_cln=pull_cln.loc[:, ['Scout','OrderType','Date','Qty', 'Amt','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','PickupNm','PickupPh','status']]
+    pull_cln=pull_cln.loc[:, ['Scout','orderType','Date','Qty', 'Amt','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','status']]
     # pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
     # pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
 

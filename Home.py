@@ -13,6 +13,7 @@ from datetime import datetime
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup 
 from elasticsearch import Elasticsearch  # need to also install with pip3
+import extra_streamlit_components as stx
 
 print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 
@@ -38,11 +39,9 @@ def init_ss():
         ss.cnt_scts_label = '1 Scout'
     if 'indexes' not in ss:
         ss.indexes = {}
-        ss.indexes_scouts = 'scouts'
-        ss.index_orders = 'orders2025'
-        ss.index_scouts = 'scouts'
-        ss.index_id = 'id'
-        ss.index_money = 'money_received2025'
+        ss.indexes['index_scouts'] = 'scouts2025f'
+        ss.indexes['index_orders'] = 'orders2025'
+        ss.indexes['index_money'] = 'money_received2025'
 
 # Function to add a new section
 def add_section():
@@ -55,15 +54,12 @@ def reset_sections():
 @st.fragment
 def update_sections():
     reset_sections()
-    st.write(f'Registing {ss.cnt_scts} Scouts')
-    for i in range(1,ss.cnt_scts):
-        st.write(i)
-        add_section()
+    st.write(f'Registering {ss.cnt_scts} Scouts')
+    add_section()
 
 def reset_login_form():
     pass
 
-# @st.cache_data
 def get_connected():
     es = esu.conn_es()
     return es
@@ -76,7 +72,7 @@ def validate_form(data):
     if not data["parent_lastname"]:
         errors.append("A last name is required.")
     if "@" not in data['parent_email']:
-                st.error("Please enter a valid email address.")
+        st.error("Please enter a valid email address.")
     if len(data["parent_password"]) < 6:
         st.error("Password must be at least 6 characters long.")
     # validation
@@ -104,11 +100,22 @@ def handle_form_submission():
 def validate_account_info():
     ss.validate_account = True
 
+# my_grid = grid(2, [2, 4, 1], 1, 4, vertical_align="bottom")
+#     # Row 1:
+#     my_grid.dataframe(random_df, use_container_width=True)
+#     my_grid.line_chart(random_df, use_container_width=True)
+#     # Row 2:
+#     my_grid.selectbox("Select Country", ["Germany", "Italy", "Japan", "USA"])
+#     my_grid.text_input("Your name")
+#     my_grid.button("Send", use_container_width=True)
+#     # Row 3:
+
 def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
     
     with st.form("Register user"):
         st.subheader('Register user')
         password_instructions = os.getenv('password_instructions')
+
         c0_1, c0_2, c0_3, c0_4 = st.columns(4)
         c0_1.text_input('Troop Leader Name', help='troop verification, 5 letters all lowercase', key='verifytrp') # on_change=verify_troop())
         cnt_scts = c0_2.number_input('Number of Scouts Registering',min_value=1,max_value=4,step=1, key='cnt_scts')
@@ -150,8 +157,8 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
             for error in errors:
                 st.error(error)
         else:
-            esu.add_es_doc(es,indexnm=ss.index_scouts,id=None, doc=ss.form_data)
-            st.write(ss.form_data)
+            esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
+            # st.write(ss.form_data)
             st.success('Account Information Valid')
             ss.validated = True
 
@@ -161,7 +168,7 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
         with st.container(border=True):
             with st.form('scout_deets'):
                 for i, section in enumerate(st.session_state.sections):
-                    st.subheader(f"{i + 1} Scout")
+                    st.write(f"**Scout {i + 1}**")
                     c3_1,c3_2,c3_3,c3_4 = st.columns(4)
                     section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title()
                     section['ln'] = (c3_2.text_input('Girl Scout Last Name',placeholder=parnt_lastnm, key=f'sct_ln_{i}')).title()
@@ -195,10 +202,10 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
 
 
     if ss.form_submitted:        
-        st.write(ss.form_data)
+        # st.write(ss.form_data)
         ss.form_data['scout_details'] = ss.sections
-        st.write(ss.form_data)
-        esu.add_es_doc(es,indexnm=ss.index_scouts,id=None, doc=ss.form_data)
+        # st.write(ss.form_data)
+        esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
 
 
 def get_compliment():
@@ -227,17 +234,30 @@ def get_compliment():
 
     comp = random.choice(compliments)
     st.success(comp)
-        
 
-    
+def acct_login(es):
+    qry_dat = esu.get_trm_qry_dat(es,indexnm=ss.indexes['index_scouts'], field='username.keyword', value=ss.username)
+    if len(qry_dat)> 0:
+        scout_dat=qry_dat[0]['_source']
+        if (scout_dat.get('parent_password') == ss.login_usrpass) and (scout_dat.get('username') == ss.login_username):
+            ss.authenticated = True
+            scout_dat.pop("parent_password", None)
+            ss.scout_dat = scout_dat.copy()
+        else:
+            st.error("Invalid username or password")
+    else:
+        st.error("Invalid username")
+
+ # Save state to query parameters
+
 #---------------------------------------
 # Main App Configuration
 #---------------------------------------
 def main():
-    es=get_connected()
+    es = get_connected()
     # Show input for password.
     if not ss.authenticated:
-        st.title("Login Page")
+        st.write('Welcome to our Troop Cookie Tracker.  This site is used to submit orders to our troop cupboard for any cookies that are girl delivery (paper or girl delivery Digital Cookie.\n Please notify the admin, Jennifer, via band or text if you encounter any errors. Thank you. ')
         new_account = st.button('Create an Account')
         if new_account:
             ss.show_form = True
@@ -252,29 +272,31 @@ def main():
 
                 if login:
                     ss.username = ss.login_username
-                    qry_dat = esu.get_trm_qry_dat(es,indexnm=ss.index_scouts, field='username.keyword', value=ss.username)
-                    if len(qry_dat)> 0:
-                        scout_dat=qry_dat[0]['_source']
-                        if (scout_dat.get('parent_password') == ss.login_usrpass) and (scout_dat.get('username') == ss.login_username):
-                            ss.authenticated = True
-                            scout_dat.pop("parent_password", None)
-                            ss.scout_dat = scout_dat.copy()
-                        else:
-                            st.error("Invalid username or password")
-                    else:
-                        st.error("Invalid username")
+                    acct_login(es)
 
     if ss.authenticated:
-       
+        
         ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
+
+        
         st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {', '.join(ss.gs_nms)}")
         st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
+        
+        cookie_manager = stx.CookieManager()
+        cookie = cookie_manager.get(cookie="user")
+        if cookie is None:
+            cookie_manager.set("user", ss.username)
+            cookie_manager.set("cookie_sctdat", ss.scout_dat)
+            cookie_manager.set("cookie_gs_nms", ss.gs_nms)
+            cookie_manager.set("auth", ss.authenticated) 
+            cookie_manager.set('indexes_dict',ss.indexes)
+
         get_compliment()
+       
         # Navigate to another page if authenticated
         st.success("You are authenticated!")
         with st.container(border=True):
-            st.page_link(label="Click Here to Go to the Cookie Portal", use_container_width=True,page="pages/portal_home.py")
-
+            st.page_link(label="Click Here to Go to the Cookie Portal", use_container_width=True, page="pages/portal_home.py")
 
 if __name__ == '__main__':
 

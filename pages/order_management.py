@@ -11,14 +11,19 @@ from utils.app_utils import apputils as au, setup
 def init_ss():
     pass
 
+def get_connected():
+    es = esu.conn_es()
+    return es
+
 def main():
+    es = get_connected()
     st.header('All Orders to Date')
-    all_orders, all_orders_cln = au.get_all_orders()
+    all_orders, all_orders_cln = au.get_all_orders(es)
 
     start_dat = all_orders_cln.copy()
 
     # start_dat = start_dat[start_dat['Scout'].str.contains('zz scout not selected')==False]
-    # start_dat.sort_values(by=['OrderType','Date','Scout'],ascending=[False, False, False],inplace=True)
+    # start_dat.sort_values(by=['orderType','Date','Scout'],ascending=[False, False, False],inplace=True)
 
     # if 'start_dat' not in ss:
     #     ss.start_dat = pd.DataFrame(start_dat)
@@ -71,7 +76,7 @@ def main():
             au.update_es(edited_dat, edited_content)
             # time.sleep(1)
             # Refresh data from Elastic
-            all_orders, all_orders_cln = au.get_all_orders()
+            all_orders, all_orders_cln = au.get_all_orders(es)
         except:
             st.warning("Error updating Elastic")
             st.write(st.session_state['edited_dat'])

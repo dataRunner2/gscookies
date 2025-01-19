@@ -12,7 +12,7 @@ import datetime
 def booth_checkin():
     st.write('----')
 
-    data_orders, data_cln = au.get_all_orders()
+    data_orders, data_cln = au.get_all_orders(es)
 
     booth_dat = data_cln[data_cln['OrderType'] == 'Booth']
     booth_names = booth_dat['ScoutName']
@@ -51,7 +51,7 @@ def booth_checkin():
                 "orderRef": booth_name
                 }
 
-            esu.add_es_doc(es,indexnm=ss.index_money, id=None, doc=moneyRec_data)
+            esu.add_es_doc(es,indexnm=ss.indexes['index_money'], id=None, doc=moneyRec_data)
             st.toast("Database updated with changes")
 
 def submitBoothOrder():
@@ -118,7 +118,7 @@ def submitBoothOrder():
                 "order_ready": False
                 }
 
-            esu.add_es_doc(es,indexnm=ss.index_orders, id=orderId, doc=order_data)
+            esu.add_es_doc(es,indexnm=ss.indexes['index_orders'], id=orderId, doc=order_data)
             st.success('Your order has been submitted!', icon="✅")
 
 def pickupSlot():
@@ -133,7 +133,7 @@ def pickupSlot():
 def inventory():
     st.write('----')
     st.header('THIS PAGE IS STILL IN WORK')
-    all_orders, all_orders_cln = get_all_orders()
+    all_orders, all_orders_cln = get_all_orders(es)
     all_orders.reset_index(names="index",inplace=True,drop=True)
 
     all_orders = order_view(all_orders)
