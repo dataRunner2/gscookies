@@ -38,7 +38,7 @@ def example():
 def main():
     es=get_connected()
     gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
-    st.write(ss['scout_dat'])
+    # st.write(ss['scout_dat'])
 
     # selection box can not default to none because the form defaults will fail. 
     gsNm = st.selectbox("Select Girl Scount:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
