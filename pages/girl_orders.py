@@ -38,7 +38,7 @@ def example():
 def main():
     es=get_connected()
     gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
-
+    st.write(ss['scout_dat'])
 
     # selection box can not default to none because the form defaults will fail. 
     gsNm = st.selectbox("Select Girl Scount:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
@@ -54,7 +54,7 @@ def main():
 
         with st.form('submit orders', clear_on_submit=True):
             appc1, appc2, appc3 = st.columns([3,.25,3])
-            guardianNm = st.write(f'Guardian accountable for order: {ss['scout_dat']['parent_FullName']}')
+            guardianNm = st.write(f"Guardian accountable for order: {ss['scout_dat']['parent_FullName']}")
             with appc1:
                 # At this point the URL query string is empty / unchanged, even with data in the text field.
                 ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie Girl Delivery','Paper Order'],key='ordType')
