@@ -236,7 +236,8 @@ def get_compliment():
     st.success(comp)
 
 def acct_login(es):
-    qry_dat = esu.get_trm_qry_dat(es,indexnm=ss.indexes['index_scouts'], field='username.keyword', value=ss.username)
+    qry_dat = esu.get_trm_qry_dat(es,indexnm=ss.indexes['index_scouts'], field='username', value=ss.username)
+    # st.write(qry_dat)
     if len(qry_dat)> 0:
         scout_dat=qry_dat[0]['_source']
         if (scout_dat.get('parent_password') == ss.login_usrpass) and (scout_dat.get('username') == ss.login_username):

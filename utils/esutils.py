@@ -50,8 +50,36 @@ class esu:
 
         return fresp
     
-    def qry_sql(es,indexnm):
+
+    def qry_sql(es,indexnm,fields=None,where=None):
+        '''
+        query = """
+        SELECT scoutName, scoutId, amountReceived, amtReceived_dt
+        FROM scouts_data
+        WHERE amountReceived > 5000
+        """
+
+        # Execute the query
         response = es.esql.query(
+            body={
+                "query": query
+            }
+        )
+        '''
+        if where and fields:
+            query = f"SELECT {fields} FROM {indexnm} where {where} | LIMIT 500"
+            st.write(query)
+            response = es.esql.query(
+            query=f"SELECT {fields} FROM {indexnm} where {where} | LIMIT 500",
+            format="csv",
+        )
+        elif fields and not where:
+            response = es.esql.query(
+            query=f"SELECT {fields} FROM {indexnm}| LIMIT 500",
+            format="csv",
+        )
+        else:
+            response = es.esql.query(
             query=f"FROM {indexnm} | LIMIT 500",
             format="csv",
         )
@@ -66,15 +94,17 @@ class esu:
         # st.table(qresp)
         return qresp
     
-    def get_trm_qry_dat(es,indexnm,field=None,value=None):
-        if not value:
-              value = st.session_state.gsNm
+    def get_trm_qry_dat(es,indexnm, field, value):
+    
         sq1 = es.search(index = indexnm, query={"match_phrase": {field: value}})
         qresp=sq1['hits']['hits']
-        # st.table(qresp)
         return qresp
 
-
+    def get_arry_dat(es,indexnm, field=None):
+        if field:
+            sq1 = es.search(index = indexnm, source=field, query={"match_all":{}})
+        else:
+            sq1 = es.search(index = indexnm, query={"match_all":{}})
 # class uts:
 #     pass
 #     return
