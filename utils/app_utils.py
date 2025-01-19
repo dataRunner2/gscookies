@@ -63,7 +63,7 @@ class setup:
                 
             except:
                 st.write('Can not find user information.  Please login')
-                st.page_link(page="pages/Home.py")
+                st.page_link(page="Home.py")
 
         if 'is_admin' not in ss:
             ss.is_admin = False
