@@ -55,7 +55,8 @@ def reset_sections():
 def update_sections():
     reset_sections()
     st.write(f'Registering {ss.cnt_scts} Scouts')
-    add_section()
+    for i in range(1,ss.cnt_scts):
+        add_section()
 
 def reset_login_form():
     pass
@@ -94,8 +95,11 @@ def verify_troop():
         del st.session_state["verifytrp"]  # Don't store the password.
 
 # Handle form submission
-def handle_form_submission():
-    ss.form_submitted = True
+def handle_form_submission(es):
+    ss.form_data['scout_details'] = ss.sections
+    # st.write(ss.form_data)
+    esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
+
 
 def validate_account_info():
     ss.validate_account = True
@@ -198,14 +202,7 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
     
                 st.checkbox('By creating this account and ordering cookies, I understand that I am financially responsible for any cookies that I order. I also agree that I will return all funds by the due date')
 
-                submitted = st.form_submit_button("Submit", on_click=handle_form_submission)
-
-
-    if ss.form_submitted:        
-        # st.write(ss.form_data)
-        ss.form_data['scout_details'] = ss.sections
-        # st.write(ss.form_data)
-        esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
+                submitted = st.form_submit_button("Submit", on_click=handle_form_submission,args=(es))
 
 
 def get_compliment():
