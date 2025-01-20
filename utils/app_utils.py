@@ -24,7 +24,7 @@ class setup:
         if ss.username in ['jklemisch','jbutler']:
             ss.is_admin = True
         else:
-            st.write('You are not listed as an admin, please contact Jennifer')
+            # st.write('You are not listed as an admin, please contact Jennifer')
             ss.is_admin = False
 
     def config_site(page_title="",initial_sidebar_state='collapsed'):

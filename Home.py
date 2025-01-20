@@ -157,7 +157,7 @@ def register_user(es,location='main',key='newuser',clear_on_submit:bool=True):
             for error in errors:
                 st.error(error)
         else:
-            esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
+            # esu.add_es_doc(es,indexnm=ss.indexes['index_scouts'],id=None, doc=ss.form_data)
             # st.write(ss.form_data)
             st.success('Account Information Valid')
             ss.validated = True
