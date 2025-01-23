@@ -183,7 +183,6 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
-    ss
     # Show input for password.
     if not ss.authenticated:
         st.write('Welcome to our Troop Cookie Tracker.  This site is used to submit orders to our troop cupboard for any cookies that are girl delivery (paper or girl delivery Digital Cookie.\n Please notify the admin, Jennifer, via band or text if you encounter any errors. Thank you. ')
@@ -342,7 +341,7 @@ def main():
         with st.container(border=True):
             st.page_link(label="**Click Here to Go to the Cookie Portal**", use_container_width=True, page="pages/portal_home.py")
             st.sidebar()
-            
+
 if __name__ == '__main__':
 
     setup.config_site(page_title="Login")
