@@ -109,8 +109,6 @@ def verify_troop():
         st.session_state["password_correct"] = False
 
 
-
-
 # my_grid = grid(2, [2, 4, 1], 1, 4, vertical_align="bottom")
 #     # Row 1:
 #     my_grid.dataframe(random_df, use_container_width=True)
@@ -147,7 +145,7 @@ def get_compliment():
     ]
 
     comp = random.choice(compliments)
-    st.success(comp)
+    st.info(comp)
 
 def acct_login(es):
     qry_resp = es.search(index = ss.indexes['index_scouts'], query={"match": {"username": ss.username}})
@@ -203,13 +201,10 @@ def main():
         # new_account = st.button('Create an Account')
 
         with st.expander("CREATE A NEW ACCOUNT", expanded=False):
-            cnt_scts =st.number_input(f'**Number of Scouts Registering**',min_value=1,max_value=4,step=1, key='cnt_scts')
             with st.form('new_user',border=False):
                 password_instructions = os.getenv('password_instructions')
 
                 c0_1, c0_2, c0_3, c0_4 = st.columns(4)
-                c0_1.text_input('Troop Leader Name', help='troop verification, 5 letters all lowercase', key='verifytrp') # on_change=verify_troop())
-                # cnt_scts = c0_2.number_input('Number of Scouts Registering',min_value=1,max_value=4,step=1, key='cnt_scts')
 
                 c1_1, c1_2, c1_3, c1_4 = st.columns(4)
                 parnt_firstnm = c1_1.text_input('First name',value=ss.form_data['parent_firstname'])
@@ -220,7 +215,9 @@ def main():
                 c2_1, c2_2, c2_3, c2_4 = st.columns(4)
                 new_username = c2_1.text_input('Username',value=ss.form_data['username'])
                 usrpass = c2_2.text_input('Password', value='',type='password', help=password_instructions)
-
+                cnt_scts = c2_3.number_input(f'**Number of Scouts Registering**',min_value=0,max_value=4,step=1, key='cnt_scts')
+                verifytrp = c2_4.text_input('Troop Leader Name', help='troop verification, 5 letters all lowercase')
+                
                 # passcopy = c2_3.text_input('Repeat password', value=ss.form_data['passcopy'],type='password')
                 # Hash the password
                 hashed_password = bcrypt.hashpw(usrpass.encode('utf-8'),bcrypt.gensalt())
@@ -251,7 +248,8 @@ def main():
                         "parent_NameId": f'{parnt_firstnm.lower()}_{parnt_lastnm.lower()}',
                         "parent_email": parnt_email.lower(),
                         "parent_phone": parnt_phone,
-                        "parent_password_b64": base64_encoded
+                        "parent_password_b64": base64_encoded,
+                        "verify_trp": verifytrp
                         }
                     is_validated, errors = validate_form(es, ss.form_data)
                     if errors:
@@ -333,14 +331,13 @@ def main():
             cookie_manager.set("cookie_gs_nms", ss.gs_nms)
             cookie_manager.set("auth", ss.authenticated)
             cookie_manager.set('indexes_dict',ss.indexes)
-        st.success("You are authenticated!")
+        # st.success("You are authenticated!")
 
         get_compliment()
 
         # Navigate to another page if authenticated
         with st.container(border=True):
             st.page_link(label="**Click Here to Go to the Cookie Portal**", use_container_width=True, page="pages/portal_home.py")
-            st.sidebar()
 
 if __name__ == '__main__':
 
