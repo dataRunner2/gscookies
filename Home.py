@@ -150,7 +150,7 @@ def get_compliment():
 def acct_login(es,login_password):
     qry_resp = es.search(index = ss.indexes['index_scouts'], query={"match": {"username": ss.username}})
     if not qry_resp["hits"]["hits"]:
-        return False, "User not Found"
+        return False, "User not Found", {}
     else:
         scout_dat=qry_resp["hits"]["hits"][0]['_source']
         # st.write(f'found account {scout_dat}')
@@ -165,7 +165,7 @@ def acct_login(es,login_password):
             if bcrypt.checkpw(login_password.encode('utf-8'), stored_hash):
                 return True, "Authentication successful", scout_dat
             else:
-                return False, "Invalid password", None
+                return False, "Invalid password", {}
         else:
             st.write('pass is not encrpted')
             is_correct = scout_dat.get('parent_password') == login_password
