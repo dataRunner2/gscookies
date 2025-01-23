@@ -17,11 +17,33 @@ def get_connected():
 
 def main():
     es = get_connected()
+
+    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+        st.warning("Please log in to access this page.")
+        st.page_link("./Home.py",label='Login')
+        st.stop()
+
     st.header('All Orders to Date')
     all_orders, all_orders_cln = au.get_all_orders(es)
 
     start_dat = all_orders_cln.copy()
 
+    # response = es.esql.query(
+    #     query="""
+    #     FROM employees
+    #     | STATS count = COUNT(emp_no) BY languages
+    #     | WHERE languages >= (?)
+    #     | SORT languages
+    #     | LIMIT 500
+    #     """,
+    #     format="csv",
+    #     params=[3],
+    # )
+    # df = pd.read_csv(
+    #     StringIO(response.body),
+    #     dtype={"count": "Int64", "languages": "Int64"},
+    # )
+    # print(df)
     # start_dat = start_dat[start_dat['Scout'].str.contains('zz scout not selected')==False]
     # start_dat.sort_values(by=['orderType','Date','Scout'],ascending=[False, False, False],inplace=True)
 
@@ -83,7 +105,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Home")
+    setup.config_site(page_title="Admin Cookie Management")
     # Initialization
     init_ss()
 

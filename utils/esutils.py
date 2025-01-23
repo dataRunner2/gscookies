@@ -38,7 +38,12 @@ class esu:
     def add_es_doc(es,indexnm,id=None, doc=""):
         resp = es.index(index=indexnm, id=id, document=doc)
         # print(resp["result"])
+        return resp
     
+    def update_doc(es, indexnm, id, doc={}):
+        resp = es.update_doc(indexnm=indexnm,id=id, doc=doc)
+        return resp
+
     def get_dat(es, indexnm, field=None):
         sq1 = es.search(index = indexnm, query={"match_all": {}},size=60)
         print(f"There are {sq1['hits']['total']['value']} documents in the index {indexnm}\n")
@@ -87,15 +92,12 @@ class esu:
         return df
 
     def get_qry_dat(es,indexnm,field=None,value=None):
-        if not value:
-              value = st.session_state.gsNm
         sq1 = es.search(index = indexnm, query={"match": {field: value}})
         qresp=sq1['hits']['hits']
         # st.table(qresp)
         return qresp
     
     def get_trm_qry_dat(es,indexnm, field, value):
-    
         sq1 = es.search(index = indexnm, query={"match_phrase": {field: value}})
         qresp=sq1['hits']['hits']
         return qresp

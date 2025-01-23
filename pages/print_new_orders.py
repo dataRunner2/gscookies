@@ -18,6 +18,12 @@ def get_connected():
 def main():
     st.write('----')
     es =  get_connected()
+
+    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+        st.warning("Please log in to access this page.")
+        st.page_link("./Home.py",label='Login')
+        st.stop()
+        
     st.header('All Orders to Date')
     st.warning('split table per scout')
     

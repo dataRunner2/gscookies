@@ -37,6 +37,11 @@ def example():
 
 def main():
     es=get_connected()
+    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+        st.warning("Please log in to access this page.")
+        st.page_link("./Home.py",label='Login')
+        st.stop()
+        
     gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
     # st.write(ss['scout_dat'])
 

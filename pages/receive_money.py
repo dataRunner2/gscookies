@@ -21,6 +21,11 @@ def get_connected():
 
 def main():
     es = get_connected()
+    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+        st.warning("Please log in to access this page.")
+        st.page_link("./Home.py",label='Login')
+        st.stop()
+        
 
     qry_all_nms = esu.qry_sql(es,ss.indexes['index_scouts'])
     parent_sel_gsNm = st.selectbox("Receive Money from:", qry_all_nms['parent_FullName'],placeholder='Select Parents Name')

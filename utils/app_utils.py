@@ -67,9 +67,10 @@ class setup:
 
         if 'is_admin' not in ss:
             ss.is_admin = False
-            setup.is_admin()
+            if 'username' in ss:
+                setup.is_admin()
 
-        st.sidebar.page_link("Home.py", label='Login')
+        st.sidebar.page_link("Home.py", label='Account')
         st.sidebar.page_link("pages/portal_home.py", label='Cookie Portal')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies')
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
