@@ -21,7 +21,7 @@ p = Path.cwd()
 
 class setup:
     def is_admin():
-        if ss.username in ['jklemisch','jbutler']:
+        if ss.username in ['jklemisch','foo_girl']:
             ss.is_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')
@@ -74,7 +74,7 @@ class setup:
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
         st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
-        # st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary ')
+        st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary ')
         
         st.sidebar.divider()
 
@@ -96,10 +96,15 @@ class apputils:
         return total_boxes, total_money
 
     def order_view(df):
-        col_order = ['orderType','orderId','submit_dt','status','comments','orderQtyBoxes', 'orderAmount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
+        df.loc[df.orderReady == True, 'status'] = 'Order Ready to Pickup'
+        df.loc[df.orderPickedup == True, 'status'] = 'Order Pickedup'
+
+        col_order = ['orderType','orderId','submit_dt','status',
+                     'comments','orderQtyBoxes', 'orderAmount',
+                     'Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
 
         view_df=df.loc[:, col_order].copy()
-        view_df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','ordeQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
+        view_df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
         view_df['Date'] = pd.to_datetime(view_df['submit_dt']).dt.date
         mv_dt_column = view_df.pop('Date')
 
