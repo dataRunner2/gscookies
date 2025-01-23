@@ -147,28 +147,28 @@ def get_compliment():
     comp = random.choice(compliments)
     st.info(comp)
 
-def acct_login(es):
+def acct_login(es,login_password):
     qry_resp = es.search(index = ss.indexes['index_scouts'], query={"match": {"username": ss.username}})
     if not qry_resp["hits"]["hits"]:
         return False, "User not Found"
     else:
         scout_dat=qry_resp["hits"]["hits"][0]['_source']
-        st.write('found account')
-        if scout_dat["password_hash"]:
+        # st.write(f'found account {scout_dat}')
+        if scout_dat["parent_password_b64"]:
             # Retrieve the stored Base64-encoded hash
-            stored_hash_base64 = scout_dat["password_hash"]
+            stored_hash_base64 = scout_dat["parent_password_b64"]
 
             # Decode the Base64-encoded hash
             stored_hash = base64.b64decode(stored_hash_base64)
 
             # Verify the provided password against the stored hash
-            if bcrypt.checkpw(ss.login_usrpass.encode('utf-8'), stored_hash):
-                return True, "Authentication successful"
+            if bcrypt.checkpw(login_password.encode('utf-8'), stored_hash):
+                return True, "Authentication successful", scout_dat
             else:
-                return False, "Invalid password"
+                return False, "Invalid password", None
         else:
             st.write('pass is not encrpted')
-            is_correct = scout_dat.get('parent_password') == ss.login_usrpass
+            is_correct = scout_dat.get('parent_password') == login_password
             return True, "Authentication successful"
         
  # Save state to query parameters
@@ -183,19 +183,23 @@ def main():
         st.rerun()
     # Show input for password.
     if not ss.authenticated:
-        st.write('Welcome to our Troop Cookie Tracker.  This site is used to submit orders to our troop cupboard for any cookies that are girl delivery (paper or girl delivery Digital Cookie.\n Please notify the admin, Jennifer, via band or text if you encounter any errors. Thank you. ')
+        # st.title('Welcome to our Troop Cookie Tracker.')
+        st.write('This site is used to submit orders to our troop cupboard for any cookies that are girl delivery (paper or girl delivery Digital Cookie).')
+        st.write('Please notify the admin, Jennifer, via band or text if you encounter any errors. Thank you. ')
         with st.form('login'):
             scout_dat = {}
             st.text_input('username',key='login_username')
-            login_password = st.text_input('Password', key='login_usrpass',type='password')
+            login_password = st.text_input('Password',type='password')
             login = st.form_submit_button("Login")
 
             if login:
                 ss.username = ss.login_username
-                ss.is_authenticated, message = acct_login(es,login_password)
+                ss.authenticated, message, scout_dat = acct_login(es,login_password)
                 st.write(message)
-                scout_dat.pop("parent_password", None)
-                ss.scout_dat = scout_dat.copy()
+                if ss.authenticated:
+                    scout_dat.pop("parent_password", None)
+                    ss.scout_dat = scout_dat.copy()
+                    st.rerun()
 
         st.divider()
         # new_account = st.button('Create an Account')
@@ -341,7 +345,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Login")
+    setup.config_site(page_title="Account")
     # Initialization
     init_ss()
 

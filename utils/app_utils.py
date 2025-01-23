@@ -71,9 +71,10 @@ class setup:
                 setup.is_admin()
 
         st.sidebar.page_link("Home.py", label='Account')
-        st.sidebar.page_link("pages/portal_home.py", label='Cookie Portal')
-        st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies')
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
+        st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
+        st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
+        
         st.sidebar.divider()
 
         if ss.is_admin:   
