@@ -37,7 +37,7 @@ def example():
 
 def main():
     es=get_connected()
-    if "authenticated" not in st.session_state or not st.session_state.authenticated:
+    if not ss.authenticated:
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
@@ -46,7 +46,7 @@ def main():
     # st.write(ss['scout_dat'])
 
     # selection box can not default to none because the form defaults will fail. 
-    gsNm = st.selectbox("Select Girl Scount:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
+    gsNm = st.selectbox("Select Girl Scout:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
     # st.write(ss['scout_dat']['scout_details'])
     selected_sct = [item for item in ss['scout_dat']['scout_details'] if item["fn"] == gsNm][0]
     # st.write(selected_sct)

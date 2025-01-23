@@ -70,6 +70,10 @@ def get_connected():
     ss.es = es
     return es
 
+@st.cache_data
+def is_authenticated():
+    ss.authenticated = True
+    
 def validate_form(es,data):
     st.write(f"validating content for {data['username']}")
     # st.write(data)
@@ -321,7 +325,7 @@ def main():
         ss.scout_dat = es.get(index=ss.indexes['index_scouts'],id = ss.doc_id)['_source']
 
     if ss.authenticated:
-        
+        is_authenticated()
         ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
 
         st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {', '.join(ss.gs_nms)}")

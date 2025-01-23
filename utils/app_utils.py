@@ -74,6 +74,7 @@ class setup:
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
         st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
+        # st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary ')
         
         st.sidebar.divider()
 
