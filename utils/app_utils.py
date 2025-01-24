@@ -2,7 +2,7 @@ from json import loads
 import streamlit as st
 import pandas as pd
 
-import sys
+import io
 from pathlib import Path
 import time
 from streamlit import session_state as ss
@@ -132,17 +132,22 @@ class apputils:
         return df
 
     def get_all_orders(es):
-        all_orders = esu.qry_sql(es, indexnm=ss.indexes['index_orders'])
+        # all_orders = esu.qry_sql(es, indexnm=ss.indexes['index_orders'])
         # st.write(all_orders)
 
-        all_orders_cln = apputils.allorder_view(all_orders)
+        all_orders_qry = f"FROM {ss.indexes['index_inventory']} | LIMIT 1000"
+        # st.write(girl_order_qry)
+        response = es.esql.query(
+            query=all_orders_qry,
+            format="csv")
+        
+        all_orders = pd.read_csv(io.StringIO(response.body))
 
-        all_orders_cln.loc[all_orders_cln.orderReady == True, 'status'] = 'Order Ready to Pickup'
-        all_orders_cln.loc[all_orders_cln.orderPickedup == True, 'status'] = 'Order Pickedup'
+        all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
+        all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
 
-        if "all_orders" not in st.session_state:
-            st.session_state['all_orders'] = all_orders
-        return all_orders, all_orders_cln
+        ss.all_orders = all_orders
+        return all_orders
 
     def update_es(es, update_index, edited_content, all_orders):
         edited_allorders = st.session_state['edited_dat']['edited_rows']
