@@ -18,7 +18,7 @@ from elasticsearch import Elasticsearch  # need to also install with pip3
 def init_ss():
     pass
 
-# @st.cache_data
+@st.cache_resource
 def get_connected():
     es = esu.conn_es()
     return es

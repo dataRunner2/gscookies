@@ -11,6 +11,7 @@ from utils.app_utils import apputils as au, setup
 def init_ss():
     pass
 
+@st.cache_resource
 def get_connected():
     es = esu.conn_es()
     return es

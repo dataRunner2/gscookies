@@ -66,6 +66,7 @@ def update_sections():
 def reset_account_formdata():
     ss.form_data = {"parent_firstname": "", "parent_lastname": "","parent_email": "", "parent_phone": "","username":"","parent_password": "","parent_password_hash":""}
 
+@st.cache_resource
 def get_connected():
     es = esu.conn_es()
     ss.es = es

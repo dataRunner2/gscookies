@@ -22,36 +22,10 @@ from elasticsearch import Elasticsearch  # need to also install with pip3
 # sys.path.append(str(Path(__file__).resolve().parent.parent))
 print(f'\n\n{"="*30}\n{Path().absolute()}\n{"="*30}\n')
 
-# from streamlit_gsheets import GSheetsConnection
-# conn = st.connection("gsheets", type=GSheetsConnection)
-# # https://docs.google.com/spreadsheets/d/1-Hl4peFJjdvpXkvoPN6eEsDoljCoIFLO/edit#gid=921650825 # parent forms
-# gsDatR = conn.read(f"cookiedat43202/{fileNm}.csv", input_format="csv", ttl=600)
-
-# print(f'The folder contents are: {os.listdir()}\n')
-# print(f"Now... the current directory: {Path.cwd()}")
-# from utils.mplcal import MplCalendar as mc
-
-#---------------------------------------
-# LOADS THE SCOUT NAME, ADDRESS, PARENT AND REWARD INFO to Elastic
-# Uncomment and re-do if changes to sheet
-#---------------------------------------
-# conn = st.connection("gsinfo", type=GSheetsConnection)
-# df = conn.read()
-# df.dropna(axis=1,how="all",inplace=True)
-# df.dropna(axis=0,how="all",inplace=True)
-# df.reset_index(inplace=True,drop=True)
-# df.rename(columns={"Unnamed: 6":"Address"},inplace=True)
-# df['FullName'] = [f"{f} {l}" for f,l in zip(df['First'],df['Last'])]
-
-# df = df.fillna('None')
-# type(df)
-
-# ed.pandas_to_eland(pd_df = df, es_client=es,  es_dest_index='scouts', es_if_exists="replace", es_refresh=True) # index field 'H' as text not keyword
-
-# # SLOW
-# # for i,row in df.iterrows():
-# #     rowdat = json.dupmp
-# #     esu.add_es_doc(es,indexnm='scouts', doc=row)
+@st.cache_resource
+def get_connected():
+    es = esu.conn_es()
+    return es
 
 def init_ss():
     if 'authenticated' not in ss:
@@ -67,10 +41,7 @@ def init_ss():
     if "edited_dat" not in st.session_state:
         st.session_state['edited_dat'] = {}
 
-# @st.cache_data
-def get_connected():
-    es = esu.conn_es()
-    return es
+
 #---------------------------------------
 # Password Configuration
 #---------------------------------------
