@@ -34,8 +34,6 @@ def init_ss():
         # st.session_state['gsNm'] = gs_nms.index('zz scout not selected')
     if 'guardianNm' not in st.session_state:
         st.session_state['guardianNm'] = 'scout parent'
-    if 'adminpassword_correct' not in st.session_state:
-        st.session_state['adminpassword_correct'] = False
     if "scout_dat" not in st.session_state:
         st.session_state['scout_dat'] = False
     if "edited_dat" not in st.session_state:
