@@ -50,108 +50,112 @@ def main():
     response = es.esql.query(
         query=girl_order_qry,
         format="csv")
-    girl_orders = pd.read_csv(io.StringIO(response.body))
-
     
-    girl_orders = au.order_view(girl_orders)
-    girl_orders.reset_index(inplace=True, drop=True)
-    girl_orders.fillna(0)
-    girl_ord_md=girl_orders[['Order Id','Order Type','Date','Status','Comments']]
+    girl_orders = pd.read_csv(io.StringIO(response.body))
+    if not pd.DataFrame(girl_orders).empty:
+    
+        girl_orders = au.order_view(girl_orders)
+        girl_orders.reset_index(inplace=True, drop=True)
+        girl_orders.fillna(0)
+        girl_ord_md=girl_orders[['Order Id','Order Type','Date','Status','Comments']]
 
-    just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC','Qty','Amt']].copy()
-    # just_cookies['Qty']= just_cookies.sum(axis=1)
-    # just_cookies['Amt']=just_cookies['Qty']*6
-    col = just_cookies.pop('Qty')
-    just_cookies.insert(0, col.name, col)
-    col = just_cookies.pop('Amt')
-    just_cookies.insert(0, col.name, col)
-    cookie_orders = pd.concat([girl_ord_md, just_cookies], axis=1)
+        just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC','Qty','Amt']].copy()
+        # just_cookies['Qty']= just_cookies.sum(axis=1)
+        # just_cookies['Amt']=just_cookies['Qty']*6
+        col = just_cookies.pop('Qty')
+        just_cookies.insert(0, col.name, col)
+        col = just_cookies.pop('Amt')
+        just_cookies.insert(0, col.name, col)
+        cookie_orders = pd.concat([girl_ord_md, just_cookies], axis=1)
 
-    st.write("Paper Orders")
-    paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
-    paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
-    paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
+        st.write("Paper Orders")
+        paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
+        paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
+        paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
 
-    st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
-                column_config={
-                    "Amount": st.column_config.NumberColumn(
-                        "Amt.",
-                        format="$%d",
-                    ),
-                    "Date": st.column_config.DateColumn(
-                        "Order Date",
-                        format="MM-DD-YY",
-                    )})
-    total_due_po = paper_orders.loc['Total','Amt']
+        st.dataframe(paper_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
+                    column_config={
+                        "Amount": st.column_config.NumberColumn(
+                            "Amt.",
+                            format="$%d",
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            "Order Date",
+                            format="MM-DD-YY",
+                        )})
+        total_due_po = paper_orders.loc['Total','Amt']
 
-    st.write("Digital Orders")
-    digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie Girl Delivery'].copy()
-    digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
-    digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-    st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
-                column_config={
-                    "Amt": st.column_config.NumberColumn(
-                        "Order Amt.",
-                        format="$%d",
-                    )})
+        st.write("Digital Orders")
+        digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie Girl Delivery'].copy()
+        digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
+        digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
+        st.dataframe(digital_orders.style.applymap(lambda _: "background-color: #F0F0F0;", subset=(['Total'], slice(None))), use_container_width=True,
+                    column_config={
+                        "Amt": st.column_config.NumberColumn(
+                            "Order Amt.",
+                            format="$%d",
+                        )})
 
-    tot_boxes_pending = cookie_orders[cookie_orders['Status']=='Pending'].copy()
-    tot_boxes_pending = tot_boxes_pending[['Status','Qty']]
-    tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
-    total_pending = tot_boxes_pending.loc['Total','Qty'].astype('int')
+        tot_boxes_pending = cookie_orders[cookie_orders['Status']=='Pending'].copy()
+        tot_boxes_pending = tot_boxes_pending[['Status','Qty']]
+        tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
+        total_pending = tot_boxes_pending.loc['Total','Qty'].astype('int')
 
-    tot_boxes_ready = cookie_orders[cookie_orders['Status']=='Order Ready for Pickup'].copy()
-    tot_boxes_ready = tot_boxes_ready[['Status','Qty']]
-    tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-    total_ready = tot_boxes_ready.loc['Total','Qty'].astype('int')
+        tot_boxes_ready = cookie_orders[cookie_orders['Status']=='Order Ready for Pickup'].copy()
+        tot_boxes_ready = tot_boxes_ready[['Status','Qty']]
+        tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
+        total_ready = tot_boxes_ready.loc['Total','Qty'].astype('int')
 
-    tot_boxes = girl_orders[girl_orders['Status']=='Order Ready for Pickup'].copy()
-    tot_boxes = girl_orders[['Status','Qty']]
-    tot_boxes.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-    total_boxes = tot_boxes_ready.loc['Total','Qty'].astype('int')
+        tot_boxes = girl_orders[girl_orders['Status']=='Order Ready for Pickup'].copy()
+        tot_boxes = girl_orders[['Status','Qty']]
+        tot_boxes.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
+        total_boxes = tot_boxes_ready.loc['Total','Qty'].astype('int')
 
-    total_boxes_ordered = cookie_orders[['Qty','Amt']].sum(numeric_only=True)
+        total_boxes_ordered = cookie_orders[['Qty','Amt']].sum(numeric_only=True)
 
-    # Summary of Funds Received
-    st.write('Funds Deposited')
-    depst_received = esu.get_trm_qry_dat(es,ss.indexes['index_money'], 'scoutId', nmId)
-    girl_money_qry = f'FROM {ss.indexes["index_money"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
-    # st.write(girl_order_qry)
-    response = es.esql.query(
-        query=girl_money_qry,
-        format="csv")
-    girl_money = pd.read_csv(io.StringIO(response.body))
+        # Summary of Funds Received
+        st.write('Funds Deposited')
+        depst_received = esu.get_trm_qry_dat(es,ss.indexes['index_money'], 'scoutId', nmId)
+        girl_money_qry = f'FROM {ss.indexes["index_money"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
+        # st.write(girl_order_qry)
+        response = es.esql.query(
+            query=girl_money_qry,
+            format="csv")
+        girl_money = pd.read_csv(io.StringIO(response.body))
 
-    if depst_received:
-        depst_received = [order['_source'] for order in depst_received]
-        deposits_received_df = pd.DataFrame(depst_received)
-        st.write(deposits_received_df)
+        if depst_received:
+            depst_received = [order['_source'] for order in depst_received]
+            deposits_received_df = pd.DataFrame(depst_received)
+            st.write(deposits_received_df)
+        else:
+            deposits_received_df = pd.DataFrame({'amountReceived': [0]})
+
+        st.subheader('Summary')
+        mc1, mc2,mc3,mc4,mc5 = st.columns([2,2,2,2,2])
+        if len(deposits_received_df).is_integer:
+            # st.write(dtype(girl_money['AmountReceived']))
+            deposits_received_df["amountReceived"] = pd.to_numeric(deposits_received_df["amountReceived"])
+            sum_money = deposits_received_df['amountReceived'].sum()
+            with mc1: st.metric(label="Total Boxes",value=total_boxes_ordered.iloc[0])
+            with mc2: st.metric(label="Total Amt Due",value=f"${total_boxes_ordered.iloc[1]}")
+            with mc3: st.metric(label="Total Amount Received", value=f"${sum_money}")
+            with mc4: st.metric(label="Total Amount Owed", value=f"${total_boxes_ordered.iloc[1] - sum_money}")
+
+            with mc2: st.metric(label="Total Due for Paper Orders", value=f"${total_due_po}")
+            with mc3: st.metric(label='Pending Boxes', value=total_pending)
+            with mc4: st.metric(label='Boxes Ready for Pickup', value=total_ready)
+            # st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
+
+        st.subheader("Payments Received - EXCLUDE DIGITAL COOKIE PAYMENTS")
+        # if len(dpst_qry['_source']> 0):
+        #     girl_money.sort_values(by="amtReceived_dt")
+        #     girl_money.rename(inplace=True, columns={'scoutName': 'Scouts Name','amountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
+        #     girl_money.reset_index(inplace=True, drop=True)
+        #     st.dataframe(girl_money,use_container_width=False)
     else:
-        deposits_received_df = pd.DataFrame({'amountReceived': [0]})
+        st.warning('You have not submitted any orders yet')
 
-    st.subheader('Summary')
-    mc1, mc2,mc3,mc4,mc5 = st.columns([2,2,2,2,2])
-    if len(deposits_received_df).is_integer:
-        # st.write(dtype(girl_money['AmountReceived']))
-        deposits_received_df["amountReceived"] = pd.to_numeric(deposits_received_df["amountReceived"])
-        sum_money = deposits_received_df['amountReceived'].sum()
-        with mc1: st.metric(label="Total Boxes",value=total_boxes_ordered.iloc[0])
-        with mc2: st.metric(label="Total Amt Due",value=f"${total_boxes_ordered.iloc[1]}")
-        with mc3: st.metric(label="Total Amount Received", value=f"${sum_money}")
-        with mc4: st.metric(label="Total Amount Owed", value=f"${total_boxes_ordered.iloc[1] - sum_money}")
-
-        with mc2: st.metric(label="Total Due for Paper Orders", value=f"${total_due_po}")
-        with mc3: st.metric(label='Pending Boxes', value=total_pending)
-        with mc4: st.metric(label='Boxes Ready for Pickup', value=total_ready)
-        # st.metric(label="Total Amount Due for Paper Orders", value=f"${paper_money_due}")
-
-    st.subheader("Payments Received - EXCLUDE DIGITAL COOKIE PAYMENTS")
-    # if len(dpst_qry['_source']> 0):
-    #     girl_money.sort_values(by="amtReceived_dt")
-    #     girl_money.rename(inplace=True, columns={'scoutName': 'Scouts Name','amountReceived':'Amount Received','amtReceived_dt': 'Date Money Received','orderRef':'Money Reference Note'})
-    #     girl_money.reset_index(inplace=True, drop=True)
-    #     st.dataframe(girl_money,use_container_width=False)
-
+        
 if __name__ == '__main__':
 
     setup.config_site(page_title="Order Summary",initial_sidebar_state='expanded')
