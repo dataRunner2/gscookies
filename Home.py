@@ -75,6 +75,7 @@ def get_connected():
 @st.cache_data
 def is_authenticated():
     ss.authenticated = True
+    setup.is_admin()
 
 def validate_form(es,data):
     st.write(f"validating content for {data['username']}")
@@ -115,15 +116,6 @@ def verify_troop():
         st.session_state["password_correct"] = False
 
 
-# my_grid = grid(2, [2, 4, 1], 1, 4, vertical_align="bottom")
-#     # Row 1:
-#     my_grid.dataframe(random_df, use_container_width=True)
-#     my_grid.line_chart(random_df, use_container_width=True)
-#     # Row 2:
-#     my_grid.selectbox("Select Country", ["Germany", "Italy", "Japan", "USA"])
-#     my_grid.text_input("Your name")
-#     my_grid.button("Send", use_container_width=True)
-#     # Row 3:
 def add_scouts(es):
     update_sections()
     with st.form('scout_deets', border=False):
@@ -373,8 +365,8 @@ def main():
                 st.page_link(label="🍪 **Click Here to get Cookies** 🍪", use_container_width=True, page="pages/portal_home.py")
 
     if ss.is_admin:
-        if st.button('Get Admin Data & Page Navigation'):
-            st.rerun()
+        # if st.button('Get Admin Data & Page Navigation'):
+        #     st.rerun()
         # GET ALL SCOUT DATA
         all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
         all_scout_dat = [sct['_source'].get('scout_details') for sct in all_scout_qrydat if sct['_source'].get('scout_details') is not None]

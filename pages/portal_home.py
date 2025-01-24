@@ -71,8 +71,9 @@ def main():
     st.write('----')
     # Calendar
     st.header('Important Dates, Links and Reminders')
+    st.error("This app is to submit all orders for in person delivery, this is how you tell our troop cupboard that you need cookies.  That means cookies for your paper orders and your digital cookie - **scout delivered**.  Digital Cookie shipped orders will show on your DC site, those numbers are NOT included here. ")
+    st.warning("Note - All Cookie Money for initial orders is due 3/8 - that means deliver those initial order as soon as we get cookies")
     st.subheader('Reminders')
-    st.warning("!! You will continue to use this app to submit orders to the troop cookie cupboard through 3/19 !!")
     st.markdown("""
                 A few reminders:
                 - Cookies are $6 per box. There's no Raspberry Rally this year, but the rest of the lineup is the same!
@@ -112,7 +113,7 @@ def main():
     with topc2:
         bandurl = "https://band.us/band/93124235"
         st.info("Connect with us on [Band](%s) if you have any questions" % bandurl)
-        st.warning("Note - All Cookie Money Due 3/19")
+        st.error("Note - All Cookie Money for initial orders is due 3/8")
     # page_names_to_funcs[selected_page]()
 
 

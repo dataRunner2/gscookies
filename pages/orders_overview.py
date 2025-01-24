@@ -43,9 +43,8 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-    
-    st.header('Order Overview')
 
+    st.write("This page shows the orders for delivered (not DC shipped orders) for our entire troop!  Wow that's a lot of cookies!")
     all_order_qry = f'FROM {ss.indexes["index_orders"]} | LIMIT 1000'
     # st.write(girl_order_qry)
     response = es.esql.query(
@@ -129,34 +128,36 @@ def main():
     all_inventory = au.just_renamer(all_inventory_dat)
     all_inventory.loc['Total']= all_inventory.sum(axis=0) # umeric_only=True,
     sum_inventory_boxes = all_inventory.loc['Total'].iloc[:9] # .sum(numeric_only=True, axis=0)
-    # st.write(sum_inventory_boxes)
-    
+
 
     # Display Tables and Graphics
     st.divider()
-    st.subheader("Paper Orders")
 
-    # metric cards         
-    
-    metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-    # Row 1
-    metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
-    metric_paper.write(':')
-    metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
-    metric_paper.write('--')
-    metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
-    metric_paper.write('=')
-    metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
-    style_metric_cards()
+    if ss.is_admin:
+        st.subheader("Paper Orders")
+        # metric cards for paper Orders - ADMIN
+        metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
+        # Row 1
+        metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
+        metric_paper.write(':')
+        metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
+        metric_paper.write('--')
+        metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
+        metric_paper.write('=')
+        metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
+        style_metric_cards()
 
-    st.divider()
-    st.subheader("Digital Orders")
+        st.divider()
+        st.subheader("Digital Orders")
 
-    st.subheader("Payments received for Digital Cookie are not shown")
-    metric_digital = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-    # Row 1
-    metric_digital.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
-    style_metric_cards()
+        st.subheader("Payments received for Digital Cookie are not shown")
+        metric_digital = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
+        metric_digital.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
+        style_metric_cards()
+    else:
+        metric_paper_dig = grid(4, vertical_align="top")
+        metric_paper_dig.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
+        metric_paper_dig.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
 
     st.divider()
 
@@ -189,42 +190,45 @@ def main():
     
     style_metric_cards()
 
-    # Inventory #'s
-    st.subheader('Received Inventory')
-    metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
-    metric_inventory.metric(label="Total Boxes", value= sum_inventory_boxes_sum.astype('int'))
-    metric_inventory.metric(label="Total $ Due", value= sum_inventory_boxes_sum*6)
-   
-    metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int'))
-    metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int'))
-    metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int'))
-    metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int'))
-    metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int'))
-    metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int'))
-    metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int'))
-    metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int'))
-    metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int'))
+    if ss.is_admin:
+        st.divider()
+        st.header('~ ~ Additional Metrics for Admins ~ ~')
+        # Inventory #'s
+        st.subheader('Received Inventory')
+        metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
+        metric_inventory.metric(label="Total Boxes", value= sum_inventory_boxes_sum.astype('int'))
+        metric_inventory.metric(label="Total $ Due", value= sum_inventory_boxes_sum*6)
     
-     # Inventory #'s
-    st.subheader('Inventory - Orders = Outstanding Inventory')
-    metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
-    metric_inventory.metric(label="Delta Total Boxes", value= sum_inventory_boxes_sum.astype('int')-type_totals.loc['Total','Qty'])
-    metric_inventory.metric(label="Delta Total $ Due", value= sum_inventory_boxes_sum*6 - type_totals.loc['Total','Amt'].astype('int'))
-   
-    metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int') - type_totals.loc['Total','Adventurefuls'].astype('int'))
-    metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int')-type_totals.loc['Total','Lemon-Ups'].astype('int'))
-    metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int')-type_totals.loc['Total','Trefoils'].astype('int'))
-    metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int')-type_totals.loc['Total','Do-Si-Dos'].astype('int'))
-    metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int')-type_totals.loc['Total','Samoas'].astype('int'))
-    metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int')-type_totals.loc['Total',"S'Mores"].astype('int'))
-    metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int')-type_totals.loc['Total','Tagalongs'].astype('int'))
-    metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int')-type_totals.loc['Total','Thin Mint'].astype('int'))
-    metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int')-type_totals.loc['Total','Toffee Tastic'].astype('int'))
+        metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int'))
+        metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int'))
+        metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int'))
+        metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int'))
+        metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int'))
+        metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int'))
+        metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int'))
+        metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int'))
+        metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int'))
+        
+        # Inventory #'s
+        st.subheader('Inventory - Orders = Outstanding Inventory')
+        metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
+        metric_inventory.metric(label="Delta Total Boxes", value= sum_inventory_boxes_sum.astype('int')-type_totals.loc['Total','Qty'])
+        metric_inventory.metric(label="Delta Total $ Due", value= sum_inventory_boxes_sum*6 - type_totals.loc['Total','Amt'].astype('int'))
     
+        metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int') - type_totals.loc['Total','Adventurefuls'].astype('int'))
+        metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int')-type_totals.loc['Total','Lemon-Ups'].astype('int'))
+        metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int')-type_totals.loc['Total','Trefoils'].astype('int'))
+        metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int')-type_totals.loc['Total','Do-Si-Dos'].astype('int'))
+        metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int')-type_totals.loc['Total','Samoas'].astype('int'))
+        metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int')-type_totals.loc['Total',"S'Mores"].astype('int'))
+        metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int')-type_totals.loc['Total','Tagalongs'].astype('int'))
+        metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int')-type_totals.loc['Total','Thin Mint'].astype('int'))
+        metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int')-type_totals.loc['Total','Toffee Tastic'].astype('int'))
+        
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Admin Overview",initial_sidebar_state='expanded')
+    setup.config_site(page_title="Troop Order Overview",initial_sidebar_state='expanded')
     # Initialization
     init_ss()
     main()

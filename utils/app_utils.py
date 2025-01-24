@@ -74,15 +74,16 @@ class setup:
         st.sidebar.page_link("Home.py", label='Account')
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
         st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
-        st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
+        st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
+        st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
+        
         
         st.sidebar.divider()
 
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            st.sidebar.page_link('pages/admin_overview.py',label='Overview')
             st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
