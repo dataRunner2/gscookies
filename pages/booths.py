@@ -139,7 +139,7 @@ def inventory():
     all_orders = order_view(all_orders)
     all_orders.reset_index(inplace=True, drop=True)
     all_orders.fillna(0)
-    all_orders = all_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
+    all_orders = all_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
     all_orders.loc['Total']= all_orders.sum(numeric_only=True, axis=0)
     st.write(all_orders)
 

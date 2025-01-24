@@ -50,9 +50,7 @@ def main():
     # st.write(ss['scout_dat']['scout_details'])
     selected_sct = [item for item in ss['scout_dat']['scout_details'] if item["fn"] == gsNm][0]
     # st.write(selected_sct)
-    nmId = selected_sct['nameId']
-    
-
+    nmId = selected_sct['nameId'].strip()
 
     st.markdown(f"Ready to submit a Cookie Order for **{gsNm}**")
 

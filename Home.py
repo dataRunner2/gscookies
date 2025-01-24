@@ -45,6 +45,7 @@ def init_ss():
         ss.indexes['index_scouts'] = 'scouts2025'
         ss.indexes['index_orders'] = 'orders2025'
         ss.indexes['index_money'] = 'money_received2025'
+        ss.indexes['index_inventory'] = 'inventory2025'
 
 
 # Function to add a new section
@@ -129,8 +130,8 @@ def add_scouts(es):
         for i, section in enumerate(ss.sections):
             st.write(f"**Scout {i + 1}**")
             c3_1,c3_2,c3_3,c3_4 = st.columns(4)
-            section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title()
-            section['ln'] = (c3_2.text_input('Girl Scout Last Name',value=ss.form_data['parent_lastname'], key=f'sct_ln_{i}')).title()
+            section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title().strip()
+            section['ln'] = (c3_2.text_input('Girl Scout Last Name',value=ss.form_data['parent_lastname'], key=f'sct_ln_{i}')).title().strip()
             section['FullName'] = section['fn'] + " " + section['ln']
             section['nameId'] = section['fn'][:3].title() + section['ln'].title()
 
@@ -299,11 +300,11 @@ def main():
                     reset_account_formdata()
                     ss.form_data = {
                         "username":new_username,
-                        "parent_firstname":parnt_firstnm.title(),
-                        "parent_lastname": parnt_lastnm.title(),
+                        "parent_firstname":parnt_firstnm.title().strip(),
+                        "parent_lastname": parnt_lastnm.title().strip(),
                         "parent_FullName": f'{parnt_firstnm.title()} {parnt_lastnm.title()}',
                         "parent_NameId": f'{parnt_firstnm.lower()}_{parnt_lastnm.lower()}',
-                        "parent_email": parnt_email.lower(),
+                        "parent_email": parnt_email.lower().strip(),
                         "parent_phone": parnt_phone,
                         "parent_password_b64": base64_encoded,
                         "verify_trp": verifytrp,
@@ -369,6 +370,13 @@ def main():
             # Navigate to another page if authenticated
             with st.container(border=True):
                 st.page_link(label="🍪 **Click Here to get Cookies** 🍪", use_container_width=True, page="pages/portal_home.py")
+
+        if ss.is_admin:
+            # GET ALL SCOUT DATA
+            all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
+            all_scout_dat = [sct['_source'].get('scout_details') for sct in all_scout_qrydat if sct['_source'].get('scout_details') is not None]
+            ss.all_scout_dat = [entry for sublist in all_scout_dat for entry in sublist]       
+
 
 if __name__ == '__main__':
 

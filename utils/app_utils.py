@@ -23,6 +23,7 @@ class setup:
     def is_admin():
         if ss.username in ['jklemisch','foo_girl']:
             ss.is_admin = True
+            st.warning('YOU ARE AN ADMIN')
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')
             ss.is_admin = False
@@ -81,10 +82,12 @@ class setup:
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            st.sidebar.page_link('pages/admin_girl_orders_summary.py',label='Girl Summary')
+            st.sidebar.page_link('pages/admin_overview.py',label='Overview')
+            st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
             st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
+            st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -95,6 +98,10 @@ class apputils:
         total_money = total_boxes*6
         return total_boxes, total_money
 
+    def just_renamer(df):
+        df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
+        return df
+    
     def order_view(df):
         df.loc[df.orderReady == True, 'status'] = 'Order Ready to Pickup'
         df.loc[df.orderPickedup == True, 'status'] = 'Order Pickedup'
@@ -104,7 +111,7 @@ class apputils:
                      'Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']
 
         view_df=df.loc[:, col_order].copy()
-        view_df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Do','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
+        view_df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
         view_df['Date'] = pd.to_datetime(view_df['submit_dt']).dt.date
         mv_dt_column = view_df.pop('Date')
 
@@ -158,6 +165,17 @@ class apputils:
             return [item.strip().strip("'").strip('"') for item in match.group(1).split(',')]
         return [s]  # If not a list string, return it as is
 
+    def flatten_dict(d):
+        flat_dict = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                # Flatten the nested dictionary and merge the result
+                for sub_k, sub_v in v.items():
+                    flat_dict[f"{k}_{sub_k}"] = sub_v
+            else:
+                flat_dict[k] = v
+        return flat_dict
+    
     def flatten_and_parse(nested_list):
         flat_list = []
         for item in nested_list:
@@ -170,6 +188,8 @@ class apputils:
                 flat_list.append(item)
         return flat_list
     
+
+
     def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         """
         Adds a UI on top of a dataframe to let viewers filter columns

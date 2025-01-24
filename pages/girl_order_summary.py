@@ -69,7 +69,7 @@ def main():
         girl_orders.fillna(0)
         girl_ord_md=girl_orders[['Order Id','Order Type','Date','Status','Comments']]
 
-        just_cookies = girl_orders[['Qty','Amt','Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC']].copy()
+        just_cookies = girl_orders[['Qty','Amt','Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Dos','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC']].copy()
         # col = just_cookies.pop('Qty')
         # just_cookies.insert(0, col.name, col)
         # col = just_cookies.pop('Amt')
@@ -81,7 +81,7 @@ def main():
         # Paper Order Calcs
         paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
         paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
-        paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
+        paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
         styled_papOrds = style_dataframe(paper_orders)
         paperOrder_totals = paper_orders[['Qty','Amt']].iloc[-1]
         
@@ -89,7 +89,7 @@ def main():
         # Digital Order Calcs
         digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie Girl Delivery'].copy()
         digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
-        digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Do':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
+        digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
         styled_digOrds = style_dataframe(digital_orders) # Apply styles to the DataFrame
         digitalOrder_totals = digital_orders[['Qty','Amt']].iloc[-1]
         
@@ -144,7 +144,7 @@ def main():
                             "Order Date",
                             format="MM-DD-YY",
                         )})
-        total_due_po = paper_orders.loc['Total','Amt']
+
         st.subheader('Paper Order Funds Deposited')
         
         st.dataframe(styled_received,
