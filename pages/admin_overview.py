@@ -136,19 +136,18 @@ def main():
     st.divider()
     st.subheader("Paper Orders")
 
-    # metric cards
-    if len(deposits_received_df).is_integer:            
+    # metric cards         
     
-        metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-        # Row 1
-        metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
-        metric_paper.write(':')
-        metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
-        metric_paper.write('--')
-        metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
-        metric_paper.write('=')
-        metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
-        style_metric_cards()
+    metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
+    # Row 1
+    metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
+    metric_paper.write(':')
+    metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
+    metric_paper.write('--')
+    metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
+    metric_paper.write('=')
+    metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
+    style_metric_cards()
 
     st.divider()
     st.subheader("Digital Orders")
