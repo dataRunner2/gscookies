@@ -348,15 +348,15 @@ def main():
             # st.write( ss.scout_dat.get('scout_details'))
             st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
 
-            cookie_manager = stx.CookieManager()
-            cookie = cookie_manager.get(cookie="user")
-            if cookie is None:
-                cookie_manager.set("user", ss.username)
-                cookie_manager.set("cookie_sctdat", ss.scout_dat)
-                cookie_manager.set("cookie_gs_nms", ss.gs_nms)
-                cookie_manager.set("auth", ss.authenticated)
-                cookie_manager.set('indexes_dict',ss.indexes)
-            # st.success("You are authenticated!")
+            # cookie_manager = stx.CookieManager()
+            # cookie = cookie_manager.get(cookie="user")
+            # if cookie is None:
+            #     cookie_manager.set("user", ss.username)
+            #     cookie_manager.set("cookie_sctdat", ss.scout_dat)
+            #     cookie_manager.set("cookie_gs_nms", ss.gs_nms)
+            #     cookie_manager.set("auth", ss.authenticated)
+            #     cookie_manager.set('indexes_dict',ss.indexes)
+            # # st.success("You are authenticated!")
 
             get_compliment()
 
