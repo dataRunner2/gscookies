@@ -27,6 +27,11 @@ def get_connected():
 def refresh():
     st.rerun()
 
+def get_all_scts(es):
+    all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
+    all_scout_dat = [sct['_source'].get('scout_details') for sct in all_scout_qrydat if sct['_source'].get('scout_details') is not None]
+    ss.all_scout_dat = [entry for sublist in all_scout_dat for entry in sublist].copy()
+
 # Function to apply styles to bottom row of tables
 def style_dataframe(dataframe):
     def highlight_bottom_row(row):
@@ -44,6 +49,8 @@ def main():
         st.page_link("./Home.py",label='Login')
         st.stop()
     
+    if 'all_scout_dat' not in ss:
+        get_all_scts(es)
 
     admin_gs_nms = [scout['FullName'] for scout in ss.all_scout_dat]
     
