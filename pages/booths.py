@@ -9,12 +9,19 @@ from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
 import datetime
 
+@st.cache_resource
+def get_connected():
+    es = esu.conn_es()
+    return es
+
 def booth_checkin():
     st.write('----')
+    es = get_connected()
 
-    data_orders, data_cln = au.get_all_orders(es)
+    all_orders_dat = au.get_all_orders(es)
+    all_orders_cln = au.allorder_view(all_orders_dat)
 
-    booth_dat = data_cln[data_cln['OrderType'] == 'Booth']
+    booth_dat = all_orders_cln[all_orders_cln['OrderType'] == 'Booth']
     booth_names = booth_dat['ScoutName']
     booth_name = st.selectbox("Booth:", booth_names, placeholder='Select the Booth', key='boothNm')
 
@@ -129,32 +136,3 @@ def pickupSlot():
     st.button("Add Timeslot")
     if st.button:
         esu.add_es_doc(es, indexnm="timeslots",doc=new_timeslot)
-
-def inventory():
-    st.write('----')
-    st.header('THIS PAGE IS STILL IN WORK')
-    all_orders, all_orders_cln = get_all_orders(es)
-    all_orders.reset_index(names="index",inplace=True,drop=True)
-
-    all_orders = order_view(all_orders)
-    all_orders.reset_index(inplace=True, drop=True)
-    all_orders.fillna(0)
-    all_orders = all_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','Operation Cookies':'int64'})
-    all_orders.loc['Total']= all_orders.sum(numeric_only=True, axis=0)
-    st.write(all_orders)
-
-    all_total = all_orders.iloc[-1,:]
-    st.write(all_total)
-
-    pending_ready = all_orders.loc[:, ['order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']]
-    pending_ready.loc['Total']= pending_ready.sum(numeric_only=True, axis=0)
-    st.write(pending_ready)
-
-    pickedup = all_orders[all_orders['status']=='Order Pickedup'].copy()
-    pickedup = pickedup.loc[:, ['order_qty_boxes', 'order_amount','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC']]
-    pickedup.loc['Total']= pickedup.sum(numeric_only=True, axis=0)
-    st.write(pickedup)
-
-
-def booths():
-    st.write("this page is in work... come back later")

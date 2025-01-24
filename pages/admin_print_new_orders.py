@@ -28,7 +28,8 @@ def main():
     st.header('All Orders to Date')
     st.warning('split table per scout')
     
-    pull_orders, pull_cln = au.get_all_orders(es)
+    pull_orders = au.get_all_orders(es)
+    pull_cln = au.allorder_view(pull_orders)
 
     # all_orders_cln.fillna(0)
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})

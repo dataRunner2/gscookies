@@ -16,6 +16,7 @@ def get_connected():
     es = esu.conn_es()
     return es
 
+
 def main():
     es = get_connected()
 
@@ -25,33 +26,9 @@ def main():
         st.stop()
 
     st.header('All Orders to Date')
-    all_orders, all_orders_cln = au.get_all_orders(es)
+    all_orders_dat = au.get_all_orders(es)
+    all_orders_cln = au.allorder_view(all_orders_dat)
 
-    start_dat = all_orders_cln.copy()
-
-    # response = es.esql.query(
-    #     query="""
-    #     FROM employees
-    #     | STATS count = COUNT(emp_no) BY languages
-    #     | WHERE languages >= (?)
-    #     | SORT languages
-    #     | LIMIT 500
-    #     """,
-    #     format="csv",
-    #     params=[3],
-    # )
-    # df = pd.read_csv(
-    #     StringIO(response.body),
-    #     dtype={"count": "Int64", "languages": "Int64"},
-    # )
-    # print(df)
-    # start_dat = start_dat[start_dat['Scout'].str.contains('zz scout not selected')==False]
-    # start_dat.sort_values(by=['orderType','Date','Scout'],ascending=[False, False, False],inplace=True)
-
-    # if 'start_dat' not in ss:
-    #     ss.start_dat = pd.DataFrame(start_dat)
-    #     ss.start_dat['Adv'] = pd.to_numeric(ss.start_dat['Adv'], errors='coerce').astype('Int')
-    #     ss.start_dat['LmUp'] = pd.to_numeric(ss.start_dat['LmUp'], errors='coerce').astype('Int')
 
     with st.expander('Filter'):
         edited_content = au.filter_dataframe(all_orders_cln)
@@ -99,7 +76,7 @@ def main():
             au.update_es(edited_dat, edited_content)
             # time.sleep(1)
             # Refresh data from Elastic
-            all_orders, all_orders_cln = au.get_all_orders(es)
+            all_orders = au.get_all_orders(es)
         except:
             st.warning("Error updating Elastic")
             st.write(st.session_state['edited_dat'])
