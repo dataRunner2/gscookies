@@ -116,7 +116,7 @@ def main():
         moneyRec_totals = 0
     
     # Inventory
-    inventory_qry = f'FROM {ss.indexes['index_inventory']} | LIMIT 1000'
+    inventory_qry = f"FROM {ss.indexes['index_inventory']} | LIMIT 1000"
     # st.write(girl_order_qry)
     response = es.esql.query(
         query=inventory_qry,
