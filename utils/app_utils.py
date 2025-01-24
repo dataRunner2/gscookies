@@ -74,17 +74,17 @@ class setup:
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
         st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
-        st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary ')
+        st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         
         st.sidebar.divider()
 
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            # st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies')
-            st.sidebar.page_link('pages/order_management.py',label='Order Management')
-            st.sidebar.page_link('pages/print_new_orders.py',label='Print Orders')
-            st.sidebar.page_link('pages/receive_money.py',label='Receive Money')
+            st.sidebar.page_link('pages/admin_girl_orders_summary.py',label='Girl Summary')
+            st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
+            st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
+            st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)

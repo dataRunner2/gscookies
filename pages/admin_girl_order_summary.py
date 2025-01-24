@@ -58,7 +58,7 @@ def main():
     girl_orders.fillna(0)
     girl_ord_md=girl_orders[['Order Id','Order Type','Date','Status','Comments']]
 
-    just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC','Qty','Amt']].copy()
+    just_cookies = girl_orders[['Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Do','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC','Qty','Amt']]
     # just_cookies['Qty']= just_cookies.sum(axis=1)
     # just_cookies['Amt']=just_cookies['Qty']*6
     col = just_cookies.pop('Qty')
@@ -154,7 +154,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Order Summary",initial_sidebar_state='expanded')
+    setup.config_site(page_title="Admin Girl Order Summary",initial_sidebar_state='expanded')
     # Initialization
     init_ss()
 

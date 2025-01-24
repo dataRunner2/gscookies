@@ -73,7 +73,7 @@ def get_connected():
 @st.cache_data
 def is_authenticated():
     ss.authenticated = True
-    
+
 def validate_form(es,data):
     st.write(f"validating content for {data['username']}")
     # st.write(data)
@@ -122,7 +122,51 @@ def verify_troop():
 #     my_grid.text_input("Your name")
 #     my_grid.button("Send", use_container_width=True)
 #     # Row 3:
+def add_scouts(es):
+    update_sections()
+    with st.form('scout_deets', border=False):
+        # Iterate through sections
+        for i, section in enumerate(ss.sections):
+            st.write(f"**Scout {i + 1}**")
+            c3_1,c3_2,c3_3,c3_4 = st.columns(4)
+            section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title()
+            section['ln'] = (c3_2.text_input('Girl Scout Last Name',value=ss.form_data['parent_lastname'], key=f'sct_ln_{i}')).title()
+            section['FullName'] = section['fn'] + " " + section['ln']
+            section['nameId'] = section['fn'][:3].title() + section['ln'].title()
 
+            st.subheader('Award Selection')
+            st.write('Note: Cookie Dough is now **Program Credits** - this name change better reflects what the funds can be used for.')
+            c4_1,c4_2,c4_3,c4_4 = st.columns(4)
+            with c4_1:
+                st.write('**Total boxes sold => 315:**')
+                st.write('The award for 315+ boxes of cookies is a t-shirt')
+                section['tshirt_size'] = st.select_slider(label='T-shirt size',key=f'tshirt_sct_{i}',options=['YS','YM','YL','Adult-S','Adult-M','Adult-L','Adult-X','Adult-XL','Adult-2XL','Adult-3XL'])
+            with c4_2:
+                st.write('**Total boxes sold < 450:**')
+                st.write('Award prizes up to 450 boxes are cumulative, so there is no selection.')
+            with c4_3:
+                st.write('')
+                st.write('Option at 450+ boxes to receive $40 in program credits instead of the *cummulative* 75-450 prizes. ')
+                section['a450_choice'] = st.selectbox(label='Prizes up to 450 boxes or Program Credits',key=f'a450_sct_{i}',options=['Cumulative Award Prizes','Program Credits'])
+            with c4_4:
+                st.write('**Total boxes sold > 500:**')
+                st.write('500+ awards are not cummulative, option to receive program credits or reward prize')
+                section['a500_choice'] = st.selectbox(label='Award Prize or Program Credits',key=f'a500_sct_{i}', options=['Award Prize','Program Credits'])
+            st.divider()
+        
+        c1,c2,c3 = st.columns(3)
+        with c2: 
+            submitted = st.form_submit_button("💾 Save Scout Info", type="primary") 
+
+    if submitted:
+        scout_deets = {"scout_details":ss.sections }
+        resp = es.update(index=ss.indexes['index_scouts'], id=ss.doc_id, doc=scout_deets, doc_as_upsert=True)
+        if resp.get('result') == 'updated':
+            ss.scouts_added = True
+            ss.show_account_expander = False
+            reset_sections()
+            reset_account_formdata()
+            st.rerun()
 
 def get_compliment():
     compliments = [
@@ -157,6 +201,8 @@ def acct_login(es,login_password):
         return False, "User not Found", {}
     else:
         scout_dat=qry_resp["hits"]["hits"][0]['_source']
+        ss.doc_id = qry_resp["hits"]["hits"][0]['_id']
+        st.write(ss.doc_id)
         # st.write(f'found account {scout_dat}')
         if scout_dat["parent_password_b64"]:
             # Retrieve the stored Base64-encoded hash
@@ -185,6 +231,7 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
+    # ss
     # Show input for password.
     if not ss.authenticated:
         # st.title('Welcome to our Troop Cookie Tracker.')
@@ -257,7 +304,8 @@ def main():
                         "parent_email": parnt_email.lower(),
                         "parent_phone": parnt_phone,
                         "parent_password_b64": base64_encoded,
-                        "verify_trp": verifytrp
+                        "verify_trp": verifytrp,
+                        "cnt_scts": cnt_scts
                         }
                     is_validated, errors = validate_form(es, ss.form_data)
                     if errors:
@@ -276,48 +324,8 @@ def main():
             if ss.doc_id:
                 with st.container():
                     st.subheader('Add Scout Details')
-                    update_sections()
-                    with st.form('scout_deets', border=False):
-                        # Iterate through sections
-                        for i, section in enumerate(ss.sections):
-                            st.write(f"**Scout {i + 1}**")
-                            c3_1,c3_2,c3_3,c3_4 = st.columns(4)
-                            section['fn'] = (c3_1.text_input('Girl Scout First Name', key=f'sct_fn_{i}',)).title()
-                            section['ln'] = (c3_2.text_input('Girl Scout Last Name',value=ss.form_data['parent_lastname'], key=f'sct_ln_{i}')).title()
-                            section['FullName'] = section['fn'] + " " + section['ln']
-                            section['nameId'] = section['fn'][:3].title() + section['ln'].title()
-
-                            st.subheader('Award Selection')
-                            st.write('Note: Cookie Dough is now **Program Credits** - this name change better reflects what the funds can be used for.')
-                            c4_1,c4_2,c4_3,c4_4 = st.columns(4)
-                            with c4_1:
-                                st.write('**Total boxes sold => 315:**')
-                                st.write('The award for 315+ boxes of cookies is a t-shirt')
-                                section['tshirt_size'] = st.select_slider(label='T-shirt size',key=f'tshirt_sct_{i}',options=['YS','YM','YL','Adult-S','Adult-M','Adult-L','Adult-X','Adult-XL','Adult-2XL','Adult-3XL'])
-                            with c4_2:
-                                st.write('**Total boxes sold < 450:**')
-                                st.write('Award prizes up to 450 boxes are cumulative, so there is no selection.')
-                            with c4_3:
-                                st.write('')
-                                st.write('Option at 450+ boxes to receive $40 in program credits instead of the *cummulative* 75-450 prizes. ')
-                                section['a450_choice'] = st.selectbox(label='Prizes up to 450 boxes or Program Credits',key=f'a450_sct_{i}',options=['Cumulative Award Prizes','Program Credits'])
-                            with c4_4:
-                                st.write('**Total boxes sold > 500:**')
-                                st.write('500+ awards are not cummulative, option to receive program credits or reward prize')
-                                section['a500_choice'] = st.selectbox(label='Award Prize or Program Credits',key=f'a500_sct_{i}', options=['Award Prize','Program Credits'])
-                            st.divider()
-                        
-                        submitted = st.form_submit_button("Add Scouts") # on_click=handle_form_submission)
-
-                    if submitted:
-                        scout_deets = {"scout_details":ss.sections }
-                        resp = es.update(index=ss.indexes['index_scouts'], id=ss.doc_id, doc=scout_deets, doc_as_upsert=True)
-                        if resp.get('result') == 'updated':
-                            ss.scouts_added = True
-                            ss.show_account_expander = False
-                            reset_sections()
-                            reset_account_formdata()
-                            st.rerun()
+                    add_scouts(es)
+                    
                     
     if ss.scouts_added and ss.doc_id:
         st.write('Scouts Added - ready to order cookies')
@@ -326,26 +334,40 @@ def main():
 
     if ss.authenticated:
         is_authenticated()
-        ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
+        try:
+            ss.gs_nms = [scout['fn'] for scout in ss.scout_dat.get('scout_details')]
+            st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {', '.join(ss.gs_nms)}")
+        except:
+            st.warning('Opps during registration your scouts information was not saved')
+            if ss.scout_dat.get('cnt_scts'): 
+                ss.cnt_scts = ss.scout_dat['cnt_scts']
+            else: ss.cnt_scts = 1
+            add_scouts(es)
+            qry_resp = es.search(index = ss.indexes['index_scouts'], query={"match": {"username": ss.username}})
+            if not qry_resp["hits"]["hits"]:
+                return False, "User not Found", {}
+            else:
+                scout_dat=qry_resp["hits"]["hits"][0]['_source']
 
-        st.write(f"Welcome {ss.scout_dat.get('parent_firstname')}, your registered scouts are: {', '.join(ss.gs_nms)}")
-        st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
+        if ss.scout_dat.get('scout_details'):
+            st.write( ss.scout_dat.get('scout_details'))
+            st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
 
-        cookie_manager = stx.CookieManager()
-        cookie = cookie_manager.get(cookie="user")
-        if cookie is None:
-            cookie_manager.set("user", ss.username)
-            cookie_manager.set("cookie_sctdat", ss.scout_dat)
-            cookie_manager.set("cookie_gs_nms", ss.gs_nms)
-            cookie_manager.set("auth", ss.authenticated)
-            cookie_manager.set('indexes_dict',ss.indexes)
-        # st.success("You are authenticated!")
+            cookie_manager = stx.CookieManager()
+            cookie = cookie_manager.get(cookie="user")
+            if cookie is None:
+                cookie_manager.set("user", ss.username)
+                cookie_manager.set("cookie_sctdat", ss.scout_dat)
+                cookie_manager.set("cookie_gs_nms", ss.gs_nms)
+                cookie_manager.set("auth", ss.authenticated)
+                cookie_manager.set('indexes_dict',ss.indexes)
+            # st.success("You are authenticated!")
 
-        get_compliment()
+            get_compliment()
 
-        # Navigate to another page if authenticated
-        with st.container(border=True):
-            st.page_link(label="**Click Here to Go to the Cookie Portal**", use_container_width=True, page="pages/portal_home.py")
+            # Navigate to another page if authenticated
+            with st.container(border=True):
+                st.page_link(label="**Click Here to Go to the Cookie Portal**", use_container_width=True, page="pages/portal_home.py")
 
 if __name__ == '__main__':
 
