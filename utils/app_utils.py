@@ -21,7 +21,7 @@ p = Path.cwd()
 
 class setup:
     def is_admin():
-        if ss.username in ['jklemisch','foo_girl']:
+        if ss.username in ['jklemisch','foo_girl','shawna']:
             ss.is_admin = True
             st.warning('YOU ARE AN ADMIN')
         else:
