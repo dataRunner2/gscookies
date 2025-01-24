@@ -45,7 +45,7 @@ def main():
         st.stop()
     
 
-    admin_gs_nms = [scout['FullName'] for scout in ss['all_scout_dat']]
+    admin_gs_nms = [scout['FullName'] for scout in ss.all_scout_dat]
     
     # selection box can not default to none because the form defaults will fail. 
     st.selectbox("Select Girl Scout:", admin_gs_nms, key='admin_gsNm')
