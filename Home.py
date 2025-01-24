@@ -366,8 +366,8 @@ def main():
                 st.page_link(label="🍪 **Click Here to get Cookies** 🍪", use_container_width=True, page="pages/portal_home.py")
 
     if ss.is_admin:
-        # if st.button('Get Admin Data & Page Navigation'):
-        #     st.rerun()
+        if st.button('Get Admin Data & Page Navigation'):
+            st.rerun()
         # GET ALL SCOUT DATA
         all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
         all_scout_dat = [sct['_source'].get('scout_details') for sct in all_scout_qrydat if sct['_source'].get('scout_details') is not None]
