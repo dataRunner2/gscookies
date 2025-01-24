@@ -224,6 +224,7 @@ def acct_login(es,login_password):
 #---------------------------------------
 def main():
     es = get_connected()
+    ss.es = es
     if st.button('logout'):
         ss.clear()
         st.rerun()
