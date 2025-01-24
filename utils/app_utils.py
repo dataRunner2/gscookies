@@ -135,7 +135,7 @@ class apputils:
         # all_orders = esu.qry_sql(es, indexnm=ss.indexes['index_orders'])
         # st.write(all_orders)
 
-        all_orders_qry = f"FROM {ss.indexes['index_inventory']} | LIMIT 1000"
+        all_orders_qry = f"FROM {ss.indexes['index_orders']} | LIMIT 1000"
         # st.write(girl_order_qry)
         response = es.esql.query(
             query=all_orders_qry,
