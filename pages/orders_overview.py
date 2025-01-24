@@ -53,7 +53,6 @@ def main():
     
     all_orders = pd.read_csv(io.StringIO(response.body))
     
-
     all_orders_fmt = au.order_view(all_orders)
     all_orders_fmt.reset_index(inplace=True, drop=True)
     all_orders_fmt.fillna(0)
@@ -127,7 +126,7 @@ def main():
     # st.write(sum_inventory_boxes_sum)
     all_inventory = au.just_renamer(all_inventory_dat)
     all_inventory.loc['Total']= all_inventory.sum(axis=0) # umeric_only=True,
-    sum_inventory_boxes = all_inventory.loc['Total'].iloc[:9] # .sum(numeric_only=True, axis=0)
+    # sum_inventory_boxes = all_inventory.loc['Total'].iloc[:9] # .sum(numeric_only=True, axis=0)
 
 
     # Display Tables and Graphics
