@@ -187,6 +187,8 @@ def get_compliment():
         "You’re a great problem-solver.",
         "You make people feel welcome and included.",
         "You’re so creative and full of ideas.",
+        "Adulting can be hard.... cookies help.",
+        "Thank you for being a good human.",
         "You bring joy to those around you.",
         "You handle tough situations like a pro.",
         "You have a natural ability to connect with others.",
@@ -326,7 +328,6 @@ def main():
                     st.subheader('Add Scout Details')
                     add_scouts(es)
                     
-                    
     if ss.scouts_added and ss.doc_id:
         st.write('Scouts Added - ready to order cookies')
         ss.authenticated = True
@@ -350,7 +351,7 @@ def main():
                 scout_dat=qry_resp["hits"]["hits"][0]['_source']
 
         if ss.scout_dat.get('scout_details'):
-            st.write( ss.scout_dat.get('scout_details'))
+            # st.write( ss.scout_dat.get('scout_details'))
             st.markdown(f"If you need to add a scout please reach out to the admin.") #[admin](mailto:{st.secrets['general']['email_admin']})?subject=Hello%20Streamlit&body=This%20is%20the%20email%20body)", unsafe_allow_html=True)
 
             cookie_manager = stx.CookieManager()
@@ -367,7 +368,7 @@ def main():
 
             # Navigate to another page if authenticated
             with st.container(border=True):
-                st.page_link(label="**Click Here to Go to the Cookie Portal**", use_container_width=True, page="pages/portal_home.py")
+                st.page_link(label="🍪 **Click Here to get Cookies** 🍪", use_container_width=True, page="pages/portal_home.py")
 
 if __name__ == '__main__':
 
