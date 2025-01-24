@@ -142,6 +142,7 @@ class apputils:
             format="csv")
         
         all_orders = pd.read_csv(io.StringIO(response.body))
+        st.write(all_orders)
 
         all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
         all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
