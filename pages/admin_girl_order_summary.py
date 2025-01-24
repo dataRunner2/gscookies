@@ -62,7 +62,6 @@ def main():
     
     ################################## PAGE CONTENT #########################################
 
-    st.markdown(f"{ss.admin_gsNm} Order Summary")
     girl_order_qry = f'FROM {ss.indexes["index_orders"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
     # st.write(girl_order_qry)
     response = es.esql.query(
