@@ -204,7 +204,7 @@ def acct_login(es,login_password):
     else:
         scout_dat=qry_resp["hits"]["hits"][0]['_source']
         ss.doc_id = qry_resp["hits"]["hits"][0]['_id']
-        st.write(ss.doc_id)
+        # st.write(ss.doc_id)
         # st.write(f'found account {scout_dat}')
         if scout_dat["parent_password_b64"]:
             # Retrieve the stored Base64-encoded hash
