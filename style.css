@@ -59,13 +59,14 @@ h1 {
     padding-bottom: 0rem;
     padding-left: 0rem;
     padding-right: 5rem;
+    font-size: x-large !important;
 }
 h1 span{
     padding-top: 0rem;
     padding-bottom: 0rem;
     padding-left: 0rem;
     padding-right: 5rem;
-    font-size: large;
+    font-size: medium;
     padding: 0px;
     color: #067438;
 }
@@ -74,18 +75,19 @@ h2 {
     padding-bottom: 0rem;
     padding-left: 0rem;
     padding-right: 5rem;
+    font-size: x-large !important;  /* Title */
 }
 h2 span{
     padding-top: 0rem;
     padding-bottom: 0rem;
     padding-left: .5rem;
     padding-right: 5rem;
-    font-size: medium;
     color: #000485;
 }
 /*h3 is stSubHeader */
-h3 span {
-    font-size: medium;
+h3 {
+    font-size: medium !important;
+    font-weight: bold;
 }
 div.css-1xfov6m.e1tzin5v3 {
     padding-top: 0rem;
@@ -118,8 +120,8 @@ body {
 .stText {
     font-size: xx-small;
     color: gray;
-
 }
+
 .highlight {
     border-radius: 0.4rem;
     color: gray;
