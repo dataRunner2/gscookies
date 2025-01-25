@@ -44,7 +44,7 @@ def init_ss():
         ss.indexes = {}
         ss.indexes['index_scouts'] = 'scouts2025'
         ss.indexes['index_orders'] = 'orders2025'
-        ss.indexes['index_money'] = 'money_received2025'
+        ss.indexes['index_money'] = 'money2025'
         ss.indexes['index_inventory'] = 'inventory2025'
 
 

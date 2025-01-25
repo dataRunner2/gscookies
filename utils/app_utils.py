@@ -10,23 +10,23 @@ import extra_streamlit_components as stx
 from utils.esutils import esu
 from PIL import Image
 import re
-from pandas.api.types import (
-    is_categorical_dtype,
-    is_datetime64_any_dtype,
-    is_numeric_dtype,
-    is_object_dtype,
-)
+from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime64_any_dtype
+
 
 p = Path.cwd()
 
 class setup:
     def is_admin():
-        if ss.username in ['jklemisch','foo_girl','shawna']:
+        if ss.username in st.secrets['general']['admins_list']:
             ss.is_admin = True
             st.warning('YOU ARE AN ADMIN')
+            if ss.username in st.secrets['general']['super_admin']:
+                ss.super_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')
             ss.is_admin = False
+            ss.super_admin = False
+    
 
     def config_site(page_title="",initial_sidebar_state='collapsed'):
         
@@ -68,6 +68,7 @@ class setup:
 
         if 'is_admin' not in ss:
             ss.is_admin = False
+            ss.super_admin = False
             if 'username' in ss:
                 setup.is_admin()
 
@@ -89,7 +90,8 @@ class setup:
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
             st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
             st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
-            st.sidebar.page_link('pages/admin_show_session.py',label='jennifer_only')
+        if ss.super_admin:
+            st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -142,28 +144,13 @@ class apputils:
             format="csv")
         
         all_orders = pd.read_csv(io.StringIO(response.body))
-        st.write(all_orders)
+        # st.write(all_orders)
 
         all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
         all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
 
         ss.all_orders = all_orders
         return all_orders
-
-    def update_es(es, update_index, edited_content, all_orders):
-        edited_allorders = st.session_state['edited_dat']['edited_rows']
-        st.write('EDITED ROWS:')
-        st.markdown(f'Initial Edited Rows: {edited_allorders}')
-
-        for key, value in edited_allorders.items():
-            new_key = all_orders.index[key]
-
-            st.write(f'Updated Values to Submit to ES: {new_key}:{value}')
-            resp = es.update(index=update_index, id=new_key, doc=value,)
-            time.sleep(1)
-        st.toast("Database updated with changes")
-        apputils.get_all_orders()  # this should updadte the session state with all orders
-
 
     def parse_list_string(s):
         # Match strings that look like lists and extract them
@@ -210,50 +197,56 @@ class apputils:
         # if not modify:
         #     return df
 
-        df = df.copy()
+        filtered_df = df.copy()
         modification_container = st.container()
+       
         with modification_container:
             to_filter_columns = st.multiselect("Filter dataframe on", df.columns)
             for column in to_filter_columns:
                 left, right = st.columns((1, 20))
                 left.write("↳")
-                # Treat columns with < 10 unique values as categorical
+                
+                # Treat columns with <10 unique values as categorical
                 if is_categorical_dtype(df[column]) or df[column].nunique() < 10:
                     user_cat_input = right.multiselect(
                         f"Values for {column}",
                         df[column].unique(),
                         default=list(df[column].unique()),
                     )
-                    df = df[df[column].isin(user_cat_input)]
+                    filtered_df = filtered_df[filtered_df[column].isin(user_cat_input)]
+                
+                # Numeric columns
                 elif is_numeric_dtype(df[column]):
-                    _min = (df[column].min())
-                    _max = (df[column].max())
-                    step = (_max - _min) / 100
+                    _min, _max = df[column].min(), df[column].max()
+                    step = max((_max - _min) / 100, 0.01)
                     user_num_input = right.slider(
-                    f"Values for {column}",
-                    min_value=_min,
-                    max_value=_max,
-                    value=(_min, _max),
-                    step=step,
+                        f"Values for {column}",
+                        min_value=_min,
+                        max_value=_max,
+                        value=(_min, _max),
+                        step=step,
                     )
-                    df = df[df[column].between(*user_num_input)]
+                    filtered_df = filtered_df[filtered_df[column].between(*user_num_input)]
+                
+                # Datetime columns
                 elif is_datetime64_any_dtype(df[column]):
                     user_date_input = right.date_input(
                         f"Values for {column}",
-                        value=(
-                            df[column].min(),
-                            df[column].max(),
-                        ),
+                        value=(df[column].min(), df[column].max()),
                     )
                     if len(user_date_input) == 2:
-                        user_date_input = tuple(map(pd.to_datetime, user_date_input))
-                        start_date, end_date = user_date_input
-                        df = df.loc[df[column].between(start_date, end_date)]
+                        start_date, end_date = tuple(map(pd.to_datetime, user_date_input))
+                        filtered_df = filtered_df.loc[filtered_df[column].between(start_date, end_date)]
+                
+                # Text columns
                 else:
                     user_text_input = right.text_input(
                         f"Substring or regex in {column}",
                     )
                     if user_text_input:
-                        df = df[df[column].astype(str).str.contains(user_text_input)]
-            df.loc['Total']= df.sum(numeric_only=True, axis=0)
-        return df
+                        try:
+                            filtered_df = filtered_df[filtered_df[column].astype(str).str.contains(user_text_input, na=False)]
+                        except Exception as e:
+                            st.warning(f"Invalid regex: {e}")
+            return filtered_df
+                
