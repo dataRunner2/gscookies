@@ -1,0 +1,169 @@
+{
+    "index_patterns": ["orders*"],
+    "template": {
+      "mappings": {
+        "properties": {
+          "Adf": {
+            "type": "long"
+          },
+          "DSD": {
+            "type": "long"
+          },
+          "LmUp": {
+            "type": "long"
+          },
+          "OpC": {
+            "type": "long"
+          },
+          "Sam": {
+            "type": "long"
+          },
+          "Smr": {
+            "type": "long"
+          },
+          "Tags": {
+            "type": "long"
+          },
+          "Tmint": {
+            "type": "long"
+          },
+          "Toff": {
+            "type": "long"
+          },
+          "Tre": {
+            "type": "long"
+          },
+          "addEbudde": {
+            "type": "boolean"
+          },
+          "comments": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "digC_val": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "guardianNm": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "guardianPh": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "orderAmount": {
+            "type": "long"
+          },
+          "orderId": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "orderPickedup": {
+            "type": "boolean"
+          },
+          "orderQtyBoxes": {
+            "type": "long"
+          },
+          "orderReady": {
+            "type": "boolean"
+          },
+          "orderType": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "pickupNm": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "pickupPh": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "pickupTm": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "scoutId": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "scoutName": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "status": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          },
+          "submit_dt": {
+            "type": "date"
+          }
+        }
+      }
+    }
+  }
+  

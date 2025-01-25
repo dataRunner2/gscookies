@@ -1,5 +1,12 @@
 ## Introduction
 
+## Inilize Elastic
+Using the mappings jsons and the code in "admin_show_session" create the index template for each of the indices
+Update the index names in Home.py file
+for each index create an index
+
+create elastic api key to put into Streamlit Secrets - upload .streamlit secrets.toml for local runs
+
 ## Launch Streamlit
 Open terminal > 
 activate the environment
@@ -14,3 +21,4 @@ poetry shell
 source $(poetry env info --path)/bin/activate
 
 Launch streamlit app
+

@@ -1,5 +1,5 @@
 
-PUT money_received2025
+PUT money2025
 {"mappings": {
       "properties": {
         "amountReceived": {

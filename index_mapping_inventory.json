@@ -1,0 +1,43 @@
+{
+    "index_patterns": ["inventory*"],
+    "template": {
+      "mappings": {
+        "properties": {
+          "Adf": {
+            "type": "short"
+          },
+          "DSD": {
+            "type": "short"
+          },
+          "LmUp": {
+            "type": "short"
+          },
+          "Sam": {
+            "type": "short"
+          },
+          "Smr": {
+            "type": "short"
+          },
+          "Tags": {
+            "type": "short"
+          },
+          "Tmint": {
+            "type": "short"
+          },
+          "Toff": {
+            "type": "short"
+          },
+          "Tre": {
+            "type": "short"
+          },
+          "orderRef_id": {
+            "type": "text"
+          },
+          "pickup_dt": {
+            "type": "date"
+          }
+        }
+      }
+    }
+  }
+  
