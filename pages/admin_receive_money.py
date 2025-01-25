@@ -42,7 +42,7 @@ def main():
 
         # Get list of orders for paper orders
         depst_orders = esu.get_trm_qry_dat(es,ss.indexes['index_orders'], 'scoutId', depst_sel_gsId)
-        st.write(depst_orders)
+        # st.write(depst_orders)
 
         # Create a DataFrame from the _source
         depst_orders_df = pd.DataFrame([item["_source"] for item in depst_orders])

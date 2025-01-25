@@ -56,6 +56,13 @@ def add_section():
 def reset_sections():
     st.session_state.sections = [{}]  # Reset to one section
 
+def update_admin_data(es):
+    if ss.is_admin:
+        # GET ALL SCOUT DATA
+        all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
+        all_scout_dat = [sct['_source'].get('scout_details') for sct in all_scout_qrydat if sct['_source'].get('scout_details') is not None]
+        ss.all_scout_dat = [entry for sublist in all_scout_dat for entry in sublist].copy()
+
 @st.fragment
 def update_sections():
     reset_sections()
@@ -228,7 +235,7 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
-    st.header("If you attempt to log in and it says your account can not be found, please re-create it.  I'm very sorry, when I was setting up backups I accidently deleted the account content. All orders are okay.")
+    st.header("If you attempt to log in and it says your account can not be found, please re-create it.  I'm very sorry, when I was setting up backups I accidently deleted about 8 accounts. All orders are okay.")
     # Show input for password.
     if not ss.authenticated:
         # st.title('Welcome to our Troop Cookie Tracker.')
@@ -367,6 +374,7 @@ def main():
 
     if ss.is_admin:
         if st.button('Get Admin Data & Page Navigation'):
+            update_admin_data()
             st.rerun()
         # GET ALL SCOUT DATA
         all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']
