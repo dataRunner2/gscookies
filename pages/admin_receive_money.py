@@ -38,7 +38,7 @@ def main():
         depst_money= esu.get_trm_qry_dat(es,ss.indexes['index_money'], 'scoutId', depst_sel_gsId)
         depst_money_amts = [float(order["_source"].get("amountReceived", 0)) for order in depst_money] # Extract the "amountReceived" field
         depst_money_tot = sum(depst_money_amts)
-        st.write(f"Total of 'amountReceived': ${depst_money_tot}")
+        st.write(f"Total amount already received': ${depst_money_tot}")
 
         # Get list of orders for paper orders
         depst_orders = esu.get_trm_qry_dat(es,ss.indexes['index_orders'], 'scoutId', depst_sel_gsId)
@@ -57,8 +57,8 @@ def main():
             # Calculate the total sum of 'orderAmount' for filtered rows
             depst_orders_tot = filtered_df['orderAmount'].sum()
 
-            st.write(f"Total Due for Sales': ${depst_orders_tot}")
-            st.write(f"Amount Outstanding ${depst_orders_tot - depst_money_tot}")
+            st.write(f"Total due for sales': ${depst_orders_tot}")
+            st.write(f"Amount outstanding for paper orders ${depst_orders_tot - depst_money_tot}")
 
 
         depst_orders_id = [order['_source']['orderId'] for order in depst_orders] or []
