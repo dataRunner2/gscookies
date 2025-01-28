@@ -124,9 +124,9 @@ class apputils:
 
     def allorder_view(df):
         # This is used for admin views so the names are not changed to friendly names
+        # Don't renanme columns - else when they write back to Elastic they don't match
         df=df.loc[:, ['scoutId','scoutName','orderType','orderId','submit_dt','orderQtyBoxes', 'orderAmount','status','addEbudde','orderReady','orderPickedup','initialOrder','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','email']]
         df = df.astype({"orderQtyBoxes":"int","orderAmount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
-        df.rename(inplace=True, columns={'orderQtyBoxes':'Qty','orderAmount':'Amt'})
         df.index.name ="id"
         df['Date'] = pd.to_datetime(df['submit_dt']).dt.date
         df.drop(columns='submit_dt',inplace=True)

@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
+# from st_aggrid import AgGrid needs 3.10
 
 def init_ss():
     pass
@@ -16,6 +17,16 @@ def get_connected():
     es = esu.conn_es()
     return es
 
+def add_totals_row(df):
+    # Function to add a totals row
+    total_columns = ['orderAmount','orderQtyBoxes', 'Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff', 'OpC']
+    totals = {col: df[col].sum() for col in total_columns} # Calculate totals for specified columns
+    # Create a new DataFrame for the totals row
+    totals_df = pd.DataFrame([totals], index=["Total"])  # Pass the index as a list
+    # Append the totals row to the original DataFrame
+    # st.write(totals_df)
+    return pd.concat([df, totals_df])
+    
 def main():
     st.write('----')
     es =  get_connected()
@@ -36,35 +47,79 @@ def main():
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
     pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
 
-    pull_cln=pull_cln.loc[:, ['Scout','orderType','Date','Qty', 'Amt','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','status']]
+    pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','Date','orderQtyBoxes', 'orderAmount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','status']]
     # pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
     # pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
 
-    pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
+    # pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
+    # Add the totals row to the DataFrame
+    
     with st.expander('Filter'):
         order_content = au.filter_dataframe(pull_cln)
-    st.dataframe(order_content, use_container_width=True, hide_index=True,
+    
+    orders_summed = add_totals_row(order_content)
+    st.subheader(f'Pickup for {", ".join(order_content['scoutName'].unique())}')
+    st.dataframe(orders_summed, use_container_width=True, hide_index=True,
                     column_config={
-                    "Amt": st.column_config.NumberColumn(
-                        format="$%d",
-                        width='small'
-                    ),
-                    "Date": st.column_config.DateColumn(
-                        format="MM-DD-YY",
-                    )})
+                        "scoutName":None,
+                        "orderAmount": st.column_config.NumberColumn(
+                            "Amt",
+                            format="$%d",
+                            width='20'
+                        ),
+                        "orderType":st.column_config.Column(
+                            width='small'
+                        ),
+                        "orderQtyBoxes":st.column_config.NumberColumn(
+                            "Qty",
+                            width='10'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        ),
+                        "comments":st.column_config.Column(
+                            width='medium'
+                        ),
+
+                        "Adf": st.column_config.Column(
+                            "Adf",
+                            width='10'
+                        ),
+                        })
     st.write('')
-    st.write('Pickup Signature: __________________')
-    st.write('----')
-    st.dataframe(order_content, use_container_width=True, hide_index=True,
-                    column_config={
-                    "Amt": st.column_config.NumberColumn(
-                        format="$%d",
-                        width='small'
-                    ),
-                    "Date": st.column_config.DateColumn(
-                        format="MM-DD-YY",
-                    )})
+    
+    st.divider()
+    st.table(orders_summed)
+    st.dataframe(orders_summed, use_container_width=True, hide_index=True,
+                     column_config={
+                        "scoutName":None,
+                        "orderAmount": st.column_config.NumberColumn(
+                            "Amt",
+                            format="$%d",
+                            width='20'
+                        ),
+                        "orderType":st.column_config.Column(
+                            width='small'
+                        ),
+                        "orderQtyBoxes":st.column_config.NumberColumn(
+                            "Qty",
+                            width='10'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        ),
+                        "comments":st.column_config.Column(
+                            width='medium'
+                        ),
+
+                        "Adf": st.column_config.Column(
+                            "Adf",
+                            width='10'
+                        ),
+                        })
+    # AgGrid(dataframe, height=500, fit_columns_on_grid_load=True)
     st.write('Reminder - All funds due back to us by 3/19 at Noon')
+    st.write('Pickup Signature: __________________')
 
 
 if __name__ == '__main__':

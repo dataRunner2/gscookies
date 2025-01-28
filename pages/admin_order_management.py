@@ -77,8 +77,6 @@ def main():
 
     ss.filtered_df = all_orders_cln.copy() #set_index('orderId').copy()
     st.divider()
-    # Sidebar filters
-    st.sidebar.header("Filters")
     name_filter = st.text_input("Filter by Scout:")
     # age_filter = st.sidebar.slider("Filter by orderType:", min_value=0, max_value=100, value=(0, 100))
     orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_cln["orderType"].unique())
@@ -99,9 +97,8 @@ def main():
 
     def add_totals_row(df):
         # Function to add a totals row
-        total_columns = ['Amt','Qty', 'Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff', 'OpC']
+        total_columns = ['orderAmount','orderQtyBoxes', 'Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff', 'OpC']
         totals = {col: df[col].sum() for col in total_columns} # Calculate totals for specified columns
-        totals["Item"] = "Total"  # Add a label for the "Item" column
         # Create a new DataFrame for the totals row
         totals_df = pd.DataFrame([totals], index=["Total"])  # Pass the index as a list
         # Append the totals row to the original DataFrame
@@ -112,7 +109,7 @@ def main():
     # Add the totals row to the DataFrame
     filter_summed = add_totals_row(filter_dat)
    
-    st.write('data editor')
+    # st.write('data editor')
     edited_dat = st.data_editor(
         filter_summed, key='edited_dat', 
         width=1500, use_container_width=False, 
@@ -124,6 +121,12 @@ def main():
             ),
             'status': st.column_config.Column(
                 width='small'
+            ),
+            'orderQtyBoxes': st.column_config.Column(
+                "Qty", width='small'
+            ),
+            'orderAmount': st.column_config.Column(
+                "Amt", width='small'
             ),
             "addEbudde": st.column_config.CheckboxColumn(
                 "In Ebudde",
@@ -137,28 +140,56 @@ def main():
             )
     }
     )
+    # st.write(ss.edited_dat)
     # Monitor updates and send changes to Elasticsearch
     if edited_dat is not None:
         # Drop the "Total" row before comparison
         edited_df = edited_dat[edited_dat.index != "Total"]
-        st.write('Edited Df:')
-        st.write(edited_df)
+        # st.write('Edited Df:')
+        # st.write(edited_df)
+        # st.write('vs filter dat')
+        # st.write(filter_dat)
         # Compare the edited DataFrame with the original
-        changes = edited_df.compare(filter_summed)
+        changes = edited_df.compare(filter_dat)
 
         if not changes.empty:
             st.write("Changes detected:")
-            st.write(changes)
-            if st.button('save updates to elastic:'):
-                # Convert changes to a dictionary and send updates to Elasticsearch
-                for doc_id in changes.index.levels[0]:  # Iterate over changed rows
-                    updated_data = edited_df.loc[doc_id].to_dict()
-                    es.index(index=index_name, id=doc_id, body=updated_data)
-                    st.write(f"Updated document {doc_id} sent to Elasticsearch:", updated_data)
+            # st.write(changes)
+            # if st.button('save updates to elastic:'):
+            #     # Convert changes to a dictionary and send updates to Elasticsearch
+            #     for doc_id in changes.index:  # Iterate over changed rows
+            #         # updated_data = edited_df.loc[doc_id].to_dict()
+            #         updated_data = changes.to_json(orient="records", indent=4)
+            #         update_doc = {"doc": updated_data}
+            #         st.write(doc_id, update_doc)
+            #         es.update(index=ss.indexes['index_orders'], id=doc_id, doc=update_doc)
+            #         st.write(f"Updated document {doc_id} sent to Elasticsearch:", updated_data)
+    #         def _handle_table_changed(self, key_name: str):
+    #     new_state = st.session_state[key_name]
+    #     if "edited_rows" in new_state:
+    #         for index, change_dict in new_state["edited_rows"].items():
+    #             source_object = self.data[index]
+    #             for changed_field, new_value in change_dict.items():
+    #                 # the getattr() check is required because streamlit does not remove entries from the modification
+    #                 # dictionary. 
+    #                 if getattr(source_object, changed_field) != new_value:
+    #                     setattr(source_object, changed_field, new_value)
+    #         # new_state["edited_rows"].clear() Disabled because no effect
+
+    # def render(self, key_name: str):
+    #     st.data_editor(
+    #         self.dataframe,
+    #         column_config=self.st_column_specs,
+    #         key=key_name,
+    #         column_order=self.column_names,
+    #         hide_index=True,
+    #         on_change=self._handle_table_changed,
+    #         args=[key_name],
+    #     )
 
     # Display message
-    st.write("Monitor updates and push changes to Elasticsearch in real-time!")
-
+    # st.write("Monitor updates and push changes to Elasticsearch in real-time!")
+    st.write('Changes not updating yet... check back soon')
 
 
     # filtered_df = pd.DataFrame() #filtered_df[filtered_df[column].isin(user_cat_input)]

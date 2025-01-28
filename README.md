@@ -22,3 +22,9 @@ source $(poetry env info --path)/bin/activate
 
 Launch streamlit app
 
+## TODO
+Take the OpC out of the counts for # pending boxes
+Add diagram to training page for process flows
+fix booth orders page
+fix manage orders page
+
