@@ -234,7 +234,7 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
-    st.header("If you attempt to log in and it says your account can not be found, please re-create it.  I'm very sorry, when I was setting up backups I accidently deleted about 8 accounts. All orders are okay.")
+    st.warning('2/1 Midnight - All initial "promise" orders and digital cookie - girl delivery order must be submitted to this site')
     # Show input for password.
     if not ss.authenticated:
         # st.title('Welcome to our Troop Cookie Tracker.')

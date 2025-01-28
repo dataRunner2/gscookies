@@ -31,7 +31,7 @@ def init_ss():
     if 'authenticated' not in ss:
         ss.authenticated = False
         # if 'gsNm' not in st.session_state:
-        # st.session_state['gsNm'] = gs_nms.index('zz scout not selected')
+        # st.session_state['gsNm'] = gs_nms.('zz scout not selected')
     if 'guardianNm' not in st.session_state:
         st.session_state['guardianNm'] = 'scout parent'
     if "scout_dat" not in st.session_state:
@@ -94,9 +94,9 @@ def main():
     # st.pyplot(fig=jan)
 
     st.subheader('Important Dates')
-    st.write('1/139: Families receeive Digital Cookie registration email')
-    st.write('1/15 - 2/2: Digital cookie sales and Promise paper Orders')
-    st.write('2/2 - All initial "promise" orders and digital cookie - girl delivery order must be submitted to this site')
+    st.write('1/13: Families receeive Digital Cookie registration email')
+    st.write('1/15 - 2/1: Digital cookie sales and Promise paper Orders')
+    st.write('2/1 Midnight - All initial "promise" orders and digital cookie - girl delivery order must be submitted to this site')
     st.write('~2/18 - Cookies Arrive <- Volunteers needed to collect cookies')
     st.write('2/20 - 3/16: In person Delivery Cookie Orders')
     st.write('2/28 - 3/16: Booth Sales - Watch out for Signups')
