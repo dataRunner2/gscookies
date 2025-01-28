@@ -8,7 +8,7 @@ from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
 from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime64_any_dtype
-
+from streamlit_extras.row import row
 
 @st.cache_resource
 def get_connected():
@@ -40,16 +40,22 @@ def update_order_status(es, update_index, edited_content, all_orders):
         st.toast("Database updated with changes")
         au.get_all_orders()  # this should updadte the session state with all orders
 
-@st.fragment
-def update_table(column):
+# @st.fragment
+def update_table(column, filter):
+    st.write(f'{column} - {filter}')
     filter_df = ss.filtered_df.copy()
-    key_val = ss['{column}']
+    key_val = ss[f'filters_dyn']
     st.write(f"{column}: {key_val}")
     ss.filters[column] = key_val
-    # Save selections to session state
-    if ss.filters[column] is not None:
-        filter_df[filter_df[column].isin([ss.filters[column]])]
-    ss.filtered_df = filter_df.copy()
+
+# Function to apply styles to bottom row of tables
+def style_dataframe(dataframe):
+    def highlight_bottom_row(row):
+        if row.name == "Total":
+            return ["font-weight: bold; background-color: #abbaaf; color: black;"] * len(row)
+        return [""] * len(row)
+    
+    return dataframe.style.apply(highlight_bottom_row, axis=1)
 
 def main():
     es = get_connected()
@@ -61,35 +67,102 @@ def main():
 
     st.warning('page in-work')
     st.header('All Orders to Date')
+   
     all_orders_dat = au.get_all_orders(es)
-    all_orders_cln = au.allorder_view(all_orders_dat)
-    st.write(all_orders_cln)
 
-    modification_container = st.container()
-    ss.filtered_df = all_orders_cln.copy()
+    st.data_editor(all_orders_dat.set_index('orderId'))
+    
+    all_orders_cln = au.allorder_view(all_orders_dat) # this keeps short names for varity changes cols to int
+    # all_orders_cln = all_orders_cln
 
-    # # with st.expander('Filter'):
-    # if st.button("Reset Filters"):
-    #     ss.filters = {}
-    #     st.rerun()
+    ss.filtered_df = all_orders_cln.copy() #set_index('orderId').copy()
+    st.divider()
+    # Sidebar filters
+    st.sidebar.header("Filters")
+    name_filter = st.text_input("Filter by Scout:")
+    # age_filter = st.sidebar.slider("Filter by orderType:", min_value=0, max_value=100, value=(0, 100))
+    orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_cln["orderType"].unique())
+    status_filter = st.multiselect("Filter by status:", options=all_orders_cln["status"].unique())
 
-    ss.filters
-    with modification_container:
-        to_filter_columns = st.multiselect("Filter dataframe on", ['Scout','orderType','status','guardianNm','addEbudde','orderReady','orderPickedup'],default='Scout')
+
+    if name_filter:
+        ss.filtered_df = ss.filtered_df[ss.filtered_df["scoutName"].str.contains(name_filter, case=False)]
+
+    if orderType_filter:
+        st.write(status_filter)
+        ss.filtered_df = ss.filtered_df[ss.filtered_df["orderType"].isin(orderType_filter)]
+
+    if status_filter:
+        ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(status_filter)]
+
+    filter_dat = ss.filtered_df.set_index('orderId')
+
+    def add_totals_row(df):
+        # Function to add a totals row
+        total_columns = ['Amt','Qty', 'Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff', 'OpC']
+        totals = {col: df[col].sum() for col in total_columns} # Calculate totals for specified columns
+        totals["Item"] = "Total"  # Add a label for the "Item" column
+        # Create a new DataFrame for the totals row
+        totals_df = pd.DataFrame([totals], index=["Total"])  # Pass the index as a list
+        # Append the totals row to the original DataFrame
+        st.write(totals_df)
+        return pd.concat([df, totals_df])
         
-        if len(to_filter_columns) > 0:
-            cols = st.columns(len(to_filter_columns))
-            for i, col in enumerate(cols):
-                with col:
-                    column = to_filter_columns[i]
-                    st.write(column)
-                    st.multiselect(f"Values for {column}", options=list(all_orders_cln[column].unique()), key=column, on_change=update_table, kwargs={"column": column})  # Pass column to the callback
-        else:
-            ss.filters = {}
 
-        ss.filters
-        filtered_df = pd.DataFrame() #filtered_df[filtered_df[column].isin(user_cat_input)]
+    # Add the totals row to the DataFrame
+    filter_summed = add_totals_row(filter_dat)
+   
+    st.write('data editor')
+    edited_dat = st.data_editor(
+        filter_summed, key='edited_dat', 
+        width=1500, use_container_width=False, 
+        num_rows="fixed",
+        column_config={
+            'scoutId': None,# st.column_config.Column()
+            'scoutName': st.column_config.Column(
+                width='small',
+            ),
+            'status': st.column_config.Column(
+                width='small'
+            ),
+            "addEbudde": st.column_config.CheckboxColumn(
+                "In Ebudde",
+                help="Has this order been added to Ebudde",
+                width='small',
+                disabled=False
+            ),
+            "digC_val": st.column_config.CheckboxColumn(
+                "Val. in DC?",
+                width='small',
+            )
+    }
+    )
+    # Monitor updates and send changes to Elasticsearch
+    if edited_dat is not None:
+        # Drop the "Total" row before comparison
+        edited_df = edited_dat[edited_dat.index != "Total"]
+        st.write('Edited Df:')
+        st.write(edited_df)
+        # Compare the edited DataFrame with the original
+        changes = edited_df.compare(filter_summed)
 
+        if not changes.empty:
+            st.write("Changes detected:")
+            st.write(changes)
+            if st.button('save updates to elastic:'):
+                # Convert changes to a dictionary and send updates to Elasticsearch
+                for doc_id in changes.index.levels[0]:  # Iterate over changed rows
+                    updated_data = edited_df.loc[doc_id].to_dict()
+                    es.index(index=index_name, id=doc_id, body=updated_data)
+                    st.write(f"Updated document {doc_id} sent to Elasticsearch:", updated_data)
+
+    # Display message
+    st.write("Monitor updates and push changes to Elasticsearch in real-time!")
+
+
+
+    # filtered_df = pd.DataFrame() #filtered_df[filtered_df[column].isin(user_cat_input)]
+        # filtered_df = filtered_df[filtered_df[column].isin(user_cat_input)]
             # 
 
             # left, right = st.columns((1, 20))

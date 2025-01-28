@@ -373,7 +373,7 @@ def main():
 
     if ss.is_admin:
         if st.button('Get Admin Data & Page Navigation'):
-            update_admin_data()
+            update_admin_data(es)
             st.rerun()
         # GET ALL SCOUT DATA
         all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], source='scout_details', query={"match_all":{}})['hits']['hits']

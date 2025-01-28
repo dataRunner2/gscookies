@@ -123,9 +123,10 @@ class apputils:
         return view_df
 
     def allorder_view(df):
-        df=df.loc[:, ['scoutId','orderType','orderId','submit_dt','orderQtyBoxes', 'orderAmount','status','addEbudde','orderReady','orderPickedup','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','email']]
+        # This is used for admin views so the names are not changed to friendly names
+        df=df.loc[:, ['scoutId','scoutName','orderType','orderId','submit_dt','orderQtyBoxes', 'orderAmount','status','addEbudde','orderReady','orderPickedup','initialOrder','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','email']]
         df = df.astype({"orderQtyBoxes":"int","orderAmount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'}) #,'addEbudde':'bool','digC_val':'bool'})
-        df.rename(inplace=True, columns={'scoutId': 'Scout','orderId':'Order Id','orderQtyBoxes':'Qty','orderAmount':'Amt'})
+        df.rename(inplace=True, columns={'orderQtyBoxes':'Qty','orderAmount':'Amt'})
         df.index.name ="id"
         df['Date'] = pd.to_datetime(df['submit_dt']).dt.date
         df.drop(columns='submit_dt',inplace=True)

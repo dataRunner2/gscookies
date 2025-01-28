@@ -129,7 +129,8 @@ def main():
                 "digC_val": False,
                 "addEbudde": False,
                 "orderPickedup": False,
-                "orderReady": False
+                "orderReady": False,
+                "initialOrder": True
                 }
             
             esu.add_es_doc(es,indexnm=ss.indexes['index_orders'], id=orderId, doc=order_data)
