@@ -60,6 +60,8 @@ def main():
             - We will do a "booth checkin" to count money, cookies and return supplies
         """
     )
+
+    st.write(f'[My GS Troop Resources](https://www.girlscoutsww.org/en/activities/cookies/for-cookie-sellers/cookie-seller-resources.html#TroopVolunteerResources)')
 if __name__ == '__main__':
 
     setup.config_site(page_title="Training Reference",initial_sidebar_state='expanded')
