@@ -48,11 +48,33 @@ def main():
     pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
 
     pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','Date','orderQtyBoxes', 'orderAmount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','OpC','guardianNm','guardianPh','pickupNm','pickupPh','status']]
-    # pull_cln.rename(inplace=True, columns={'ScoutName': 'Scout','submit_dt':"Date",'order_qty_boxes':'Qty','order_amount':'Amt'})
-    # pull_cln = pull_cln.astype({"Amt": 'int', "Qty": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
 
-    # pull_cln.loc['Total']= pull_cln.sum(numeric_only=True, axis=0)
-    # Add the totals row to the DataFrame
+    column_config = column_config={
+                        "scoutName":None,
+                        "orderAmount": st.column_config.NumberColumn(
+                            "Amt",
+                            format="$%d",
+                            width='20'
+                        ),
+                        "orderType":st.column_config.Column(
+                            width='small'
+                        ),
+                        "orderQtyBoxes":st.column_config.NumberColumn(
+                            "Qty",
+                            width='10'
+                        ),
+                        "Date": st.column_config.DateColumn(
+                            format="MM-DD-YY",
+                        ),
+                        "comments":st.column_config.Column(
+                            width='medium'
+                        ),
+
+                        "Adf": st.column_config.Column(
+                            "Adf",
+                            width='10'
+                        ),
+                        }
     
     with st.expander('Filter'):
         order_content = au.filter_dataframe(pull_cln)
@@ -60,63 +82,16 @@ def main():
     orders_summed = add_totals_row(order_content)
     st.subheader(f'Pickup for {", ".join(order_content['scoutName'].unique())}')
     st.dataframe(orders_summed, use_container_width=True, hide_index=True,
-                    column_config={
-                        "scoutName":None,
-                        "orderAmount": st.column_config.NumberColumn(
-                            "Amt",
-                            format="$%d",
-                            width='20'
-                        ),
-                        "orderType":st.column_config.Column(
-                            width='small'
-                        ),
-                        "orderQtyBoxes":st.column_config.NumberColumn(
-                            "Qty",
-                            width='10'
-                        ),
-                        "Date": st.column_config.DateColumn(
-                            format="MM-DD-YY",
-                        ),
-                        "comments":st.column_config.Column(
-                            width='medium'
-                        ),
-
-                        "Adf": st.column_config.Column(
-                            "Adf",
-                            width='10'
-                        ),
-                        })
+                     column_config = column_config,
+                     height=35*len(orders_summed)+38)
+    
     st.write('')
     
     st.divider()
-    st.table(orders_summed)
     st.dataframe(orders_summed, use_container_width=True, hide_index=True,
-                     column_config={
-                        "scoutName":None,
-                        "orderAmount": st.column_config.NumberColumn(
-                            "Amt",
-                            format="$%d",
-                            width='20'
-                        ),
-                        "orderType":st.column_config.Column(
-                            width='small'
-                        ),
-                        "orderQtyBoxes":st.column_config.NumberColumn(
-                            "Qty",
-                            width='10'
-                        ),
-                        "Date": st.column_config.DateColumn(
-                            format="MM-DD-YY",
-                        ),
-                        "comments":st.column_config.Column(
-                            width='medium'
-                        ),
+                     column_config = column_config,
+                     height=35*len(orders_summed)+38)
 
-                        "Adf": st.column_config.Column(
-                            "Adf",
-                            width='10'
-                        ),
-                        })
     # AgGrid(dataframe, height=500, fit_columns_on_grid_load=True)
     st.write('Reminder - All funds due back to us by 3/19 at Noon')
     st.write('Pickup Signature: __________________')

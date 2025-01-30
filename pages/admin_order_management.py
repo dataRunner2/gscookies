@@ -102,7 +102,7 @@ def main():
         # Create a new DataFrame for the totals row
         totals_df = pd.DataFrame([totals], index=["Total"])  # Pass the index as a list
         # Append the totals row to the original DataFrame
-        st.write(totals_df)
+        # st.write(totals_df)
         return pd.concat([df, totals_df])
         
 
