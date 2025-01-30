@@ -65,9 +65,6 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-
-    # st.warning('page in-work')
-    st.header('All Orders to Date')
    
     all_orders_dat = au.get_all_orders(es)
     all_orders_cln = au.allorder_view(all_orders_dat) # this keeps short names for varity changes cols to int
