@@ -1,8 +1,9 @@
 from json import loads
 import streamlit as st
 import pandas as pd
-import sys
+import json
 import time
+import io
 from pathlib import Path
 from streamlit import session_state as ss
 from utils.esutils import esu
@@ -69,25 +70,26 @@ def main():
     st.header('All Orders to Date')
    
     all_orders_dat = au.get_all_orders(es)
-
-    st.data_editor(all_orders_dat.set_index('orderId'))
-    
     all_orders_cln = au.allorder_view(all_orders_dat) # this keeps short names for varity changes cols to int
     # all_orders_cln = all_orders_cln
 
     ss.filtered_df = all_orders_cln.copy() #set_index('orderId').copy()
     st.divider()
-    name_filter = st.text_input("Filter by Scout:")
-    # age_filter = st.sidebar.slider("Filter by orderType:", min_value=0, max_value=100, value=(0, 100))
-    orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_cln["orderType"].unique())
-    status_filter = st.multiselect("Filter by status:", options=all_orders_cln["status"].unique())
+    row1 = st.columns(4)
+    with row1[0]:
+        name_filter = st.text_input("Filter by Scout:")
+    with row1[1]:
+        orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_cln["orderType"].unique())
+    with row1[2]:
+        status_filter = st.multiselect("Filter by status:", options=all_orders_cln["status"].unique())
+    with row1[3]:
+        status_filter = st.multiselect("In Ebudde:", options=all_orders_cln["addEbudde"].unique())
 
-
+  
     if name_filter:
         ss.filtered_df = ss.filtered_df[ss.filtered_df["scoutName"].str.contains(name_filter, case=False)]
 
     if orderType_filter:
-        st.write(status_filter)
         ss.filtered_df = ss.filtered_df[ss.filtered_df["orderType"].isin(orderType_filter)]
 
     if status_filter:
@@ -105,16 +107,30 @@ def main():
         # st.write(totals_df)
         return pd.concat([df, totals_df])
         
+        # Calculate the paper order totals
+    papers = ss.filtered_df.copy()
+    papers = papers[papers["orderType"] == "Paper Order"]
+    papers_sum = add_totals_row(papers)
+    paper_ord_money = papers_sum.loc['Total','orderAmount']
+    scts_sel = list(filter_dat['scoutId'].unique())
+    girl_money_qry = f'FROM {ss.indexes["index_money"]} | WHERE scoutId IN ("' + '", "'.join(scts_sel) + '") | LIMIT 500'
+
+    # Amount Received
+    response = es.esql.query(
+        query=girl_money_qry,
+        format="csv")
+    amt_received =  pd.read_csv(io.StringIO(response.body))
+    amt_received = amt_received.fillna(0)
+    amt_received = amt_received.astype({"amountReceived": 'int'})
+    total_amt_received = amt_received['amountReceived'].sum()
+    st.write(f"Total Paper Orders Money Due: ${paper_ord_money}")
+    st.write(f'Total amount received: ${total_amt_received}')
+    st.write(f'Amount that should show in Ebudde if orders and money received are in ebudde: ${paper_ord_money - total_amt_received}')
 
     # Add the totals row to the DataFrame
-    filter_summed = add_totals_row(filter_dat)
-   
-    # st.write('data editor')
-    edited_dat = st.data_editor(
-        filter_summed, key='edited_dat', 
-        width=1500, use_container_width=False, 
-        num_rows="fixed",
-        column_config={
+    filter_summed = add_totals_row(filter_dat)    
+
+    column_config = column_config={
             'scoutId': None,# st.column_config.Column()
             'scoutName': st.column_config.Column(
                 width='small',
@@ -139,163 +155,62 @@ def main():
                 width='small',
             )
     }
+    column_order=['scoutName','orderType','Date','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','Tre','comments','guardianNm','guardianPh','submit_dt']
+       
+    # st.write('data editor')
+    edited_dat = st.data_editor(
+        filter_summed, key='edited_dat', 
+        width=1500, use_container_width=False, 
+        num_rows="fixed", column_order = column_order,
+        column_config = column_config
     )
-    # st.write(ss.edited_dat)
+
+
     # Monitor updates and send changes to Elasticsearch
     if edited_dat is not None:
         # Drop the "Total" row before comparison
         edited_df = edited_dat[edited_dat.index != "Total"]
-        # st.write('Edited Df:')
-        # st.write(edited_df)
-        # st.write('vs filter dat')
-        # st.write(filter_dat)
-        # Compare the edited DataFrame with the original
+        st.divider()
+        st.write('Updated table:')
+        updated_frame = st.dataframe(
+            edited_df, key='updated_tbl', 
+            width=1500, use_container_width=False, 
+            column_order = column_order,
+            column_config = column_config
+            )
+        time.sleep(1)
         changes = edited_df.compare(filter_dat)
-
+               
         if not changes.empty:
             st.write("Changes detected:")
-            # st.write(changes)
-            # if st.button('save updates to elastic:'):
-            #     # Convert changes to a dictionary and send updates to Elasticsearch
-            #     for doc_id in changes.index:  # Iterate over changed rows
-            #         # updated_data = edited_df.loc[doc_id].to_dict()
-            #         updated_data = changes.to_json(orient="records", indent=4)
-            #         update_doc = {"doc": updated_data}
-            #         st.write(doc_id, update_doc)
-            #         es.update(index=ss.indexes['index_orders'], id=doc_id, doc=update_doc)
-            #         st.write(f"Updated document {doc_id} sent to Elasticsearch:", updated_data)
-    #         def _handle_table_changed(self, key_name: str):
-    #     new_state = st.session_state[key_name]
-    #     if "edited_rows" in new_state:
-    #         for index, change_dict in new_state["edited_rows"].items():
-    #             source_object = self.data[index]
-    #             for changed_field, new_value in change_dict.items():
-    #                 # the getattr() check is required because streamlit does not remove entries from the modification
-    #                 # dictionary. 
-    #                 if getattr(source_object, changed_field) != new_value:
-    #                     setattr(source_object, changed_field, new_value)
-    #         # new_state["edited_rows"].clear() Disabled because no effect
-
-    # def render(self, key_name: str):
-    #     st.data_editor(
-    #         self.dataframe,
-    #         column_config=self.st_column_specs,
-    #         key=key_name,
-    #         column_order=self.column_names,
-    #         hide_index=True,
-    #         on_change=self._handle_table_changed,
-    #         args=[key_name],
-    #     )
-
-    # Display message
-    # st.write("Monitor updates and push changes to Elasticsearch in real-time!")
-    st.write('Changes not updating yet... check back soon')
-
-
-    # filtered_df = pd.DataFrame() #filtered_df[filtered_df[column].isin(user_cat_input)]
-        # filtered_df = filtered_df[filtered_df[column].isin(user_cat_input)]
-            # 
-
-            # left, right = st.columns((1, 20))
-            # left.write("↳")
+             # Keep only columns where the second level is "Self"
+            changed_df = changes.loc[:, changes.columns.get_level_values(1) == "self"]
+            # Reset the column index if needed
+            changed_df.columns = changed_df.columns.droplevel(1)  # Remove second level
+            st.write(changed_df)
             
-            # # Treat columns with <10 unique values as categorical
-            # if is_categorical_dtype(all_orders_cln[column]) or all_orders_cln[column].nunique() < 10:
-            #     # Restrict options to the already filtered DataFrame
-            #     options = all_orders_cln[column].unique()
-            #     # Get selected values from session state or if None then get all of them default to all
-            #     selected_values = ss.filters[column] or list(options)
-            #     user_cat_input = right.multiselect(
-            #         f"Values for {column}",
-            #         options=options,
-            #         default=selected_values,
-            #     )
-            #     get_cat_values(user_cat_input, column)
-            #     ss.filters
-                
-            #     # Apply the filter
-            #     filtered_df = filtered_df[filtered_df[column].isin(user_cat_input)]
-        
-            # # Text columns
-            # else:
-            #     user_text_input = st.session_state.filters[column] or ""
-            #     user_text_input = right.text_input(f"Substring or regex in {column}", value=user_text_input)
-                
-            #     # Save input to session state
-            #     st.session_state.filters[column] = user_text_input
-                
-            #     # Apply filter
-            #     if user_text_input:
-            #         try:
-            #             filtered_df = filtered_df[filtered_df[column].astype(str).str.contains(user_text_input, na=False)]
-            #         except Exception as e:
-            #             st.warning(f"Invalid regex: {e}")
-
-    # st.write(f'Filtered DF')
-    # st.data_editor(filtered_df)
-
-    # st.divider()
-    # edited_dat = st.data_editor(
-    #     filtered_df, key='edited_dat', 
-    #     width=1500, use_container_width=False, 
-    #     num_rows="fixed",
-    #     column_config={
-    #     'id': st.column_config.Column(
-    #         width='small',
-    #     ),
-    #     'status': st.column_config.Column(
-    #         width='small'
-    #     ),
-    #     "addEbudde": st.column_config.CheckboxColumn(
-    #         "Ebudde Ver",
-    #         help="Has this order been added to Ebudde",
-    #         width='small',
-    #         disabled=False
-    #     ),
-    #     "digC_val": st.column_config.CheckboxColumn(
-    #         "Validated in Digital Cookie?",
-    #         width='small',
-    #     )
-    # }
-    # )
-        
-    #      # Monitor changes
-        
-    # # Check for changes and update Elasticsearch
-    # if st.button("Save Changes"):
-    #     update_order_status()
-    #         # for index, row in edited_data.iterrows():
-    #         #     original_row = df.loc[index]
-    #         #     if row["is_a"] != original_row["is_a"]:
-    #         #         update_elasticsearch(row["id"], "is_a", row["is_a"])
-    #         #     if row["is_b"] != original_row["is_b"]:
-    #         #         update_elasticsearch(row["id"], "is_b", row["is_b"])
-    #         # st.success("Changes saved to Elasticsearch!")
-
-    #     # Display current data
-    #     st.write("Edited Data:")
-    #     st.write(edited_dat)
-
-    # USE DEV index to test this - make sure it's only affecting the rows I think itis
-    # if not ss.start_dat.equals(edited_dat):
-    #     st.write('start data is Not equal to edited')
-    #     ss.start_dat = edited_dat
-    #     ss.start_dat.loc[,'Qty'] = ss.start_dat['Adv'] + ss.start_dat['LmUp'] 
-    #     # st.write(ss.start_dat)
-    #     rr()
+            changed_str = changed_df.to_json(orient="index") # type str
+            changed_dict = json.loads(changed_str)  # type json
+            # st.write(changed_dict)
             
+            st.divider()
+          
+            if st.button('save updates to elastic'):
+                # Convert changes to a dictionary and send updates to Elasticsearch
+                for doc_id,v in changed_dict.items():  # Iterate over changed rows
+                    # st.write(f'{doc_id} :> {v}')
+                    update_doc = {"doc": v}
+                    # st.write(doc_id, update_doc)
+                    resp = es.update(index=ss.indexes['index_orders'], id=doc_id, body=update_doc)
+                    st.write(f"{doc_id} : {resp.get('result')}")
+                    # POST your_index_name/_update/your_document_id
+                    #     {
+                    #     "doc": {
+                    #         "field1": "new_value1",
+                    #         "field2": "new_value2"
+                    #     }
+                    #     }
 
-        # if submit_button:
-        #     st.session_state["refresh"] = True
-        #     try:
-        #         # Write to database
-        #         au.update_es(edited_dat, edited_content)
-        #         # time.sleep(1)
-        #         # Refresh data from Elastic
-        #         all_orders = au.get_all_orders(es)
-        #     except:
-        #         st.warning("Error updating Elastic")
-        #         st.write(st.session_state['edited_dat'])
 
 if __name__ == '__main__':
 
