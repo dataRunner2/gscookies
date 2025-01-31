@@ -17,7 +17,7 @@ p = Path.cwd()
 
 class setup:
     def is_admin():
-        if ss.username in ['jklemisch','Jessica B','shawna']:  # st.secrets['general']['admins_list']:
+        if ss.username in st.secrets['general']['admins_list']:
             ss.is_admin = True
             st.warning('YOU ARE AN ADMIN')
             if ss.username in st.secrets['general']['super_admin']:
