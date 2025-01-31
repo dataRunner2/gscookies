@@ -81,7 +81,7 @@ def main():
     with row1[2]:
         status_filter = st.multiselect("Filter by status:", options=all_orders_cln["status"].unique())
     with row1[3]:
-        status_filter = st.multiselect("In Ebudde:", options=all_orders_cln["addEbudde"].unique())
+        ebudde_filter = st.multiselect("In Ebudde:", options=all_orders_cln["addEbudde"].unique())
 
   
     if name_filter:
@@ -92,6 +92,9 @@ def main():
 
     if status_filter:
         ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(status_filter)]
+
+    if ebudde_filter:
+        ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(ebudde_filter)]
 
     filter_dat = ss.filtered_df.set_index('orderId')
     filter_dat.sort_index(inplace=True)
