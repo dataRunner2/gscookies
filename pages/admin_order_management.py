@@ -127,7 +127,7 @@ def main():
     total_amt_received = amt_received['amountReceived'].sum()
     st.write(f"Total Paper Orders Money Due: ${paper_ord_money}")
     st.write(f'Total amount received: ${total_amt_received}')
-    st.write(f'Amount that should show in Ebudde if orders and money received are in ebudde: ${paper_ord_money - total_amt_received}')
+    st.write(f'Amount that should show in Ebudde for **delivery** orders, assuming any money received are in ebudde: ${paper_ord_money - total_amt_received}')
 
     # Add the totals row to the DataFrame
     filter_summed = add_totals_row(filter_dat)
