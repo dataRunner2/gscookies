@@ -65,6 +65,7 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
+
    
     all_orders_dat = au.get_all_orders(es)
     all_orders_cln = au.allorder_view(all_orders_dat) # this keeps short names for varity changes cols to int
@@ -93,6 +94,7 @@ def main():
         ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(status_filter)]
 
     filter_dat = ss.filtered_df.set_index('orderId')
+    filter_dat.sort_index(inplace=True)
 
     def add_totals_row(df):
         # Function to add a totals row
@@ -125,7 +127,8 @@ def main():
     st.write(f'Amount that should show in Ebudde if orders and money received are in ebudde: ${paper_ord_money - total_amt_received}')
 
     # Add the totals row to the DataFrame
-    filter_summed = add_totals_row(filter_dat)    
+    filter_summed = add_totals_row(filter_dat)
+    filter_summed.sort_index(inplace=True)  
 
     column_config = column_config={
             'scoutId': None,# st.column_config.Column()
@@ -133,7 +136,8 @@ def main():
                 width='small',
             ),
             'status': st.column_config.Column(
-                width='small'
+                width='small',
+                disabled=True
             ),
             'orderQtyBoxes': st.column_config.Column(
                 "Qty", width='small'
@@ -149,10 +153,14 @@ def main():
             ),
             "digC_val": st.column_config.CheckboxColumn(
                 "Val. in DC?",
-                width='small',
+                width='small'
+            ),
+            "Date": st.column_config.DateColumn(
+                disabled=True
             )
+
     }
-    column_order=['scoutName','orderType','Date','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','Tre','comments','guardianNm','guardianPh','submit_dt']
+    column_order=['scoutName','orderType','Date','status','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','Tre','comments','guardianNm','guardianPh','submit_dt']
        
     # st.write('data editor')
     edited_dat = st.data_editor(

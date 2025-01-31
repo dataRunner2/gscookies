@@ -1,6 +1,9 @@
 {
     "index_patterns": ["orders*"],
     "template": {
+      "settings": {
+        "index.default_pipeline": "update_status_pipeline"
+      },
       "mappings": {
         "properties": {
           "Adf": {

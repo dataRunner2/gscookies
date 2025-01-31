@@ -28,3 +28,35 @@ Add diagram to training page for process flows
 fix booth orders page
 fix manage orders page
 
+# Status logic
+New Order = pending
+added to Ebudde = ordered
+order picked up = picked up
+paid = paid
+
+
+add ingest pipeline
+PUT _ingest/pipeline/update_status_pipeline
+{
+  "description": "Pipeline to update status field based on addEbudde, pickedUp, and paid values",
+  "processors": [
+    {
+      "script": {
+        "lang": "painless",
+        "source": """
+          if (ctx.addEbudde == true && ctx.pickedUp == true && ctx.paid == true) {
+            ctx.status = "Paid";
+          } else if (ctx.addEbudde == true && ctx.pickedUp == true) {
+            ctx.status = "Picked Up";
+          } else if (ctx.addEbudde == true) {
+            ctx.status = "Ordered";
+          } else if (ctx.pickedUp == true) {
+            ctx.status = "Needs Processing";
+          } else if (ctx.paid == true) {
+            ctx.status = "Needs Processing";
+          }
+        """
+      }
+    }
+  ]
+}

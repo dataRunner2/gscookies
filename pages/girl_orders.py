@@ -130,7 +130,8 @@ def main():
                 "addEbudde": False,
                 "orderPickedup": False,
                 "orderReady": False,
-                "initialOrder": True
+                "initialOrder": True,
+                "orderPaid":False
                 }
             
             esu.add_es_doc(es,indexnm=ss.indexes['index_orders'], id=orderId, doc=order_data)
