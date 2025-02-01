@@ -20,7 +20,7 @@ class setup:
         if ss.username in ['jklemisch','Jessica B','shawna']:  # st.secrets['general']['admins_list']:
             ss.is_admin = True
             st.warning('YOU ARE AN ADMIN')
-            if ss.username in st.secrets['general']['super_admin']:
+            if ss.username in ['jklemisch'] #st.secrets['general']['super_admin']:
                 ss.super_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')

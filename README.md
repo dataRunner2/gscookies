@@ -27,6 +27,7 @@ Take the OpC out of the counts for # pending boxes
 Add diagram to training page for process flows
 fix booth orders page
 fix manage orders page
+add feature to import ebudde "all DOC orders" report - splice it and put it into our orders.  so we match 100%. 
 
 # Status logic
 New Order = pending
