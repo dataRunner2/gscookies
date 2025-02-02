@@ -147,8 +147,8 @@ class apputils:
         all_orders = pd.read_csv(io.StringIO(response.body))
         # st.write(all_orders)
 
-        all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
-        all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
+        # all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
+        # all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
 
         ss.all_orders = all_orders
         return all_orders

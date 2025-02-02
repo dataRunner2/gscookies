@@ -128,10 +128,13 @@ def main():
     st.write(f"Total Paper Orders Money Due: ${paper_ord_money}")
     st.write(f'Total amount received: ${total_amt_received}')
     st.write(f'Amount that should show in Ebudde for **delivery** orders, assuming any money received are in ebudde: ${paper_ord_money - total_amt_received}')
-
+    
+    # sort by order number
+    filter_dat.sort_index(inplace=True) 
+    
     # Add the totals row to the DataFrame
     filter_summed = add_totals_row(filter_dat)
-    filter_summed.sort_index(inplace=True)  
+     
 
     column_config = column_config={
             'scoutId': None,# st.column_config.Column()

@@ -61,10 +61,11 @@ def main():
             # At this point the URL query string is empty / unchanged, even with data in the text field.
             ordType = st.selectbox("Order Type (Submit seperate orders for paper orders vs. Digital Cookie):",options=['Digital Cookie Girl Delivery','Paper Order'],key='ordType')
             # pickupT = st.selectbox('Pickup Slot', ['Tues Feb 27 9-12','Wed Feb 28 10-4:30','Thurs Feb 29 10am-5:30pm','Fri Mar 1 10am-8:30pm','Sat Mar 2 10am-4:30pm','Mon Mar 4 10am-4:30pm','Tues Mar 5 10am-4:30pm','Mon Mar 6 10am-4:30pm','Mon Mar 7 10am-8:30pm'])
+            st.html("<p style='color:red;'>Please seperate paper orders from girl delivery DC orders</br>Do not include shipped DC orders</p>")
 
         with appc3:
-            PickupNm = st.text_input(label="Parent Name picking up cookies",key='PickupNm',max_chars=50)
-            PickupPh = st.text_input("Person picking up cookies phone number",key='pickupph',max_chars=13)
+            PickupNm = st.text_input(label="Parent Name picking up cookies (optional)",key='PickupNm',max_chars=50)
+            PickupPh = st.text_input("Person picking up cookies phone number (optional)",key='pickupph',max_chars=13)
 
         st.write('----')
         ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
