@@ -90,7 +90,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Receive Money")
+    setup.config_site(page_title="Receive Money", initial_sidebar_state='expanded')
     # Initialization
     init_ss()
 

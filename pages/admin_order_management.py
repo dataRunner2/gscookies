@@ -225,7 +225,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Admin Cookie Management")
+    setup.config_site(page_title="Admin Cookie Management",initial_sidebar_state='expanded')
     # Initialization
     init_ss()
 

@@ -141,7 +141,8 @@ def main():
             st.write('__________')
 
    
-    ss
+    if st.button('Show Session State'):
+        ss
 
 if __name__ == '__main__':
 

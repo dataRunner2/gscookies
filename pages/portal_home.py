@@ -97,7 +97,7 @@ def main():
     st.write('1/13: Families receeive Digital Cookie registration email')
     st.write('1/15 - 2/1: Digital cookie sales and Promise paper Orders')
     st.write('2/1 Midnight - All initial "promise" orders and digital cookie - girl delivery order must be submitted to this site')
-    st.write('~2/18 - Cookies Arrive <- Volunteers needed to collect cookies')
+    st.write('~2/23 - Cookies Arrive <- Volunteers needed to collect cookies')
     st.write('2/20 - 3/16: In person Delivery Cookie Orders')
     st.write('2/28 - 3/16: Booth Sales - Watch out for Signups')
     st.write('3/9: Family deadline for turning in initial order cookie money by 12 Noon')

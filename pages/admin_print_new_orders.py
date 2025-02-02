@@ -99,7 +99,7 @@ def main():
 
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Print Orders")
+    setup.config_site(page_title="Print Orders",initial_sidebar_state='expanded')
     # Initialization
     init_ss()
 
