@@ -163,7 +163,7 @@ def main():
             )
 
     }
-    column_order=['scoutName','orderType','Date','status','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','Tre','comments','guardianNm','guardianPh','submit_dt']
+    column_order=['scoutName','orderType','Date','status','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','comments','guardianNm','guardianPh','submit_dt']
        
     # st.write('data editor')
     edited_dat = st.data_editor(
