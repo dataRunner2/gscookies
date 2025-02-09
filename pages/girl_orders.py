@@ -131,7 +131,7 @@ def main():
                 "addEbudde": False,
                 "orderPickedup": False,
                 "orderReady": False,
-                "initialOrder": True,
+                "initialOrder": False,
                 "orderPaid":False
                 }
             

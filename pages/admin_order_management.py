@@ -134,7 +134,7 @@ def main():
     
     # Add the totals row to the DataFrame
     filter_summed = add_totals_row(filter_dat)
-     
+    # st.write(f'{filter_summed.columns}')
 
     column_config = column_config={
             'scoutId': None,# st.column_config.Column()
@@ -158,7 +158,7 @@ def main():
                 disabled=False
             ),
             "digC_val": st.column_config.CheckboxColumn(
-                "Val. in DC?",
+                "ValDC",
                 width='small'
             ),
             "Date": st.column_config.DateColumn(
@@ -166,7 +166,7 @@ def main():
             )
 
     }
-    column_order=['scoutName','orderType','Date','status','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','comments','guardianNm','guardianPh','submit_dt']
+    column_order=['scoutName','orderType','Date','status','addEbudde','orderReady','orderPickedup','initialOrder','orderAmount','orderQtyBoxes','digC_val','OpC','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','comments','guardianNm','guardianPh','submit_dt']
        
     # st.write('data editor')
     edited_dat = st.data_editor(
