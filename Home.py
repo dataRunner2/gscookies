@@ -234,7 +234,7 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
-    st.warning('Feb 1st (Saturday) Midnight - All initial "promise" orders and digital cookie - girl delivery order must be submitted to this site')
+    st.warning('Cookie order pickup is Feb 22nd.  We need volunteers - please signup on Band.')
     # Show input for password.
     if not ss.authenticated:
         # st.title('Welcome to our Troop Cookie Tracker.')
