@@ -18,7 +18,7 @@ def booth_checkin():
     st.write('----')
     es = get_connected()
 
-    all_orders_dat = au.get_all_orders(es)
+    all_orders_dat = esu.get_all_orders(es)
     all_orders_cln = au.allorder_view(all_orders_dat)
 
     booth_dat = all_orders_cln[all_orders_cln['OrderType'] == 'Booth']

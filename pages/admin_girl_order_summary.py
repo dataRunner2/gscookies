@@ -57,9 +57,16 @@ def main():
     admin_gs_nms.sort()
     
     # selection box can not default to none because the form defaults will fail. 
-    st.selectbox("Select Girl Scout:", admin_gs_nms, key='admin_gsNm')
-    selected_sct_dat = [item for item in ss['all_scout_dat'] if item["FullName"] == ss.admin_gsNm][0]
-    st.write(selected_sct_dat)
+    cols = st.columns(2)
+    with cols[0]:
+        st.selectbox("Select Girl Scout:", admin_gs_nms, key='admin_gsNm')
+        selected_sct_dat = [item for item in ss['all_scout_dat'] if item["FullName"] == ss.admin_gsNm][0]
+    with cols[1]:
+        st.write('') # blank line
+        show_sel = st.button(label='Show girl award seletions')
+        if show_sel:
+            st.write(selected_sct_dat)
+
     nmId = selected_sct_dat.get('nameId')
     
     ################################## PAGE CONTENT #########################################

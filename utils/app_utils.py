@@ -85,6 +85,7 @@ class setup:
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
+            st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
             st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
@@ -134,24 +135,7 @@ class apputils:
         df.insert(3, 'Date', mv_dt_column)
         return df
 
-    def get_all_orders(es):
-        # all_orders = esu.qry_sql(es, indexnm=ss.indexes['index_orders'])
-        # st.write(all_orders)
-
-        all_orders_qry = f"FROM {ss.indexes['index_orders']} | LIMIT 1000"
-        # st.write(girl_order_qry)
-        response = es.esql.query(
-            query=all_orders_qry,
-            format="csv")
-        
-        all_orders = pd.read_csv(io.StringIO(response.body))
-        # st.write(all_orders)
-
-        # all_orders.loc[all_orders.orderReady == True, 'status'] = 'Order Ready to Pickup'
-        # all_orders.loc[all_orders.orderPickedup == True, 'status'] = 'Order Pickedup'
-
-        ss.all_orders = all_orders
-        return all_orders
+    
 
     def parse_list_string(s):
         # Match strings that look like lists and extract them

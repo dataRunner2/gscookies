@@ -39,7 +39,7 @@ def update_order_status(es, update_index, edited_content, all_orders):
             resp = es.update(index=ss.indexes['index_orders'], id=new_key, doc=value)
             time.sleep(1)
         st.toast("Database updated with changes")
-        au.get_all_orders()  # this should updadte the session state with all orders
+        esu.get_all_orders()  # this should updadte the session state with all orders
 
 # @st.fragment
 def update_table(column, filter):
@@ -67,7 +67,7 @@ def main():
         st.stop()
 
    
-    all_orders_dat = au.get_all_orders(es)
+    all_orders_dat = esu.get_all_orders(es)
     all_orders_cln = au.allorder_view(all_orders_dat) # this keeps short names for varity changes cols to int
     # all_orders_cln = all_orders_cln
 
@@ -109,7 +109,7 @@ def main():
         # st.write(totals_df)
         return pd.concat([df, totals_df])
         
-        # Calculate the paper order totals
+    # Calculate the paper order totals
     papers = ss.filtered_df.copy()
     papers = papers[papers["orderType"] == "Paper Order"]
     papers_sum = add_totals_row(papers)

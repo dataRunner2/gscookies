@@ -4,6 +4,7 @@ import streamlit as st
 from streamlit import session_state as ss
 import pandas as pd
 import json
+import io
 import os
 environment = os.getenv('ENV')
 
@@ -46,7 +47,114 @@ class esu:
 
         return fresp
     
+    def get_scouts(es):
+        """
+        This function gets the scouts name and scountId
+        """
+        scout_list_qry = f'FROM {ss.indexes["index_scout"]}'
+        # Amount Received
+        response = es.esql.query(
+            query=scout_list_qry,
+            format="csv")
+        scout_list =  pd.read_csv(io.StringIO(response.body))
+        return scout_list
 
+    def get_all_orders(es):
+        all_orders_qry = f"FROM {ss.indexes['index_orders']} | LIMIT 1000"
+        # st.write(girl_order_qry)
+        response = es.esql.query(
+            query=all_orders_qry,
+            format="csv")
+        
+        all_orders = pd.read_csv(StringIO(response.body))
+
+        ss.all_orders = all_orders
+        return all_orders
+
+
+    def get_sum_agg_orders(es):
+        agg_query = {
+            "size": 0,
+            "aggs": {
+                "scouts": {
+                    "terms": {"field": "scoutId.keyword", "size": 100},
+                    "aggs": {
+                        "order_types": {
+                            "terms": {"field": "orderType.keyword", "size": 10},
+                            "aggs": {
+                                "adv": {"sum": {"field": "adv"}},
+                                "lmup": {"sum": {"field": "LmUp"}},
+                                "tre": {"sum": {"field": "tre"}},
+                                "dsd": {"sum": {"field": "DSD"}},
+                                "sam": {"sum": {"field": "sam"}},
+                                "tags": {"sum": {"field": "Tags"}},
+                                "tmint": {"sum": {"field": "Tmint"}},
+                                "smr": {"sum": {"field": "Smr"}},
+                                "toff": {"sum": {"field": "Toff"}},
+                                "opc": {"sum": {"field": "OpC"}},
+                                "qty": {"sum": {"field": "orderQtyBoxes"}},
+                            }
+                        }
+                    }
+                }
+            }
+        }
+       
+        response = es.search(index = ss.indexes['index_orders'], body=agg_query)
+        if response:
+            agg_dat = response["aggregations"]["scouts"]["buckets"]
+
+        data = []
+        for scout in agg_dat:
+            scout_name = scout["key"]
+            
+            for order in scout["order_types"]["buckets"]:
+                order_type = order["key"]
+                data.append({
+                    "scoutId": scout_name,
+                    "orderType": order_type,
+                    "ADV": order["adv"]["value"],
+                    "LmUp": order["lmup"]["value"],
+                    "TRE": order["tre"]["value"],
+                    "DSD": order["dsd"]["value"],
+                    "SAM": order["sam"]["value"],
+                    "TAGS": order["tags"]["value"],
+                    "TMINT": order["tmint"]["value"],
+                    "SMR": order["smr"]["value"],
+                    "TOFF": order["toff"]["value"],
+                    "OPC": order["opc"]["value"],
+                    "QTY": order["qty"]["value"]
+                })
+
+        # Convert to DataFrame
+        agg_data = pd.DataFrame(data)
+
+        return agg_data
+
+    def get_sum_agg_money(es):
+        # Get the Sum of the amount received per scout
+        girl_money_agg = {
+            "size": 0,
+            "aggs": {
+                "scouts": {
+                    "terms": {"field": "scoutId.keyword", "size": 100},
+                    "aggs": {                
+                        "amountReceived": {"sum": {"field": "amountReceived.keyword"}}
+                    }
+                }
+            }
+        }
+       
+        response = es.search(index = ss.indexes['index_money'], body=girl_money_agg)
+        
+        if response:
+            # Normalize the JSON response into a DataFrame
+            agg_dat = pd.json_normalize(response["aggregations"]["scouts"]["buckets"], sep="_")
+            # Dynamically rename columns to remove '_value'
+            agg_dat.columns = [col.replace(".value", "") for col in agg_dat.columns]
+
+        return agg_dat
+    
     def qry_sql(es,indexnm,fields=None,where=None):
         '''
         query = """
