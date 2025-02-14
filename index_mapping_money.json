@@ -13,13 +13,7 @@
             }
           },
           "amountReceived": {
-            "type": "text",
-            "fields": {
-              "keyword": {
-                "type": "keyword",
-                "ignore_above": 256
-              }
-            }
+            "type": "long"
           },
           "amtReceived_dt": {
             "type": "date"

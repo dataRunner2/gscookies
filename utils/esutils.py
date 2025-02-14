@@ -139,7 +139,7 @@ class esu:
                 "scouts": {
                     "terms": {"field": "scoutId.keyword", "size": 100},
                     "aggs": {                
-                        "amountReceived": {"sum": {"field": "amountReceived.keyword"}}
+                        "amountReceived": {"sum": {"field": "amountReceived"}}
                     }
                 }
             }
