@@ -234,6 +234,7 @@ def main():
     if st.button('logout'):
         ss.clear()
         st.rerun()
+        
     st.warning('Cookie order pickup is Feb 22nd.  We need volunteers - please signup on Band.')
     # Show input for password.
     if not ss.authenticated:
@@ -242,8 +243,8 @@ def main():
         st.write('Please notify the admin, Jennifer, via band or text if you encounter any errors. Thank you. ')
         with st.form('login'):
             scout_dat = {}
-            st.text_input('username',key='login_username')
-            login_password = st.text_input('Password',type='password')
+            st.text_input('username', key='login_username')
+            login_password = st.text_input('Password', type='password')
             login = st.form_submit_button("Login")
 
             if login:
