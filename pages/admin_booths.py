@@ -7,7 +7,7 @@ from pathlib import Path
 from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
-import datetime
+from datetime import datetime
 
 @st.cache_resource
 def get_connected():
@@ -61,7 +61,7 @@ def booth_checkin():
             esu.add_es_doc(es,indexnm=ss.indexes['index_money'], id=None, doc=moneyRec_data)
             st.toast("Database updated with changes")
 
-def submitBoothOrder():
+def submitBoothOrder(es):
     with st.form('submit orders', clear_on_submit=True):
         Booth = st.text_input(f'Booth - Location and Date:')
 
@@ -70,22 +70,22 @@ def submitBoothOrder():
         ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
         with ck1:
-            advf=st.number_input(label='Adventurefuls',step=1,min_value=0, value=6) # 48 for first weekend
-            tags=st.number_input(label='Tagalongs',step=1,min_value=0, value=6) # 48 for first weekend
+            advf=st.number_input(label='Adventurefuls (24)',step=1,min_value=0, value=6) # 24 for first weekend
+            tags=st.number_input(label='Tagalongs (36)',step=1,min_value=0, value=6) # 48 for first weekend
 
         with ck2:
-            lmup=st.number_input(label='Lemon-Ups',step=1,value=3) # 12
-            tmint=st.number_input(label='Thin Mints',step=1,value=18) # 60 for first weekend
+            lmup=st.number_input(label='Lemon-Ups (12)',step=1,value=3) # 12
+            tmint=st.number_input(label='Thin Mints (60)',step=1,value=18) # 60 for first weekend
         with ck3:
-            tre=st.number_input(label='Trefoils',step=1,value=3) #12
-            smr=st.number_input(label="S'Mores",step=1,value=3) #12
+            tre=st.number_input(label='Trefoils(12)',step=1,value=3) #12
+            smr=st.number_input(label="S'Mores (18)",step=1,value=3) #18
 
         with ck4:
-            dsd=st.number_input(label='Do-Si-Dos',step=1,min_value=3) #12
-            toff=st.number_input(label='Toffee-Tastic',step=1,value=3) #12
+            dsd=st.number_input(label='Do-Si-Dos (12)',step=1,min_value=3) #12
+            toff=st.number_input(label='Toffee-Tastic (12)',step=1,value=3) #12
 
         with ck5:
-            sam=st.number_input(label='Samoas',step=1,value=18) # 60 for first weekend
+            sam=st.number_input(label='Samoas (48)',step=1,value=18) # 48 for first weekend
 
 
         comments = st.text_area("Comments to us or your ref notes", key='comments')
@@ -94,15 +94,15 @@ def submitBoothOrder():
         # submitted = st.form_submit_button()
         if st.form_submit_button("Submit Order to Cookie Crew"):
             opc=0
-            total_boxes, order_amount=calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc)
+            total_boxes, order_amount=au.calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc)
             now = datetime.now()
             idTime = now.strftime("%m%d%Y%H%M")
             # st.write(idTime)
-            orderId = (f'{Booth.replace(" ","").replace(".","_").lower()}{idTime}')
+            orderId = (f'{Booth.replace(" ","").replace("/","_").replace("-","_").replace(".","_").lower()}{idTime}')
             # Every form must have a submit button.
             order_data = {
-                "ScoutName": Booth,
-                "OrderType": "Booth",
+                "scoutName": Booth,
+                "orderType": "Booth",
                 "Adf": advf,
                 "LmUp": lmup,
                 "Tre": tre,
@@ -113,22 +113,24 @@ def submitBoothOrder():
                 "Smr": smr,
                 "Toff": toff,
                 "OpC": opc,
-                "order_qty_boxes": total_boxes,
-                "order_amount": order_amount,
+                "orderQtyBoxes": total_boxes,
+                "orderAmount": order_amount,
                 "submit_dt": datetime.now(),
                 "comments": comments,
                 "status": "Pending",
                 "order_id": orderId,
                 "digC_val": False,
-                "inEbudde": False,
-                "order_pickedup": False,
-                "order_ready": False
+                "addEbudde": False,
+                "orderPickedup": False,
+                "orderReady": True,
+                "initialOrder": False,
+                "orderPaid": True
                 }
 
             esu.add_es_doc(es,indexnm=ss.indexes['index_orders'], id=orderId, doc=order_data)
             st.success('Your order has been submitted!', icon="✅")
 
-def pickupSlot():
+def pickupSlot(es):
     st.write("this page is in work... come back later")
     st.header("Add a Pickup Timeslot Here")
     st.write(esu.get_dat(es, indexnm="timeslots", field='timeslots'))
@@ -136,3 +138,17 @@ def pickupSlot():
     st.button("Add Timeslot")
     if st.button:
         esu.add_es_doc(es, indexnm="timeslots",doc=new_timeslot)
+
+def main():
+    st.write('Booths')
+    es = get_connected()
+    
+    submitBoothOrder(es)
+    # booth_checkin()
+
+if __name__ == '__main__':
+
+    setup.config_site(page_title="Booths",initial_sidebar_state='expanded')
+    # Initialization
+    # init_ss()
+    main()

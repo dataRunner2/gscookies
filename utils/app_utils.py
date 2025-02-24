@@ -28,8 +28,11 @@ class setup:
             ss.super_admin = False
     
 
-    def config_site(page_title="",initial_sidebar_state='collapsed'):
-        
+    def config_site(page_title="",initial_sidebar_state='collapsed',no_header=False):
+        if no_header:
+            page_title=''
+        else:
+            page_title = page_title
         st.set_page_config(
             page_title = page_title,
             page_icon = "samoas.jpg",
@@ -37,6 +40,8 @@ class setup:
             initial_sidebar_state = initial_sidebar_state
             # menu_items = {"About": "Developed for Girl Scout Troop 43202, by Jennifer Klemisch"}
         )
+        
+
         # Inject custom CSS to hide the sidebar
         hide_menu_style = """
             <style>
@@ -93,6 +98,8 @@ class setup:
             st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
         if ss.super_admin:
             st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
+            st.sidebar.page_link('pages/admin_booths.py',label='Booths')
+            st.sidebar.page_link('pages/admin_print_booths.py',label='Print Booths')
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -103,8 +110,11 @@ class apputils:
         total_money = total_boxes*6
         return total_boxes, total_money
 
-    def just_renamer(df):
-        df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
+    def just_renamer(df,just_cookies=False):
+        if just_cookies:
+            df.rename(columns={'Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
+        else:
+            df.rename(columns={'orderType':'Order Type','orderId':'Order Id','status':'Status','comments':'Comments','guardianNm':'Guardian Name','guardianPh':'Guardian Phone','pickupT':'Pickup Date/Time','scoutName':'Scouts Name','orderQtyBoxes':'Qty','orderAmount':'Amt','Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
         return df
     
     def order_view(df):

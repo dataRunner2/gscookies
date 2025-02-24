@@ -120,10 +120,8 @@ def main():
   
     if name_filter:
         ss.order_content = ss.order_content[ss.order_content["scoutName"].str.contains(name_filter, case=False)]
-
     if orderType_filter:
         ss.order_content = ss.order_content[ss.order_content["orderType"].isin(orderType_filter)]
-
     if status_filter:
         ss.order_content = ss.order_content[ss.order_content["status"].isin(status_filter)]
     if io_filter:
@@ -134,7 +132,8 @@ def main():
     
     with st.container():
         orders_summed = add_totals_row(order_content)
-        st.subheader(f'Pickup for {", ".join(order_content["scoutName"].unique())}')
+        if isinstance(order_content['scoutName'], list):
+            st.subheader(f'Pickup for {", ".join(order_content["scoutName"].unique())}')
         styled_df = orders_summed.style.set_properties(**{"background-color": "white", "color": "black"})
         st.dataframe(styled_df, use_container_width=True, hide_index=True,
                         column_config = column_config,
