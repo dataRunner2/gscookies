@@ -118,7 +118,7 @@ def submitBoothOrder(es):
                 "submit_dt": datetime.now(),
                 "comments": comments,
                 "status": "Pending",
-                "order_id": orderId,
+                "orderId": orderId,
                 "digC_val": False,
                 "addEbudde": False,
                 "orderPickedup": False,
