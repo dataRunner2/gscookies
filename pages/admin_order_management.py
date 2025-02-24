@@ -115,6 +115,7 @@ def main():
     papers_sum = add_totals_row(papers)
     paper_ord_money = papers_sum.loc['Total','orderAmount']
     scts_sel = list(filter_dat['scoutId'].unique())
+    scts_sel = [x for x in scts_sel if not pd.isna(x)]
     girl_money_qry = f'FROM {ss.indexes["index_money"]} | WHERE scoutId IN ("' + '", "'.join(scts_sel) + '") | LIMIT 500'
 
     # Amount Received
