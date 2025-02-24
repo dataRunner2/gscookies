@@ -119,7 +119,7 @@ def main():
     response = es.esql.query(
         query=inventory_qry,
         format="csv")
-    
+    # st.write(response)
     all_inventory_dat = pd.read_csv(io.StringIO(response.body))
     # st.write(all_inventory_dat)
     sum_inventory_boxes_sum = all_inventory_dat.sum(numeric_only=True, axis=0).sum()
@@ -223,6 +223,19 @@ def main():
         metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int')-type_totals.loc['Total','Tagalongs'].astype('int'))
         metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int')-type_totals.loc['Total','Thin Mint'].astype('int'))
         metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int')-type_totals.loc['Total','Toffee Tastic'].astype('int'))
+        
+        # % of Inventory
+        metric_inventory = grid(9, vertical_align="center")
+        st.write('At the end of cookies we want these to be Zero')
+        metric_inventory.metric(label="% Adv", value=f"{(all_inventory.loc['Total','Adventurefuls'].astype('int') - type_totals.loc['Total','Adventurefuls'].astype('int'))/all_inventory.loc['Total','Adventurefuls'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Lemon-Ups", value=f"{(all_inventory.loc['Total','Lemon-Ups'].astype('int')-type_totals.loc['Total','Lemon-Ups'].astype('int'))/all_inventory.loc['Total','Lemon-Ups'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Trefoils", value=f"{(all_inventory.loc['Total','Trefoils'].astype('int')-type_totals.loc['Total','Trefoils'].astype('int'))/all_inventory.loc['Total','Trefoils'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Do-Si-Dos", value=f"{(all_inventory.loc['Total','Do-Si-Dos'].astype('int')-type_totals.loc['Total','Do-Si-Dos'].astype('int'))/all_inventory.loc['Total','Do-Si-Dos'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Samoas", value=f"{(all_inventory.loc['Total','Samoas'].astype('int')-type_totals.loc['Total','Samoas'].astype('int'))/all_inventory.loc['Total','Samoas'].astype('int'):.2f}")
+        metric_inventory.metric(label="% S'Mores", value=f"{(all_inventory.loc['Total',"S'Mores"].astype('int')-type_totals.loc['Total',"S'Mores"].astype('int'))/all_inventory.loc['Total',"S'Mores"].astype('int'):.2f}")
+        metric_inventory.metric(label="% Tagalongs", value=f"{(all_inventory.loc['Total','Tagalongs'].astype('int')-type_totals.loc['Total','Tagalongs'].astype('int'))/all_inventory.loc['Total','Tagalongs'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Thin Mint", value=f"{(all_inventory.loc['Total','Thin Mint'].astype('int')-type_totals.loc['Total','Thin Mint'].astype('int'))/all_inventory.loc['Total','Thin Mint'].astype('int'):.2f}")
+        metric_inventory.metric(label="% Toffee Tastic", value=f"{(all_inventory.loc['Total','Toffee Tastic'].astype('int')-type_totals.loc['Total','Toffee Tastic'].astype('int'))/all_inventory.loc['Total','Toffee Tastic'].astype('int'):.2f}")
         
 
 if __name__ == '__main__':
