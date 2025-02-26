@@ -51,10 +51,6 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-        
-    # st.warning('page in-work')
-    # st.header('All Orders to Date')
-    # st.warning('split table per scout')
     
     pull_orders = esu.get_all_orders(es)
     pull_cln = au.allorder_view(pull_orders)

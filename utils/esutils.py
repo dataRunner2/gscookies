@@ -70,6 +70,18 @@ class esu:
 
         ss.all_orders = all_orders
         return all_orders
+    
+    def get_booth_orders(es):
+        all_orders_qry = f"""FROM {ss.indexes['index_orders']} | WHERE orderType == "Booth" | LIMIT 1000"""
+        # st.write(girl_order_qry)
+        response = es.esql.query(
+            query=all_orders_qry,
+            format="csv")
+        
+        booth_orders = pd.read_csv(StringIO(response.body))
+
+        ss.booth_orders = booth_orders
+        return booth_orders
 
 
     def get_sum_agg_orders(es):

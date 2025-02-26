@@ -146,7 +146,6 @@ class apputils:
         return df
 
     
-
     def parse_list_string(s):
         # Match strings that look like lists and extract them
         match = re.fullmatch(r"\[(.*)\]", s)

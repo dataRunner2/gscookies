@@ -146,9 +146,32 @@ def main():
     submitBoothOrder(es)
     # booth_checkin()
 
+    st.divider()
+    st.subheader('Delete Booth')
+    booth_orders = esu.get_booth_orders(es)
+
+    booths = booth_orders["scoutName"]
+    del_booth = st.selectbox("Booth:", booths, key='del_booth')
+
+    row_index = booth_orders.index[booth_orders["scoutName"] == del_booth].tolist()[0]  # Get index
+    del_boothid = booth_orders.at[row_index, "orderId"]
+    
+    # Button to trigger deletion
+    if st.button("Delete Selected Booth"):
+        st.write(f'Deleting booth: {del_boothid}')
+        index_nm = ss.indexes['index_orders']
+        if index_nm and del_booth:
+            try:
+                response = es.delete(index=index_nm, id=del_boothid)
+                st.success(f"Document {del_boothid} deleted successfully!")
+            except Exception as e:
+                st.error(f"Error: {e}")
+        else:
+            st.warning("Please enter both Index Name and Document ID.")
+
 if __name__ == '__main__':
 
-    setup.config_site(page_title="Booths",initial_sidebar_state='expanded')
+    setup.config_site(page_title="Booth Admin",initial_sidebar_state='expanded')
     # Initialization
     # init_ss()
     main()
