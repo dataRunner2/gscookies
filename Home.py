@@ -235,7 +235,7 @@ def main():
         ss.clear()
         st.rerun()
         
-    st.warning('Cookie order pickup is Feb 22nd.  We need volunteers - please signup on Band.')
+    st.warning('Money for initial orders is due 3/9')
     # Show input for password.
     if not ss.authenticated:
         # st.title('Welcome to our Troop Cookie Tracker.')

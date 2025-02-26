@@ -18,16 +18,11 @@ def get_connected():
     es = esu.conn_es()
     return es
 
-def add_totals_row(df):
-    # Function to add a totals row
-    total_columns = ['Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff']
-    totals = {col: df[col].sum() for col in total_columns} # Calculate totals for specified columns
-    # Create a new DataFrame for the totals row
-    totals_df = pd.DataFrame([totals], index=["Total"])  # Pass the index as a list
-    # Append the totals row to the original DataFrame
-    # st.write(totals_df)
-    return pd.concat([df, totals_df])
-    
+def highlight_total(row):
+    if row["Cookie Variety"] == "Total":
+        return ["background-color: lightgray; color: black; font-weight: bold"] * len(row)
+    return [""] * len(row)
+
 def main():
     es =  get_connected()
     st.markdown(
@@ -42,19 +37,12 @@ def main():
                 background: white !important;
             }
         }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        """
-        <style>
-         @media print {
-            .stDataFrame {
-                background: white !important;
-                color: black !important;
+        .stApp {
+            padding-top: 10px !important; /* Adjust padding */
             }
-        }
+            .st-emotion-cache-1v0mbdj {  /* Adjusts main container */
+                padding-top: 0px !important;
+            }
         </style>
         """,
         unsafe_allow_html=True
@@ -98,19 +86,26 @@ def main():
         booth_order_trans = booth_order.T
         booth_order_trans.reset_index(inplace=True)
         booth_order_trans.columns = ['Cookie Variety','Starting Qty']
+        # Add a new row with "Total" and sum of "starting qty"
+        booth_order_trans.loc[len(booth_order_trans)] = ["Total", booth_order_trans["Starting Qty"].sum()]
 
-        booth_order_trans[['Ending Cases','Ending Boxes','Total Sold']] = ''
+        booth_order_trans[['Ending Qty','Total Sold (starting qty - ending qty)','Optional notes or tally']] = ''
         # st.table(booth_order_trans)
         # Apply left-alignment styling
-        # df_styled = booth_order_trans.style.set_properties(**{
-        #     'text-align': 'left'
-        # }).hide(axis="index")  # Hide the index (optional)
+        df_styled = booth_order_trans.style.apply(highlight_total, axis=1).set_properties(**{
+            'text-align': 'left',
+            'font-size': '20px',
+            'padding-right': '100px',
+            'color': 'blue'  # Corrected font color property
+        }).hide(axis="index")  # Hide index
+        st.markdown(df_styled.to_html(index=False), unsafe_allow_html=True)
 
         # Display styled DataFrame
-        # st.dataframe(df_styled)
-        st.dataframe(booth_order_trans.style.set_properties(**{'text-align': 'left'}),use_container_width=True,hide_index=True)
-        # st.markdown(booth_order_trans.to_html(index=False), unsafe_allow_html=True)
-
+        # # st.dataframe(df_styled)
+        # st.dataframe(booth_order_trans.style.set_properties(**{
+        #     'text-align': 'left',
+        #     'font-size': '20px'}),use_container_width=True, hide_index=True)
+        
 
     # # Inject CSS for full width and left alignment
     # st.markdown(
@@ -135,45 +130,59 @@ def main():
     #     unsafe_allow_html=True
     # )
    
-    booth_grid = grid([.7,.3],[.3,.2,.2,.3],[.3,.2,.5],[.3,.2,.5],[.3,.15,.15,.4], [.3,.15,.3,.2], [.5,.3,.2], [.5,.35,.2], vertical_align="center")
-    booth_grid.write('Out-going signiture: _____________________________')
-    booth_grid.write('Total Boxes Sold: _______________')
-    booth_grid.write('Finish Cash')
-    booth_grid.write('$__________')
-    booth_grid.write('')
-    booth_grid.write('Total boxes sold * $6 = ____________')
+    sign_row = st.columns([.35,.6])
+    sign_row[0].write('')
+    sign_row[0].write('Outgoing signiture: ________________________________')
+    sign_row[1].write('')
+    sign_row[1].write('Starting petty cash: $_______________')
+    st.divider()
+    calcs = st.columns([.4,.4,.2])
+    with calcs[0]:
+        booth_grid = grid([.4,.6],[.4,.6],[1],[.5,.5],[1],[1], vertical_align="center")
     
+    # Row 1
+    booth_grid.write('Finish Cash')
+    booth_grid.write('  $ ____________')
+
     # Row 2
     booth_grid.write('Total Credit Card Sales')
-    booth_grid.write('$ __________')
-    booth_grid.write('')
-
+    booth_grid.write('\+ $ ___________')
+    
+    booth_grid.write('==========================')
     # Row 3
-    booth_grid.write('Cash + Credit = Ending $')
-    booth_grid.write('$ __________')
-    booth_grid.write('')
-
-    # Row 4
-    booth_grid.write('Starting Cash')
-    booth_grid.write('$ __________')
-    booth_grid.write('Typically $100')
-    booth_grid.write('')
-
-    # Row 4
-    booth_grid.write('Ending \$ - Starting \$ = Revenue')
-    booth_grid.write('$ __________')
-    booth_grid.write('------------- > Enter same revenue # here')
+    booth_grid.write('**Ending Money = Cash + Credit**')
     booth_grid.write('$ __________')
 
-    # Row 5
-    booth_grid.write('')
-    booth_grid.write ('Revenue - \$ req. for boxes')
-    booth_grid.write('$ __________  ----^')
+    # Row 4 Notes
+    booth_grid.write('---')
+    booth_grid.markdown('\nNotes:  \nGet the report from square click reports, filter for today and select your booth.  It will give you the total.  \n  \n A sealed case _always_ has 12 boxes of cookies.  ')
 
-    # Row 6
-    booth_grid.write('')
-    booth_grid.write ('Typically ~ 10\% for operation Cookie /6 = ')
-    booth_grid.write('__________ OpC boxes')
+
+    with calcs[1]:
+        right_grid = grid([.6,.4],[.6,.4],[.6,.4],[.6,.4],[.6,.4], vertical_align="center")
+    
+    # Row R1
+    right_grid.write('(1) **Ending Money**')
+    right_grid.write('$ __________')
+
+    right_grid.write('(2) Starting Cash (typ. $100)')
+    right_grid.write(' $ __________')
+
+    # Row R2
+    right_grid.write('(3) **Revenue** = Line (1) - Line (2)')
+    right_grid.write('$ __________')
+
+    # Row R3 
+    right_grid.write('(4) Total # Sold Boxes sold * $6')
+    right_grid.write('$ __________')
+
+    # Row R4
+    right_grid.write ('(5) Op C $$ = Line (3) - Line (4)')
+    right_grid.write('$ __________')
+
+    # Row R5
+    right_grid.write ('(6) \# OpC (Donation) boxes = Line (5) / \$6 ')
+    right_grid.write('________ boxes')
 
 
 
