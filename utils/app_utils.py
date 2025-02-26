@@ -98,7 +98,7 @@ class setup:
             st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
         if ss.super_admin:
             st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
-            st.sidebar.page_link('pages/admin_booths.py',label='Booths')
+            st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
             st.sidebar.page_link('pages/admin_print_booths.py',label='Print Booths')
 
         with open('style.css') as f:
