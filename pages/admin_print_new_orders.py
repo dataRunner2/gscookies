@@ -73,6 +73,8 @@ def main():
     # all_orders_cln.fillna(0)
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
     pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
+    pull_cln = pull_cln[pull_cln['orderType'] != 'Booth']
+
 
     pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','initialOrder','Date','orderQtyBoxes', 'orderAmount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','guardianNm','guardianPh','status']]
     ss.order_content = pull_cln.copy()
