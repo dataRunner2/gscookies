@@ -23,7 +23,9 @@ def main():
         st.warning("Please log in to access this page.")
         st.page_link("./Home.py",label='Login')
         st.stop()
-        
+
+    if 'all_scout_dat' not in ss:
+        esu.get_all_scts(es)    
 
     admin_gs_nms = [scout['FullName'] for scout in ss.all_scout_dat]
     
@@ -57,7 +59,7 @@ def main():
             # Calculate the total sum of 'orderAmount' for filtered rows
             depst_orders_tot = filtered_df['orderAmount'].sum()
 
-            st.write(f"Total due for sales': ${depst_orders_tot}")
+            st.write(f"Total due for sales: ${depst_orders_tot}")
             st.write(f"Amount outstanding for paper orders ${depst_orders_tot - depst_money_tot}")
 
 
