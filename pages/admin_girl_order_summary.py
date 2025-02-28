@@ -45,8 +45,8 @@ def main():
         st.page_link("./Home.py",label='Login')
         st.stop()
     
-    # if 'all_scout_dat' not in ss:
-    esu.get_all_scts(es)
+    if 'all_scout_dat' not in ss:
+        esu.get_all_scts(es)
 
     admin_gs_nms = [scout['FullName'] for scout in ss.all_scout_dat]
     admin_gs_nms = list(set(admin_gs_nms))

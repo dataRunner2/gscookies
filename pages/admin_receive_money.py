@@ -28,7 +28,8 @@ def main():
         esu.get_all_scts(es)    
 
     admin_gs_nms = [scout['FullName'] for scout in ss.all_scout_dat]
-    
+    admin_gs_nms.sort()
+
     # selection box can not default to none because the form defaults will fail. 
     st.selectbox("Select Girl Scout:", options=admin_gs_nms, key='depst_sel_gsNm', index=None,  placeholder="Receive Money From... ")
     if ss.depst_sel_gsNm:
