@@ -70,22 +70,22 @@ def submitBoothOrder(es):
         ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
         with ck1:
-            advf=st.number_input(label='Adventurefuls (24)',step=1,min_value=0, value=6) # 24 for first weekend
-            tags=st.number_input(label='Tagalongs (36)',step=1,min_value=0, value=6) # 48 for first weekend
+            advf=st.number_input(label='Adventurefuls (24)',step=1,min_value=0, value=12) # 24 for first weekend
+            tags=st.number_input(label='Tagalongs (36)',step=1,min_value=0, value=24) # 48 for first weekend
 
         with ck2:
-            lmup=st.number_input(label='Lemon-Ups (12)',step=1,value=3) # 12
-            tmint=st.number_input(label='Thin Mints (60)',step=1,value=18) # 60 for first weekend
+            lmup=st.number_input(label='Lemon-Ups (12)',step=1,value=6) # 12
+            tmint=st.number_input(label='Thin Mints (60)',step=1,value=36) # 60 for first weekend
         with ck3:
-            tre=st.number_input(label='Trefoils(12)',step=1,value=3) #12
-            smr=st.number_input(label="S'Mores (18)",step=1,value=3) #18
+            tre=st.number_input(label='Trefoils(12)',step=1,value=6) #12
+            smr=st.number_input(label="S'Mores (18)",step=1,value=6) #18
 
         with ck4:
-            dsd=st.number_input(label='Do-Si-Dos (12)',step=1,min_value=3) #12
-            toff=st.number_input(label='Toffee-Tastic (12)',step=1,value=3) #12
+            dsd=st.number_input(label='Do-Si-Dos (12)',step=1,min_value=6) #12
+            toff=st.number_input(label='Toffee-Tastic (12)',step=1,value=6) #12
 
         with ck5:
-            sam=st.number_input(label='Samoas (48)',step=1,value=18) # 48 for first weekend
+            sam=st.number_input(label='Samoas (48)',step=1,value=24) # 48 for first weekend
 
 
         comments = st.text_area("Comments to us or your ref notes", key='comments')
