@@ -98,7 +98,7 @@ def submitBoothOrder(es):
             now = datetime.now()
             idTime = now.strftime("%m%d%Y%H%M")
             # st.write(idTime)
-            orderId = (f'{Booth.replace(" ","").replace("/","_").replace("-","_").replace(".","_").lower()}{idTime}')
+            orderId = (f'{Booth.replace(" ","_").replace("/","_").replace("-","_").replace(".","_").replace("(","_").replace(")","_").lower()}{idTime}')
             # Every form must have a submit button.
             order_data = {
                 "scoutName": Booth,
@@ -149,18 +149,25 @@ def main():
     st.divider()
     st.subheader('Delete Booth')
     booth_orders = esu.get_booth_orders(es)
+    booth_orders = booth_orders[booth_orders['orderPickedup'] == False].copy()
+    booth_orders.reindex()
 
-    booths = booth_orders["scoutName"]
-    del_booth = st.selectbox("Booth:", booths, key='del_booth')
+    if "booths_list" not in ss:
+        ss.booths_list = ss.booth_orders["scoutName"].tolist()
+        ss.booths_list.sort()
+    
+    st.selectbox("Booth:", ss.booths_list, key='del_booth')
+    
+    st.write(ss.del_booth)
 
-    row_index = booth_orders.index[booth_orders["scoutName"] == del_booth].tolist()[0]  # Get index
+    row_index = booth_orders.index[booth_orders["scoutName"] == ss.del_booth].tolist()[0]  # Get index
     del_boothid = booth_orders.at[row_index, "orderId"]
     
     # Button to trigger deletion
     if st.button("Delete Selected Booth"):
         st.write(f'Deleting booth: {del_boothid}')
         index_nm = ss.indexes['index_orders']
-        if index_nm and del_booth:
+        if index_nm and del_boothid:
             try:
                 response = es.delete(index=index_nm, id=del_boothid)
                 st.success(f"Document {del_boothid} deleted successfully!")

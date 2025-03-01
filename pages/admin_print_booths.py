@@ -23,6 +23,10 @@ def highlight_total(row):
         return ["background-color: lightgray; color: black; font-weight: bold"] * len(row)
     return [""] * len(row)
 
+# Callback to update selection persistently
+def update_selection():
+    st.session_state.selected_option = st.session_state.sel_booth
+
 def main():
     es =  get_connected()
     st.markdown(
@@ -52,35 +56,49 @@ def main():
         st.page_link("./Home.py",label='Login')
         st.stop()
     
-    pull_orders = esu.get_all_orders(es)
-    pull_cln = au.allorder_view(pull_orders)
+    booth_orders = esu.get_booth_orders(es)
+    pull_cln = au.allorder_view(booth_orders)
 
     # all_orders_cln.fillna(0)
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
-    pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
+    pull_cln = pull_cln[pull_cln['orderPickedup'] == False].copy()
 
     pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','Date','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','status']]
     ss.order_content = pull_cln.copy()
 
-    orderType_filter = ['Booth']
-    ss.order_content = ss.order_content[ss.order_content["orderType"].isin(orderType_filter)]
-    row1 = st.columns(4)
-    with row1[0]:
-        booths = ss.order_content["scoutName"]
+    # Store options in session state to prevent reloading issues
+    if "booths_list" not in ss:
+        ss.booths_list = ss.order_content["scoutName"].tolist()
+        ss.booths_list.sort()
+        
+    # Initialize selected option
+    if "selected_booth" not in ss:
+        ss.selected_booth = ss.booths_list[0]  # Default selection
+
+    # sel_booth = st.selectbox("Booth:", ss.booths_list, key='sel_booth')
+    # Selectbox with stable options and persistent state
+    st.selectbox(
+        "Choose a Booth:",
+        ss.booths_list,
+        index=ss.booths_list.index(ss.selected_booth),
+        key="sel_booth",
+        on_change=update_selection
+    )
     
+    st.header(f" {st.session_state.sel_booth}")
+
     # ss.order_content = ss.order_content.set_index('orderId')
     ss.order_content = au.just_renamer(ss.order_content,just_cookies = True)
     ss.order_content.sort_index(inplace=True)
-    
-    
-    st.selectbox("Booth:",booths,key='sel_booth')
-    st.text_area('Scouts @ Booth')
+    st.text_area('Scouts at Booth')
     if ss.sel_booth:
-        ss.order_content = ss.order_content[ss.order_content["scoutName"].str.contains(ss.sel_booth, case=False)]
-        booth_order = ss.order_content.copy()
+        booth_order = ss.order_content[ss.order_content["scoutName"] == ss.sel_booth].copy()
+        # st.write(booth_order)
+        
         booth_order.drop(columns=['scoutName','orderType','orderId','Date','status'],axis=1,inplace=True)
         booth_order_trans = booth_order.T
         booth_order_trans.reset_index(inplace=True)
+        
         booth_order_trans.columns = ['Cookie Variety','Starting Qty']
         # Add a new row with "Total" and sum of "starting qty"
         booth_order_trans.loc[len(booth_order_trans)] = ["Total", booth_order_trans["Starting Qty"].sum()]
@@ -96,35 +114,6 @@ def main():
         }).hide(axis="index")  # Hide index
         st.markdown(df_styled.to_html(index=False), unsafe_allow_html=True)
 
-        # Display styled DataFrame
-        # # st.dataframe(df_styled)
-        # st.dataframe(booth_order_trans.style.set_properties(**{
-        #     'text-align': 'left',
-        #     'font-size': '20px'}),use_container_width=True, hide_index=True)
-        
-
-    # # Inject CSS for full width and left alignment
-    # st.markdown(
-    #     f"""
-    #     <style>
-    #         .dataframe-container {{
-    #             width: 100%;
-    #             overflow-x: auto;
-    #         }}
-    #         table {{
-    #             width: 100%;
-    #             border-collapse: collapse;
-    #         }}
-    #         th, td {{
-    #             text-align: left !important;
-    #             padding: 8px;
-    #             border: 1px solid #ddd;
-    #         }}
-    #     </style>
-    #     <div class="dataframe-container">{html_table}</div>
-    #     """,
-    #     unsafe_allow_html=True
-    # )
    
     sign_row = st.columns([.35,.6])
     sign_row[0].write('')
@@ -142,7 +131,7 @@ def main():
 
     # Row 2
     booth_grid.write('Total Credit Card Sales')
-    booth_grid.write('\+ $ ___________')
+    booth_grid.write(r'\+ $ ___________')
     
     booth_grid.write('==========================')
     # Row 3
@@ -177,7 +166,7 @@ def main():
     right_grid.write('$ __________')
 
     # Row R5
-    right_grid.write ('(6) \# OpC (Donation) boxes = Line (5) / \$6 ')
+    right_grid.write (r'(6) \# OpC (Donation) boxes = Line (5) / \$6 ')
     right_grid.write('________ boxes')
 
 
