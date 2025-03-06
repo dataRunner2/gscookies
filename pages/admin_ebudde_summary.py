@@ -48,6 +48,7 @@ def main():
     order_money_df.fillna(0,inplace=True)
     order_money_df = order_money_df.applymap(lambda x: f"{int(x)}" if isinstance(x, (int, float)) else x)
     order_money_df = order_money_df.sort_values(by='scoutId')
+    order_money_df['Nm'] = order_money_df['scoutId']
     order_money_df.reset_index(drop=True, inplace=True)
 
     # shade every other row
