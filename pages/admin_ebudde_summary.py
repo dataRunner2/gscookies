@@ -17,7 +17,9 @@ def get_connected():
     es = esu.conn_es()
     return es
 
-
+def alternate_rows(df):
+        return ['background-color:#f2f2f2' if i %2 !=0 else '' for i in range(len(df))]
+    
 def main():
     es = get_connected()
 
@@ -48,18 +50,9 @@ def main():
     order_money_df = order_money_df.sort_values(by='scoutId')
     order_money_df.reset_index(drop=True, inplace=True)
 
-    # Inject CSS to shade every other row
-    st.markdown(
-        """
-        <style>
-            .stDataEditor [role='row']:nth-child(even) {
-                background-color: #f0f0f0 !important;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-    st.data_editor(order_money_df, height=900,use_container_width=True)
+    # shade every other row
+    styled_df = order_money_df.style.apply(alternate_rows, axis=0)
+    st.dataframe(styled_df, height=900,use_container_width=True)
 
 if __name__ == '__main__':
 
