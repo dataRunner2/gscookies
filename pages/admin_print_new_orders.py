@@ -75,14 +75,12 @@ def main():
     pull_cln = pull_cln[pull_cln['orderPickedup'] == False]
     pull_cln = pull_cln[pull_cln['orderType'] != 'Booth']
 
-
-    pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','initialOrder','Date','orderQtyBoxes', 'orderAmount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','guardianNm','guardianPh','status']]
+    pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','orderReady','initialOrder','Date','orderQtyBoxes', 'orderAmount','comments','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','guardianNm','guardianPh','status']]
     ss.order_content = pull_cln.copy()
     column_config = column_config={
                         "scoutId":None,
-                        "initalOrder": st.column_config.Column(
-                            width='small'
-                        ),
+                        "initialOrder": None,
+                        # "orderReady": None,
                         "orderAmount": st.column_config.NumberColumn(
                             "Amt",
                             format="$%d",
@@ -109,7 +107,7 @@ def main():
                         }
     
     with st.expander('Filter Orders'):
-        row1 = st.columns(4)
+        row1 = st.columns(5)
         with row1[0]:
             name_filter = st.text_input("Filter by Scout:")
         with row1[1]:
@@ -117,6 +115,8 @@ def main():
         with row1[2]:
             status_filter = st.multiselect("Filter by status:", options=pull_cln["status"].unique())
         with row1[3]:
+            ready_filter = st.multiselect("Order Ready:", options=pull_cln["orderReady"].unique())
+        with row1[4]:
             io_filter = st.multiselect("Initial Order:", options=pull_cln["initialOrder"].unique())
 
   
@@ -126,6 +126,8 @@ def main():
         ss.order_content = ss.order_content[ss.order_content["orderType"].isin(orderType_filter)]
     if status_filter:
         ss.order_content = ss.order_content[ss.order_content["status"].isin(status_filter)]
+    if ready_filter:
+        ss.order_content = ss.order_content[ss.order_content["orderReady"].isin(ready_filter)]
     if io_filter:
         ss.order_content = ss.order_content[ss.order_content["initialOrder"].isin(io_filter)]
 
@@ -141,7 +143,8 @@ def main():
                         column_config = column_config,
                         height=35*len(orders_summed)+38)
         
-        
+        st.subheader('Reminder - All inital order funds due back to us by 3/9 by Noon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   Pickup Signature: ______________________________')
+
         st.write('')
         
         st.divider()
@@ -150,8 +153,7 @@ def main():
                         height=35*len(orders_summed)+38)
 
         # AgGrid(dataframe, height=500, fit_columns_on_grid_load=True)
-        st.markdown('Reminder - All inital order funds due back to us by 3/9 by Noon&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   Pickup Signature: ______________________________')
-
+       
 
 if __name__ == '__main__':
 
