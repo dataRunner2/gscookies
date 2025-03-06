@@ -47,7 +47,19 @@ def main():
     order_money_df = order_money_df.applymap(lambda x: f"{int(x)}" if isinstance(x, (int, float)) else x)
     order_money_df = order_money_df.sort_values(by='scoutId')
     order_money_df.reset_index(drop=True, inplace=True)
-    st.table(order_money_df)
+
+    # Inject CSS to shade every other row
+    st.markdown(
+        """
+        <style>
+            .stDataEditor [role='row']:nth-child(even) {
+                background-color: #f0f0f0 !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    st.data_editor(order_money_df, height=900,use_container_width=True)
 
 if __name__ == '__main__':
 
