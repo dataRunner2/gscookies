@@ -94,7 +94,7 @@ def main():
         ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(status_filter)]
 
     if ebudde_filter:
-        ss.filtered_df = ss.filtered_df[ss.filtered_df["status"].isin(ebudde_filter)]
+        ss.filtered_df = ss.filtered_df[ss.filtered_df["addEbudde"].isin(ebudde_filter)]
 
     filter_dat = ss.filtered_df.set_index('orderId')
     filter_dat.sort_index(inplace=True)
