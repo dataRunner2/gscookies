@@ -83,6 +83,8 @@ class setup:
         st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')  # all and admin content
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
+        st.sidebar.page_link('pages/delete_order.py',label='Delete Cookie Order')
+        
         
         
         st.sidebar.divider()

@@ -1,7 +1,7 @@
 from json import loads
 import streamlit as st
 import pandas as pd
-import sys
+import io
 import time
 from pathlib import Path
 from streamlit import session_state as ss
@@ -156,12 +156,20 @@ def main():
         ss.booths_list = ss.booth_orders["scoutName"].tolist()
         ss.booths_list.sort()
     
-    st.selectbox("Booth:", ss.booths_list, key='del_booth')
+    st.selectbox("Booth:", ss.booths_list, index=None,key='del_booth')
     
     st.write(ss.del_booth)
-
-    row_index = booth_orders.index[booth_orders["scoutName"] == ss.del_booth].tolist()[0]  # Get index
-    del_boothid = booth_orders.at[row_index, "orderId"]
+    
+    get_booth = f'FROM {ss.indexes["index_orders"]}| WHERE scoutName LIKE """{ss.del_booth}""" | LIMIT 5'
+    # st.write(girl_order_qry)
+    response = es.esql.query(
+        query=get_booth,
+        format="csv")
+    found_booths = pd.read_csv(io.StringIO(response.body))
+    st.write(found_booths)
+    # row_index = booth_orders.index[booth_orders["scoutName"] == ss.del_booth].tolist()  # Get index
+    del_boothid = found_booths["orderId"].tolist()
+    st.write(del_boothid)
     
     # Button to trigger deletion
     if st.button("Delete Selected Booth"):
