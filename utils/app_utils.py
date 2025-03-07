@@ -1,7 +1,7 @@
 from json import loads
 import streamlit as st
 import pandas as pd
-
+import numpy as np
 import io
 from pathlib import Path
 import time
@@ -111,7 +111,19 @@ class apputils:
         total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
         total_money = total_boxes*6
         return total_boxes, total_money
-
+    
+    def add_totals_row(df, cols_to_total):
+        # Function to add a totals row
+        total_columns = cols_to_total #['orderAmount','orderQtyBoxes', 'Adf', 'LmUp', 'Tre', 'DSD', 'Sam', 'Tags', 'Tmint', 'Smr', 'Toff', 'OpC']
+        totals = {col: df[col].sum() for col in total_columns} # Calculate totals for specified columns
+        # Create a new DataFrame for the totals row
+        totals_df = pd.DataFrame([totals], index=["Total"]).astype(np.int64)  # Pass the index as a list
+        
+        df_tots = pd.concat([df, totals_df])
+        # Append the totals row to the original DataFrame
+        # st.write(totals_df)
+        return df_tots
+    
     def just_renamer(df,just_cookies=False):
         if just_cookies:
             df.rename(columns={'Adf':'Adventurefuls','LmUp':'Lemon-Ups','Tre':'Trefoils','DSD':'Do-Si-Dos','Sam':'Samoas','Smr':"S'Mores",'Tags':'Tagalongs','Tmint':'Thin Mint','Toff':'Toffee Tastic'},inplace=True)
