@@ -197,13 +197,14 @@ def main():
             st.write("Changes detected:")
              # Keep only columns where the second level is "Self"
             changed_df = changes.loc[:, changes.columns.get_level_values(1) == "self"]
+            changed_df.fillna(0,inplace=True)
             # Reset the column index if needed
             changed_df.columns = changed_df.columns.droplevel(1)  # Remove second level
-            st.write(changed_df)
+            # st.write(changed_df)
             
             changed_str = changed_df.to_json(orient="index") # type str
             changed_dict = json.loads(changed_str)  # type json
-            # st.write(changed_dict)
+            st.write(changed_dict)
             
             st.divider()
           
