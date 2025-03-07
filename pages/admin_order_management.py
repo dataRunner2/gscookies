@@ -177,7 +177,6 @@ def main():
         column_config = column_config
     )
 
-
     # Monitor updates and send changes to Elasticsearch
     if edited_dat is not None:
         # Drop the "Total" row before comparison

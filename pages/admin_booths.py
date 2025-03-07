@@ -8,6 +8,7 @@ from streamlit import session_state as ss
 from utils.esutils import esu
 from utils.app_utils import apputils as au, setup
 from datetime import datetime
+from streamlit_extras.row import row as strow
 
 @st.cache_resource
 def get_connected():
@@ -65,36 +66,28 @@ def submitBoothOrder(es):
     with st.form('submit orders', clear_on_submit=True):
         Booth = st.text_input(f'Booth - Location and Date:')
 
+        row1 = strow(5, vertical_align="center")
+        row1.number_input(label='Adventurefuls',step=1,min_value=-5, value=12,key='bth_advf')
+        row1.number_input(label='Lemon-Ups',step=1,min_value=-5, value=6, key='bth_lmup')
+        row1.number_input(label='Trefoils',step=1,min_value=-5, value=6, key='bth_tre')
+        row1.number_input(label='Do-Si_Dos',step=1,min_value=-5, value=8, key='bth_dsd')
 
+        row2 = strow(5, vertical_align="center")
+        row2.number_input(label='Samoas',step=1,min_value=-5, value=24, key='bth_sam')
+        row2.number_input(label='Tagalongs',step=1,min_value=-5, value=24, key='bth_tags')
+        row2.number_input(label='Thin Mints',step=1,min_value=-5, value=36, key='bth_tmint')
+        row2.number_input(label="S'mores",step=1,min_value=-5, value=4, key='bth_smr')
+        row2.number_input(label='Toffee-Tastic',step=1,min_value=-5, value=6, key='bth_toff')
+        
         st.write('----')
-        ck1,ck2,ck3,ck4,ck5 = st.columns([1.5,1.5,1.5,1.5,1.5])
 
-        with ck1:
-            advf=st.number_input(label='Adventurefuls (24)',step=1,min_value=0, value=12) # 24 for first weekend
-            tags=st.number_input(label='Tagalongs (36)',step=1,min_value=0, value=24) # 48 for first weekend
-
-        with ck2:
-            lmup=st.number_input(label='Lemon-Ups (12)',step=1,value=6) # 12
-            tmint=st.number_input(label='Thin Mints (60)',step=1,value=36) # 60 for first weekend
-        with ck3:
-            tre=st.number_input(label='Trefoils(12)',step=1,value=6) #12
-            smr=st.number_input(label="S'Mores (18)",step=1,value=6) #18
-
-        with ck4:
-            dsd=st.number_input(label='Do-Si-Dos (12)',step=1,min_value=6) #12
-            toff=st.number_input(label='Toffee-Tastic (12)',step=1,value=6) #12
-
-        with ck5:
-            sam=st.number_input(label='Samoas (48)',step=1,value=24) # 48 for first weekend
-
-
-        comments = st.text_area("Comments to us or your ref notes", key='comments')
+        comments = st.text_area("assigned_scouts", key='comments')
 
 
         # submitted = st.form_submit_button()
         if st.form_submit_button("Submit Order to Cookie Crew"):
             opc=0
-            total_boxes, order_amount=au.calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc)
+            total_boxes, order_amount=au.calc_tots(ss.bth_advf,ss.bth_lmup,ss.bth_tre,ss.bth_dsd,ss.bth_sam,ss.bth_tags,ss.bth_tmint,ss.bth_smr,ss.bth_toff,0)
             now = datetime.now()
             idTime = now.strftime("%m%d%Y%H%M")
             # st.write(idTime)
@@ -103,16 +96,16 @@ def submitBoothOrder(es):
             order_data = {
                 "scoutName": Booth,
                 "orderType": "Booth",
-                "Adf": advf,
-                "LmUp": lmup,
-                "Tre": tre,
-                "DSD": dsd,
-                "Sam": sam,
-                "Tags": tags,
-                "Tmint": tmint,
-                "Smr": smr,
-                "Toff": toff,
-                "OpC": opc,
+                "Adf": ss.bth_advf,
+                "LmUp": ss.bth_lmup,
+                "Tre": ss.bth_tre,
+                "DSD": ss.bth_dsd,
+                "Sam": ss.bth_sam,
+                "Tags": ss.bth_tags,
+                "Tmint": ss.bth_tmint,
+                "Smr": ss.bth_smr,
+                "Toff": ss.bth_toff,
+                "OpC": 0,
                 "orderQtyBoxes": total_boxes,
                 "orderAmount": order_amount,
                 "submit_dt": datetime.now(),
