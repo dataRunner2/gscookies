@@ -63,7 +63,7 @@ def main():
     # pull_cln = pull_cln.astype({"order_qty_boxes":"int","order_amount": 'int', 'Adf':'int','LmUp': 'int','Tre':'int','DSD':'int','Sam':'int',"Smr":'int','Tags':'int','Tmint':'int','Toff':'int','OpC':'int'})
     pull_cln = pull_cln[pull_cln['orderPickedup'] == False].copy()
 
-    pull_cln=pull_cln.loc[:, ['scoutName','orderId','orderType','Date','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','status']]
+    pull_cln=pull_cln.loc[:, ['scoutName','comments','orderId','orderType','Date','Adf','LmUp','Tre','DSD','Sam','Tags','Tmint','Smr','Toff','status']]
     ss.order_content = pull_cln.copy()
 
     # Store options in session state to prevent reloading issues
@@ -90,12 +90,13 @@ def main():
     # ss.order_content = ss.order_content.set_index('orderId')
     ss.order_content = au.just_renamer(ss.order_content,just_cookies = True)
     ss.order_content.sort_index(inplace=True)
-    st.text_area('Scouts at Booth')
+    # st.text_input('Scouts at Booth')
     if ss.sel_booth:
         booth_order = ss.order_content[ss.order_content["scoutName"] == ss.sel_booth].copy()
         # st.write(booth_order)
-        
-        booth_order.drop(columns=['scoutName','orderType','orderId','Date','status'],axis=1,inplace=True)
+        booth_comments = booth_order["comments"].tolist()[0]
+        st.header(booth_comments)
+        booth_order.drop(columns=['scoutName','orderType','orderId','Date','status','comments'],axis=1,inplace=True)
         booth_order_trans = booth_order.T
         booth_order_trans.reset_index(inplace=True)
         

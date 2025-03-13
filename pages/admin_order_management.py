@@ -183,12 +183,12 @@ def main():
         edited_df = edited_dat[edited_dat.index != "Total"]
         st.divider()
         st.write('Updated table:')
-        updated_frame = st.dataframe(
-            edited_df, key='updated_tbl', 
-            width=1500, use_container_width=False, 
-            column_order = column_order,
-            column_config = column_config
-            )
+        # updated_frame = st.dataframe(
+        #     edited_df, key='updated_tbl', 
+        #     width=1500, use_container_width=False, 
+        #     column_order = column_order,
+        #     column_config = column_config
+        #     )
         time.sleep(1)
         changes = edited_df.compare(filter_dat)
                
