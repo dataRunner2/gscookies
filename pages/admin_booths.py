@@ -47,24 +47,14 @@ def booth_checkin():
                         format="MM-DD-YY",
                     )})
 
-    if st.form_submit_button("Submit Booth Money"):
-            now = datetime.now()
-            idTime = now.strftime("%m%d%Y%H%M")
-
-            # Every form must have a submit button.
-            moneyRec_data = {
-                "Booth": st.session_state["scout_dat"]["FullName"],
-                "AmountReceived": amt,
-                "amtReceived_dt": amt_date,
-                "orderRef": booth_name
-                }
-
-            esu.add_es_doc(es,indexnm=ss.indexes['index_money'], id=None, doc=moneyRec_data)
-            st.toast("Database updated with changes")
-
+    
 def submitBoothOrder(es):
     with st.form('submit orders', clear_on_submit=True):
-        Booth = st.text_input(f'Booth - Location and Date:')
+        topcols = st.columns(3)
+        topcols[0].date_input('Select Booth Date', format="MM/DD/YYYY", key='booth_date')
+        topcols[1].text_input(f'Booth - Time & Location:', key='booth')
+        topcols[2].text_input('Assigned Scouts', key='comments')
+        
 
         row1 = strow(5, vertical_align="center")
         row1.number_input(label='Adventurefuls',step=1,min_value=-5, value=12,key='bth_advf')
@@ -76,12 +66,8 @@ def submitBoothOrder(es):
         row2.number_input(label='Samoas',step=1,min_value=-5, value=24, key='bth_sam')
         row2.number_input(label='Tagalongs',step=1,min_value=-5, value=24, key='bth_tags')
         row2.number_input(label='Thin Mints',step=1,min_value=-5, value=36, key='bth_tmint')
-        row2.number_input(label="S'mores",step=1,min_value=-5, value=4, key='bth_smr')
-        row2.number_input(label='Toffee-Tastic',step=1,min_value=-5, value=6, key='bth_toff')
-        
-        st.write('----')
-
-        comments = st.text_area("assigned_scouts", key='comments')
+        row2.number_input(label="S'mores",step=1,min_value=-5, value=0, key='bth_smr')
+        row2.number_input(label='Toffee-Tastic',step=1,min_value=-5, value=0, key='bth_toff')
 
 
         # submitted = st.form_submit_button()
@@ -91,10 +77,13 @@ def submitBoothOrder(es):
             now = datetime.now()
             idTime = now.strftime("%m%d%Y%H%M")
             # st.write(idTime)
-            orderId = (f'{Booth.replace(" ","_").replace("/","_").replace("-","_").replace(".","_").replace("(","_").replace(")","_").lower()}{idTime}')
+            orderId = (f'{ss.booth.replace(" ","_").replace("/","_").replace("-","_").replace(".","_").replace("(","_").replace(")","_").lower()}{idTime}')
+            booth_dt_str = pd.to_datetime(ss.booth_date, format="%m/%d/%Y").strftime("%d %b")
+            boothName = f'{booth_dt_str}_{ss.booth}'
+            st.write(boothName)
             # Every form must have a submit button.
             order_data = {
-                "scoutName": Booth,
+                "scoutName": boothName,
                 "orderType": "Booth",
                 "Adf": ss.bth_advf,
                 "LmUp": ss.bth_lmup,
@@ -108,8 +97,8 @@ def submitBoothOrder(es):
                 "OpC": 0,
                 "orderQtyBoxes": total_boxes,
                 "orderAmount": order_amount,
-                "submit_dt": datetime.now(),
-                "comments": comments,
+                "submit_dt": ss.booth_date,
+                "comments": ss.comments,
                 "status": "Pending",
                 "orderId": orderId,
                 "digC_val": False,
