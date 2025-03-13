@@ -77,7 +77,8 @@ def submitBoothOrder(es):
             now = datetime.now()
             idTime = now.strftime("%m%d%Y%H%M")
             # st.write(idTime)
-            orderId = (f'{ss.booth.replace(" ","_").replace("/","_").replace("-","_").replace(".","_").replace("(","_").replace(")","_").lower()}{idTime}')
+            booth_dt_str = pd.to_datetime(ss.booth_date, format="%m/%d/%Y").strftime("%d %b")
+            orderId = (f'{booth_dt_str}_{ss.booth.replace(" ","_").replace("/","_").replace("-","_").replace(".","_").replace("(","_").replace(")","_").replace("__","_").lower()}{idTime}')
             booth_dt_str = pd.to_datetime(ss.booth_date, format="%m/%d/%Y").strftime("%d %b")
             boothName = f'{booth_dt_str}_{ss.booth}'
             st.write(boothName)
