@@ -42,10 +42,10 @@ def init_ss():
         ss.doc_id = None
     if 'indexes' not in ss:
         ss.indexes = {}
-        ss.indexes['index_scouts'] = 'scouts2025'
-        ss.indexes['index_orders'] = 'orders2025'
-        ss.indexes['index_money'] = 'money2025'
-        ss.indexes['index_inventory'] = 'inventory2025'
+        ss.indexes['index_scouts'] = 'scouts2025' # if we create a new index then users will need to rereg. 
+        ss.indexes['index_orders'] = 'orders2026'
+        ss.indexes['index_money'] = 'money2026'
+        ss.indexes['index_inventory'] = 'inventory2026'
 
 
 # Function to add a new section
