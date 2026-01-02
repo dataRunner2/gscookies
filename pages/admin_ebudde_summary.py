@@ -31,7 +31,7 @@ def main():
     # Get Money Data
     all_money_agg = esu.get_sum_agg_money(es)
     all_money_agg.drop(columns=['doc_count'],inplace=True)
-    all_money_agg.rename(columns={'key':'scoutId','amountReceived_value':'Amt Received'},inplace=True)
+    all_money_agg.rename(columns={'key':'scoutId','amountReceived_value':'AmtReceived'},inplace=True)
     all_money_agg['orderType'] = 'Paper Order'
 
     ### Get Order Data
@@ -42,11 +42,13 @@ def main():
         orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_dat["orderType"].unique())
     if orderType_filter:
         all_orders_dat = all_orders_dat[all_orders_dat["orderType"].isin(orderType_filter)]
-    all_orders_dat['TotalAmt'] = [6*qty if ordert == "Paper Order" else '-' for qty, ordert in zip(all_orders_dat['QTY'],all_orders_dat['orderType'])]
+    all_orders_dat['TotalAmt'] = [6*qty if ordert == "Paper Order" else 0 for qty, ordert in zip(all_orders_dat['QTY'],all_orders_dat['orderType'])]
     
     order_money_df = pd.merge(left= all_orders_dat, right=all_money_agg, how='left', on=['scoutId','orderType'])
     order_money_df.fillna(0,inplace=True)
     order_money_df = order_money_df.applymap(lambda x: f"{int(x)}" if isinstance(x, (int, float)) else x)
+    order_money_df =order_money_df.astype({"TotalAmt":"int","AmtReceived":"int"})
+    order_money_df['balance'] = [total - rec for total, rec in zip(order_money_df['TotalAmt'],order_money_df['AmtReceived']) ]
     order_money_df = order_money_df.sort_values(by='scoutId')
     order_money_df['Nm'] = order_money_df['scoutId']
     order_money_df.reset_index(drop=True, inplace=True)
