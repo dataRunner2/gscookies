@@ -11,17 +11,16 @@ from utils.esutils import esu
 from PIL import Image
 import re
 from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime64_any_dtype
-
+from utils.db_utils import fetch_all, fetch_one, execute_sql
+from typing import Any, Iterable, Optional
 
 p = Path.cwd()
 
 class setup:
-    def is_admin():
-        if ss.username in ['jklemisch','Jessica B','shawna']:  # st.secrets['general']['admins_list']:
-            ss.is_admin = True
-            st.warning('YOU ARE AN ADMIN')
-            if ss.username in ['jklemisch','shawna']: #st.secrets['general']['super_admin']:
-                ss.super_admin = True
+    def check_admin():
+        st.warning('YOU ARE AN ADMIN')
+        if ss.username in ['jklemisch','shawna']: #st.secrets['general']['super_admin']:
+            ss.super_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')
             ss.is_admin = False
@@ -80,11 +79,12 @@ class setup:
         st.sidebar.page_link("Home.py", label='Account')
         st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
         st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
+        st.sidebar.page_link('pages/add_scouts.py',label='Add Scouts')
         st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')  # all and admin content
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
         st.sidebar.page_link('pages/delete_order.py',label='Delete Cookie Order')
-        
+        st.sidebar.page_link('pages/booth.py',label='Booth Entry')
         
         
         st.sidebar.divider()
@@ -101,7 +101,11 @@ class setup:
         if ss.super_admin:
             st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
             st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
-            st.sidebar.page_link('pages/admin_print_booths.py',label='Print Booths')
+
+        st.sidebar.divider()
+        if st.sidebar.button("Log out"):
+            ss.clear()
+            st.rerun()
 
         with open('style.css') as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)

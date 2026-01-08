@@ -1,218 +1,276 @@
-from json import loads
 import streamlit as st
 from streamlit import session_state as ss
-# from streamlit_calendar import calendar
-import io
-from typing import List, Tuple
-import pandas as pd
-import random
-from pathlib import Path
-from streamlit_extras.let_it_rain import rain
-from streamlit_extras.metric_cards import style_metric_cards
-from streamlit_extras.grid import grid
-
 from datetime import datetime
-from utils.esutils import esu
-from utils.app_utils import apputils as au, setup 
-from elasticsearch import Elasticsearch  # need to also install with pip3
+from decimal import Decimal
 
-def init_ss():
-    pass
+import pandas as pd
+from sqlalchemy import create_engine, text
 
-@st.cache_resource
-def get_connected():
-    es = esu.conn_es()
-    return es
+from utils.app_utils import setup
 
-def refresh():
-    st.rerun()
 
-# Function to apply styles to bottom row of tables
-def style_dataframe(dataframe):
-    def highlight_bottom_row(row):
-        if row.name == "Total":
-            return ["font-weight: bold; background-color: #abbaaf; color: black;"] * len(row)
-        return [""] * len(row)
-    
-    return dataframe.style.apply(highlight_bottom_row, axis=1)
-    
-def main():
-    # st.write('---')
-    es=get_connected()
-    if not ss.authenticated:
-        st.warning("Please log in to access this page.")
-        st.page_link("./Home.py",label='Login')
+# --------------------------------------------------
+# DB connection
+# --------------------------------------------------
+DB_HOST = "136.118.19.164"
+DB_PORT = "5432"
+DB_NAME = "cookies"
+DB_USER = "cookie_admin"
+DB_PASS = st.secrets["general"]["DB_PASSWORD"]
+
+engine = create_engine(
+    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+    pool_pre_ping=True,
+)
+
+
+# --------------------------------------------------
+# Session checks
+# --------------------------------------------------
+def require_login():
+    if not ss.get("authenticated"):
+        st.warning("Please log in to view your orders.")
         st.stop()
-        
-    # st.button('Refresh',on_click=refresh())
-    gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
-    
-    # selection box can not default to none because the form defaults will fail. 
-    gsNm = st.selectbox("Select Girl Scout:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
-    # st.write(ss['scout_dat']['scout_details'])
-    selected_sct = [item for item in ss['scout_dat']['scout_details'] if item["fn"] == ss.gsNm][0]
-    # st.write(selected_sct)
-    nmId = selected_sct['nameId']
-    
-    st.markdown(f"{ss.gsNm} Order Summary")
-    girl_order_qry = f'FROM {ss.indexes["index_orders"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
-    # st.write(girl_order_qry)
-    response = es.esql.query(
-        query=girl_order_qry,
-        format="csv")
-    
-    girl_orders = pd.read_csv(io.StringIO(response.body))
-    if not pd.DataFrame(girl_orders).empty:
-    
-        girl_orders = au.order_view(girl_orders)
-        girl_orders.reset_index(inplace=True, drop=True)
-        girl_orders.fillna(0)
-        girl_ord_md=girl_orders[['Order Id','Order Type','Date','Status','Comments']]
-
-        just_cookies = girl_orders[['Qty','Amt','Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Dos','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC']].copy()
-        # col = just_cookies.pop('Qty')
-        # just_cookies.insert(0, col.name, col)
-        # col = just_cookies.pop('Amt')
-        # just_cookies.insert(0, col.name, col)
-        cookie_orders = pd.concat([girl_ord_md, just_cookies], axis=1)
-        cookie_totals = cookie_orders[['Qty','Amt']].sum(numeric_only=True)
 
 
-        # Paper Order Calcs
-        paper_orders = cookie_orders[cookie_orders['Order Type']=='Paper Order'].copy()
-        paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
-        paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-        styled_papOrds = style_dataframe(paper_orders)
-        paperOrder_totals = paper_orders[['Qty','Amt']].iloc[-1]
-        
+# --------------------------------------------------
+# DB helpers
+# --------------------------------------------------
+def get_scouts(parent_id):
+    sql = text("""
+        SELECT scout_id, first_name, last_name
+        FROM cookies_app.scouts
+        WHERE parent_id = :parent_id
+        ORDER BY last_name, first_name
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"parent_id": parent_id}).fetchall()
 
-        # Digital Order Calcs
-        digital_orders = cookie_orders[cookie_orders['Order Type']=='Digital Cookie Girl Delivery'].copy()
-        digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
-        digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-        styled_digOrds = style_dataframe(digital_orders) # Apply styles to the DataFrame
-        digitalOrder_totals = digital_orders[['Qty','Amt']].iloc[-1]
-        
-        # Totals Qty Calcs
-        tot_boxes_pending = cookie_orders[cookie_orders['Status']=='Pending'].copy()
-        tot_boxes_pending = tot_boxes_pending[['Status','Qty']]
-        tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
-        total_pending_qty = tot_boxes_pending.loc['Total','Qty'].astype('int')
 
-        tot_boxes_ready = cookie_orders[cookie_orders['Status']=='Order Ready for Pickup'].copy()
-        tot_boxes_ready = tot_boxes_ready[['Status','Qty']]
-        tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-        total_ready_qty = tot_boxes_ready.loc['Total','Qty'].astype('int')
+def get_orders_for_scout(scout_id, year):
+    """
+    Returns orders + total paid so far (paper only).
+    Digital orders are treated as fully paid.
+    """
+    sql = text("""
+        SELECT
+            o.order_id,
+            o.order_ref,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status AS order_status,
+            COALESCE(SUM(m.amount), 0) AS paid_amount
+        FROM cookies_app.orders o
+        LEFT JOIN cookies_app.money_ledger m
+          ON o.order_id = m.related_order_id
+        WHERE o.scout_id = :scout_id
+          AND o.program_year = :year
+        GROUP BY
+            o.order_id,
+            o.order_ref,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status
+        ORDER BY o.submit_dt DESC
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {
+            "scout_id": scout_id,
+            "year": year
+        }).fetchall()
 
-        tot_boxes = cookie_orders[cookie_orders['Status']=='Picked Up'].copy()
-        tot_boxes = tot_boxes[['Status','Qty']]
-        tot_boxes.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-        total_completed_qty = tot_boxes_ready.loc['Total','Qty'].astype('int')
 
-        
-        # Funds Received
-        # All money received is for paper orders
-        girl_money_qry = f'FROM {ss.indexes["index_money"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
-        # st.write(girl_order_qry)
-        response = es.esql.query(
-            query=girl_money_qry,
-            format="csv")
-        deposits_received_dat = pd.read_csv(io.StringIO(response.body))
-        if len(deposits_received_dat)>0:
-            deposits_received_dat = deposits_received_dat.fillna(0)
-            deposits_received_df = deposits_received_dat[['amtReceived_dt','amountReceived','orderRef']].copy()
-            deposits_received_df = deposits_received_df.astype({"amountReceived": 'int'})
-            deposits_received_df.loc['Total']= deposits_received_df.sum(numeric_only=True, axis=0)
-            styled_received = style_dataframe(deposits_received_df)
-            moneyRec_totals = deposits_received_df.loc['Total','amountReceived']
+def get_order_items(order_id):
+    sql = text("""
+        SELECT
+            cy.display_name,
+            oi.quantity
+        FROM cookies_app.order_items oi
+        JOIN cookies_app.cookie_years cy
+          ON oi.cookie_code = cy.cookie_code
+         AND oi.program_year = cy.program_year
+        WHERE oi.order_id = :order_id
+        ORDER BY cy.display_order
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"order_id": order_id}).fetchall()
+
+
+# --------------------------------------------------
+# Status helpers
+# --------------------------------------------------
+def payment_status(order_type, order_amount, paid_amount):
+    if "Digital" in order_type:
+        return "PAID"
+    return "PAID" if paid_amount >= order_amount else "UNPAID"
+
+
+# --------------------------------------------------
+# UI
+# --------------------------------------------------
+def main():
+    require_login()
+
+    st.subheader("Order Summary")
+
+    # ---- Scout ----
+    scouts = get_scouts(ss.parent_id)
+    if not scouts:
+        st.info("No scouts found.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        scout = st.selectbox(
+            "Scout",
+            scouts,
+            format_func=lambda s: f"{s.first_name} {s.last_name}"
+        )
+    with c2:
+        # ---- Year ----
+        current_year = datetime.now().year
+        year = st.selectbox(
+            "Program Year",
+            [current_year - 1, current_year, current_year + 1],
+            index=1
+        )
+
+    orders = get_orders_for_scout(scout.scout_id, year)
+    if not orders:
+        st.info("No orders found for this scout and year.")
+        return
+
+    # --------------------------------------------------
+    # SUMMARY METRICS
+    # --------------------------------------------------
+    total_boxes = 0
+    paper_boxes = 0
+    digital_boxes = 0
+
+    total_due = Decimal("0.00")
+    paid_paper = Decimal("0.00")
+    paid_digital = Decimal("0.00")
+
+    for o in orders:
+        total_boxes += o.order_qty_boxes
+        total_due += Decimal(o.order_amount)
+
+        if "Digital" in o.order_type:
+            digital_boxes += o.order_qty_boxes
+            paid_digital += Decimal(o.order_amount)
         else:
-            deposits_received_df = pd.DataFrame()
-            styled_received = style_dataframe(deposits_received_df)
-            moneyRec_totals = 0
-        
+            paper_boxes += o.order_qty_boxes
+            paid_paper += Decimal(o.paid_amount)
 
-        # Display Tables and Graphics
-        st.divider()
-        st.subheader("Paper Orders")
-        st.dataframe(styled_papOrds, use_container_width=True,
-                    column_config={
-                        "Amt": st.column_config.NumberColumn(
-                            "Amt.",
-                            format="$%d",
-                        ),
-                        "Date": st.column_config.DateColumn(
-                            "Order Date",
-                            format="MM-DD-YY",
-                        )})
+    total_paid = paid_paper + paid_digital
+    balance = total_due - total_paid
 
-        st.subheader('Paper Order Funds Deposited')
-        
-        st.dataframe(styled_received,
-                column_config={
-                    "amountReceived": st.column_config.NumberColumn(
-                        "Amt.",
-                        format="$%d",
-                    ),
-                    "amtReceived_dt": st.column_config.DateColumn(
-                        "Date Received",
-                        format="MM-DD-YY",
-                    ),
-                    "orderRef": st.column_config.TextColumn(
-                        "Order Ref"
-                    ),
-                    })
+    st.markdown("### Season Summary")
 
-        # metric cards         
-        
-        metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-        # Row 1
-        metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
-        metric_paper.write(':')
-        metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
-        metric_paper.write('--')
-        metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
-        metric_paper.write('=')
-        metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
-        style_metric_cards()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Boxes", total_boxes)
+    c2.metric("Paper Boxes", paper_boxes)
+    c3.metric("Digital Boxes", digital_boxes)
 
-        st.divider()
-        st.subheader("Digital Orders")
-        st.dataframe(styled_digOrds, use_container_width=True,
-                    column_config={
-                        "Amt": st.column_config.NumberColumn(
-                            "Order Amt.",
-                            format="$%d",
-                        ),
-                        "Date": st.column_config.DateColumn(
-                            "Order Date",
-                            format="MM-DD-YY",
-                        )})
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Total Due", f"${total_due:.2f}")
+    c5.metric("Total Paid", f"${total_paid:.2f}")
+    c6.metric("Balance", f"${balance:.2f}")
 
-        st.subheader("Payments received for Digital Cookie are not shown")
-        metric_digital = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-        # Row 1
-        metric_digital.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
-        style_metric_cards()
+    st.divider()
 
-        st.divider()
-   
-        # Status Metrics Cards
-        metric_grid = grid(4, vertical_align="center")
-        # Row 1
-        metric_grid.metric(label='Total Ordered Boxes', value=cookie_totals.loc['Qty']) 
-        metric_grid.metric(label='Pending Boxes', value=total_pending_qty)
-        metric_grid.metric(label='Boxes Ready for Pickup', value=total_ready_qty)
-        metric_grid.metric(label='Boxes Picked Up', value=total_completed_qty)
-        
+    # --------------------------------------------------
+    # ORDERS TABLE
+    # --------------------------------------------------
+    table_rows = []
 
-    else:
-        st.warning('You have not submitted any orders yet')
+    for o in orders:
+        paid = (
+            Decimal(o.order_amount)
+            if "Digital" in o.order_type
+            else Decimal(o.paid_amount)
+        )
+
+        bal = (
+            Decimal("0.00")
+            if "Digital" in o.order_type
+            else Decimal(o.order_amount) - paid
+        )
+
+        pay_status = payment_status(o.order_type, Decimal(o.order_amount), paid)
+
+        table_rows.append({
+            "Order Date": o.submit_dt.strftime("%Y-%m-%d %H:%M"),
+            "Order Type": o.order_type,
+            "Boxes": o.order_qty_boxes,
+            "Amount": float(o.order_amount),
+            "Paid": float(paid),
+            "Balance": float(bal),
+            "Payment Status": pay_status,
+            "Order Status": o.order_status
+        })
+
+    st.markdown("### Orders")
+    st.dataframe(
+        pd.DataFrame(table_rows),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
+    # --------------------------------------------------
+    # EXPANDABLE ORDER DETAILS
+    # --------------------------------------------------
+    st.subheader('Order Details')
+    for o in orders:
+        paid = (
+            Decimal(o.order_amount)
+            if "Digital" in o.order_type
+            else Decimal(o.paid_amount)
+        )
+
+        bal = (
+            Decimal("0.00")
+            if "Digital" in o.order_type
+            else Decimal(o.order_amount) - paid
+        )
+
+        pay_status = payment_status(o.order_type, Decimal(o.order_amount), paid)
+
+        order_dt = o.submit_dt.strftime("%b %d, %Y %I:%M %p")
+
+        with st.expander(
+            f"{order_dt} — {o.order_qty_boxes} boxes — "
+            f"${o.order_amount:.2f} | {pay_status} | {o.order_status}"
+        ):
+            st.write(f"**Payment Status:** {pay_status}")
+            st.write(f"**Order Status:** {o.order_status}")
+            st.write(f"**Amount Due:** ${o.order_amount:.2f}")
+            st.write(f"**Amount Paid:** ${paid:.2f}")
+            st.write(f"**Balance:** ${bal:.2f}")
+
+            st.markdown("**Cookies Ordered**")
+            items = get_order_items(o.order_id)
+            for item in items:
+                st.write(f"- {item.display_name}: {item.quantity}")
+
+            if bal <= 0:
+                st.success("Paid in full")
+            else:
+                st.warning("Payment outstanding")
 
 
-if __name__ == '__main__':
-
-    setup.config_site(page_title="Order Summary",initial_sidebar_state='expanded')
-    # Initialization
-    init_ss()
-
+# --------------------------------------------------
+# Entry
+# --------------------------------------------------
+if __name__ == "__main__":
+    setup.config_site(
+        page_title="Order Summary",
+        initial_sidebar_state="expanded"
+    )
     main()

@@ -1,71 +1,248 @@
-from json import loads
 import streamlit as st
-import pandas as pd
-import io
-import time
-from pathlib import Path
 from streamlit import session_state as ss
-from utils.esutils import esu
-from utils.app_utils import apputils as au, setup
-from datetime import datetime    
+from datetime import datetime
+from decimal import Decimal
 
-@st.cache_resource
-def get_connected():
-    es = esu.conn_es()
-    return es
+from sqlalchemy import create_engine, text
 
-def main():
-    es=get_connected()
-    if not ss.authenticated:
-        st.warning("Please log in to access this page.")
-        st.page_link("./Home.py",label='Login')
+from utils.app_utils import setup
+
+
+# --------------------------------------------------
+# DB connection
+# --------------------------------------------------
+DB_HOST = "136.118.19.164"
+DB_PORT = "5432"
+DB_NAME = "cookies"
+DB_USER = "cookie_admin"
+DB_PASS = st.secrets["general"]["DB_PASSWORD"]
+
+engine = create_engine(
+    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+    pool_pre_ping=True,
+)
+
+
+# --------------------------------------------------
+# Session checks
+# --------------------------------------------------
+def require_login():
+    if not ss.get("authenticated"):
+        st.warning("Please log in to continue.")
         st.stop()
 
-    st.subheader('Delete Order')
 
-    gs_nms = [scout['fn'] for scout in ss['scout_dat']['scout_details']]
-    # selection box can not default to none because the form defaults will fail. 
-    gsNm = st.selectbox("Select Girl Scout:", gs_nms, key='gsNm') # index=noscouti, key='gsNm', on_change=update_session(gs_nms))
-    selected_sct = [item for item in ss['scout_dat']['scout_details'] if item["fn"] == ss.gsNm][0]
-    nmId = selected_sct['nameId']
+# --------------------------------------------------
+# DB helpers
+# --------------------------------------------------
+def get_scouts(parent_id):
+    sql = text("""
+        SELECT scout_id, first_name, last_name
+        FROM cookies_app.scouts
+        WHERE parent_id = :parent_id
+        ORDER BY last_name, first_name
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"parent_id": parent_id}).fetchall()
 
-    girl_order_qry = f'FROM {ss.indexes["index_orders"]}| WHERE scoutId LIKE """{nmId}""" | LIMIT 500'
-    response = es.esql.query(
-        query=girl_order_qry,
-        format="csv")
-    
-    girl_orders = pd.read_csv(io.StringIO(response.body))
-    deletable_orders = girl_orders[girl_orders['orderPickedup'] == False]
-    deletable_orders.reindex()
-    st.write('Deletable Orders (note orders that have been pickedup are not deleteable)')
-    
-    ss.deletable_orders = au.order_view(deletable_orders)
-    st.write(ss.deletable_orders)
 
-    ss.deletable_order_ids = ss.deletable_orders["Order Id"].tolist()
-    ss.deletable_order_ids.sort()
-    
-    st.selectbox("Selet Order to Delete:", ss.deletable_order_ids, index=None,key='del_order')
-    
-    st.write(f'You have selected this order to delete: {ss.del_order}')
-    
-    
-    # Button to trigger deletion
-    if st.button("Delete Selected Order"):
-        st.write(f'Deleting booth: {ss.del_order}')
-        index_nm = ss.indexes['index_orders']
-        if index_nm and ss.del_order:
-            try:
-                response = es.delete(index=index_nm, id=ss.del_order)
-                st.success(f"Order {ss.del_order} deleted successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
+def get_orders_for_scout(scout_id, year):
+    sql = text("""
+        SELECT
+            o.order_id,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status AS order_status,
+            o.comments,
+            COALESCE(SUM(m.amount), 0) AS paid_amount
+        FROM cookies_app.orders o
+        LEFT JOIN cookies_app.money_ledger m
+          ON o.order_id = m.related_order_id
+        WHERE o.scout_id = :scout_id
+          AND o.program_year = :year
+        GROUP BY
+            o.order_id,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status,
+            o.comments
+        ORDER BY o.submit_dt DESC
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {
+            "scout_id": scout_id,
+            "year": year
+        }).fetchall()
+
+
+def update_order(order_id, order_type, comments):
+    sql = text("""
+        UPDATE cookies_app.orders
+        SET order_type = :order_type,
+            comments = :comments
+        WHERE order_id = :order_id
+    """)
+    with engine.begin() as conn:
+        conn.execute(sql, {
+            "order_id": order_id,
+            "order_type": order_type,
+            "comments": comments
+        })
+
+
+def delete_order(order_id):
+    sql_items = text("""
+        DELETE FROM cookies_app.order_items
+        WHERE order_id = :order_id
+    """)
+
+    sql_inventory = text("""
+        DELETE FROM cookies_app.inventory_ledger
+        WHERE related_order_id = :order_id
+    """)
+
+    sql_order = text("""
+        DELETE FROM cookies_app.orders
+        WHERE order_id = :order_id
+    """)
+
+    with engine.begin() as conn:
+        conn.execute(sql_items, {"order_id": order_id})
+        conn.execute(sql_inventory, {"order_id": order_id})
+        conn.execute(sql_order, {"order_id": order_id})
+
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+def is_digital(order_type):
+    return "Digital" in order_type
+
+
+def can_delete(order_type, order_status, paid_amount):
+    if order_status == "PICKED_UP":
+        return False
+    if not is_digital(order_type) and paid_amount > 0:
+        return False
+    return True
+
+
+# --------------------------------------------------
+# UI
+# --------------------------------------------------
+def main():
+    require_login()
+
+    st.subheader("Modify or Delete Order")
+
+    # ---- Scout ----
+    scouts = get_scouts(ss.parent_id)
+    if not scouts:
+        st.info("No scouts found.")
+        return
+
+    scout = st.selectbox(
+        "Scout",
+        scouts,
+        format_func=lambda s: f"{s.first_name} {s.last_name}"
+    )
+
+    # ---- Year ----
+    current_year = datetime.now().year
+    year = st.selectbox(
+        "Program Year",
+        [current_year - 1, current_year, current_year + 1],
+        index=1
+    )
+
+    orders = get_orders_for_scout(scout.scout_id, year)
+    if not orders:
+        st.info("No orders found.")
+        return
+
+    def order_label(o):
+        paid = Decimal(o.paid_amount)
+        payment_label = "PAID" if is_digital(o.order_type) or paid > 0 else "UNPAID"
+
+        return (
+            f"{o.submit_dt.strftime('%b %d %I:%M %p')} — "
+            f"{o.order_type} — "
+            f"{payment_label} — "
+            f"{o.order_status} — "
+            f"{o.order_qty_boxes} boxes — "
+            f"${o.order_amount:.2f}"
+        )
+
+    order = st.selectbox("Order", orders, format_func=order_label)
+
+    paid_amount = Decimal(order.paid_amount)
+    deletable = can_delete(order.order_type, order.order_status, paid_amount)
+
+    st.markdown("### Order Details")
+    st.write(f"**Order Type:** {order.order_type}")
+    st.write(f"**Order Status:** {order.order_status}")
+    st.write(f"**Money Received:** ${paid_amount:.2f}")
+
+    st.divider()
+
+    # --------------------------------------------------
+    # MODIFY
+    # --------------------------------------------------
+    st.markdown("### Modify Order")
+
+    with st.form("modify_order"):
+        new_order_type = st.selectbox(
+            "Order Type",
+            ["Paper Order", "Digital Cookie Girl Delivery"],
+            index=1 if is_digital(order.order_type) else 0
+        )
+
+        comments = st.text_area("Notes", value=order.comments or "")
+
+        if st.form_submit_button("Save Changes"):
+            update_order(order.order_id, new_order_type, comments)
+            st.success("Order updated successfully.")
+            st.rerun()
+
+    st.divider()
+
+    # --------------------------------------------------
+    # DELETE
+    # --------------------------------------------------
+    st.markdown("### Delete Order")
+
+    if not deletable:
+        if order.order_status == "PICKED_UP":
+            st.info("Orders that have been picked up cannot be deleted.")
         else:
-            st.warning(":-( something went wrong.  Contact Jennifer")
+            st.info("Paper orders with received money cannot be deleted.")
+        return
 
-if __name__ == '__main__':
+    with st.form("delete_order"):
+        confirm = st.checkbox(
+            "I understand this will permanently delete the order."
+        )
 
-    setup.config_site(page_title="Booth Admin",initial_sidebar_state='expanded')
-    # Initialization
-    # init_ss()
+        if st.form_submit_button("Delete Order"):
+            if not confirm:
+                st.error("Please confirm deletion.")
+                return
+
+            delete_order(order.order_id)
+            st.success("Order deleted successfully.")
+            st.rerun()
+
+
+# --------------------------------------------------
+# Entry
+# --------------------------------------------------
+if __name__ == "__main__":
+    setup.config_site(
+        page_title="Modify or Delete Order",
+        initial_sidebar_state="expanded"
+    )
     main()

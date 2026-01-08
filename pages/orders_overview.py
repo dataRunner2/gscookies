@@ -1,281 +1,238 @@
-from json import loads
 import streamlit as st
 from streamlit import session_state as ss
-# from streamlit_calendar import calendar
-import io
-from typing import List, Tuple
-import pandas as pd
-import random
-from pathlib import Path
-from streamlit_extras.let_it_rain import rain
-from streamlit_extras.metric_cards import style_metric_cards
-from streamlit_extras.grid import grid
-
 from datetime import datetime
-from utils.esutils import esu
-from utils.app_utils import apputils as au, setup 
-from elasticsearch import Elasticsearch  # need to also install with pip3
+from decimal import Decimal
 
-def init_ss():
-    pass
+import pandas as pd
+from sqlalchemy import create_engine, text
 
-@st.cache_resource
-def get_connected():
-    es = esu.conn_es()
-    return es
+from utils.app_utils import setup
 
-def refresh():
-    st.rerun()
 
-# Function to apply styles to bottom row of tables
-def style_dataframe(dataframe):
-    def highlight_bottom_row(row):
-        if row.name == "Total":
-            return ["font-weight: bold; background-color: #abbaaf; color: black;"] * len(row)
-        return [""] * len(row)
-    
-    return dataframe.style.apply(highlight_bottom_row, axis=1)
-    
-def main():
-    # st.write('---')
-    es=get_connected()
-    if not ss.authenticated:
-        st.warning("Please log in to access this page.")
-        st.page_link("./Home.py",label='Login')
+# --------------------------------------------------
+# DB connection
+# --------------------------------------------------
+DB_HOST = "136.118.19.164"
+DB_PORT = "5432"
+DB_NAME = "cookies"
+DB_USER = "cookie_admin"
+DB_PASS = st.secrets["general"]["DB_PASSWORD"]
+
+engine = create_engine(
+    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
+    pool_pre_ping=True,
+)
+
+
+# --------------------------------------------------
+# Session checks
+# --------------------------------------------------
+def require_login():
+    if not ss.get("authenticated"):
+        st.warning("Please log in to view troop orders.")
         st.stop()
 
-    st.write("This page shows the orders for delivered (not DC shipped orders) for our entire troop!  Wow that's a lot of cookies!")
-    all_order_qry = f'FROM {ss.indexes["index_orders"]} | LIMIT 1000'
-    # st.write(girl_order_qry)
-    response = es.esql.query(
-        query=all_order_qry,
-        format="csv")
-    
-    all_orders = pd.read_csv(io.StringIO(response.body))
-    
-    all_orders_fmt = au.order_view(all_orders)
-    all_orders_fmt.reset_index(inplace=True, drop=True)
-    all_orders_fmt.fillna(0)
-    all_orders_fmt = all_orders_fmt.astype({"Amt": 'int', "Qty": 'int', 'Adventurefuls':'int','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-    all_ord_md=all_orders_fmt[['Order Type','Status','Qty','Amt','Adventurefuls','Lemon-Ups','Trefoils','Do-Si-Dos','Samoas',"S'Mores",'Tagalongs','Thin Mint','Toffee Tastic','OpC']].copy()
-    cookie_totals = all_ord_md[['Qty','Amt']].sum(numeric_only=True)
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+def payment_status(order_type, order_amount, paid_amount):
+    if "Digital" in order_type:
+        return "PAID"
+    return "PAID" if paid_amount >= order_amount else "UNPAID"
 
 
-    # Paper Order Calcs
-    paper_orders = all_ord_md[all_ord_md['Order Type']=='Paper Order'].copy()
-    paper_orders.loc['Total']= paper_orders.sum(numeric_only=True, axis=0)
-    paper_orders = paper_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-    styled_papOrds = style_dataframe(paper_orders)
-    paperOrder_totals = paper_orders[['Qty','Amt']].iloc[-1]
-    
+# --------------------------------------------------
+# DB helpers
+# --------------------------------------------------
+def get_all_orders(year):
+    sql = text("""
+        SELECT
+            o.order_id,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status AS order_status,
+            o.parent_id,
+            o.scout_id,
+            o.booth_id,
+            p.parent_firstname || ' ' || p.parent_lastname AS parent_name,
+            s.first_name || ' ' || s.last_name AS scout_name,
+            COALESCE(SUM(m.amount), 0) AS paid_amount
+        FROM cookies_app.orders o
+        LEFT JOIN cookies_app.parents p
+          ON o.parent_id = p.parent_id
+        LEFT JOIN cookies_app.scouts s
+          ON o.scout_id = s.scout_id
+        LEFT JOIN cookies_app.money_ledger m
+          ON o.order_id = m.related_order_id
+        WHERE o.program_year = :year
+        GROUP BY
+            o.order_id,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status,
+            o.parent_id,
+            o.scout_id,
+            o.booth_id,
+            parent_name,
+            scout_name
+        ORDER BY o.submit_dt DESC
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"year": year}).fetchall()
 
-    # Digital Order Calcs
-    digital_orders = all_ord_md[all_ord_md['Order Type']=='Digital Cookie Girl Delivery'].copy()
-    digital_orders.loc['Total']= digital_orders.sum(numeric_only=True, axis=0)
-    digital_orders = digital_orders.astype({"Amt": 'int64', "Qty": 'int64', 'Adventurefuls':'int64','Lemon-Ups': 'int64','Trefoils':'int64','Do-Si-Dos':'int64','Samoas':'int64',"S'Mores":'int64','Tagalongs':'int64','Thin Mint':'int64','Toffee Tastic':'int64','OpC':'int64'})
-    styled_digOrds = style_dataframe(digital_orders) # Apply styles to the DataFrame
-    digitalOrder_totals = digital_orders[['Qty','Amt']].iloc[-1]
-    
-    # Totals Qty Calcs
-    tot_boxes_pending = all_ord_md[all_ord_md['Status']=='Pending'].copy()
-    tot_boxes_pending = tot_boxes_pending[['Status','Qty']]
-    tot_boxes_pending.loc['Total']= tot_boxes_pending.sum(numeric_only=True, axis=0)
-    total_pending_qty = tot_boxes_pending.loc['Total','Qty'].astype('int')
 
-    tot_boxes_ready = all_ord_md[all_ord_md['Status']=='Order Ready for Pickup'].copy()
-    tot_boxes_ready = tot_boxes_ready[['Status','Qty']]
-    tot_boxes_ready.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-    total_ready_qty = tot_boxes_ready.loc['Total','Qty'].astype('int')
+def get_cookie_totals(year):
+    sql = text("""
+        SELECT
+            cy.display_name,
+            SUM(oi.quantity) AS total_boxes,
+            cy.display_order
+        FROM cookies_app.order_items oi
+        JOIN cookies_app.cookie_years cy
+          ON oi.cookie_code = cy.cookie_code
+         AND oi.program_year = cy.program_year
+        JOIN cookies_app.orders o
+          ON oi.order_id = o.order_id
+        WHERE o.program_year = :year
+        GROUP BY cy.display_name, cy.display_order
+        ORDER BY cy.display_order
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"year": year}).fetchall()
 
-    tot_boxes = all_ord_md[all_ord_md['Status']=='Picked Up'].copy()
-    tot_boxes = tot_boxes[['Status','Qty']]
-    tot_boxes.loc['Total']= tot_boxes_ready.sum(numeric_only=True, axis=0)
-    total_completed_qty = tot_boxes_ready.loc['Total','Qty'].astype('int')
+# --------------------------------------------------
+# UI
+# --------------------------------------------------
+def main():
+    require_login()
 
-    
-    # Funds Received
-    # All money received is for paper orders
-    girl_money_qry = f'FROM {ss.indexes["index_money"]}| LIMIT 1000'
-    # st.write(girl_order_qry)
-    response = es.esql.query(
-        query=girl_money_qry,
-        format="csv")
-    deposits_received_dat = pd.read_csv(io.StringIO(response.body))
-    if len(deposits_received_dat)>0:
-        deposits_received_dat = deposits_received_dat.fillna(0)
-        deposits_received_df = deposits_received_dat[['amtReceived_dt','amountReceived','orderRef']].copy()
-        deposits_received_df = deposits_received_df.astype({"amountReceived": 'int'})
-        deposits_received_df.loc['Total']= deposits_received_df.sum(numeric_only=True, axis=0)
-        styled_received = style_dataframe(deposits_received_df)
-        moneyRec_totals = deposits_received_df.loc['Total','amountReceived']
+    st.subheader("Troop Orders Overview")
+    st.caption("Summary of all orders for the selected season.")
+
+    # ---- Year ----
+    current_year = datetime.now().year
+    year = st.selectbox(
+        "Program Year",
+        [current_year - 1, current_year, current_year + 1],
+        index=1
+    )
+
+    orders = get_all_orders(year)
+    if not orders:
+        st.info("No orders found for this year.")
+        return
+
+    # --------------------------------------------------
+    # Build aggregates
+    # --------------------------------------------------
+    rows = []
+
+    girl_orders = 0
+    booth_orders = 0
+
+    girl_boxes = 0
+    booth_boxes = 0
+
+    total_sales = Decimal("0.00")
+    total_paid = Decimal("0.00")
+
+    for o in orders:
+        is_booth = o.booth_id is not None
+        is_girl = o.scout_id is not None
+
+        paid = (
+            Decimal(o.order_amount)
+            if "Digital" in o.order_type
+            else Decimal(o.paid_amount)
+        )
+
+        if is_booth:
+            booth_orders += 1
+            booth_boxes += o.order_qty_boxes
+        elif is_girl:
+            girl_orders += 1
+            girl_boxes += o.order_qty_boxes
+
+        total_sales += Decimal(o.order_amount)
+        total_paid += paid
+
+        rows.append({
+            "Order Date": o.submit_dt.strftime("%Y-%m-%d %H:%M"),
+            "Order Source": "Booth" if is_booth else "Girl",
+            "Parent": o.parent_name if is_girl else "",
+            "Scout / Booth": (
+                o.scout_name if is_girl else "Booth Sale"
+            ),
+            "Order Type": o.order_type,
+            "Boxes": o.order_qty_boxes,
+            "Amount ($)": float(o.order_amount),
+            "Paid ($)": float(paid),
+            "Balance ($)": float(Decimal(o.order_amount) - paid),
+            "Payment Status": payment_status(
+                o.order_type,
+                Decimal(o.order_amount),
+                paid
+            ),
+            "Order Status": o.order_status
+        })
+
+    df = pd.DataFrame(rows)
+
+    # --------------------------------------------------
+    # BOOTH VS GIRL SUMMARY (TOP)
+    # --------------------------------------------------
+    st.markdown("### 🧍‍♀️ Girl Orders vs 🏪 Booth Orders")
+
+    a, b, c, d = st.columns(4)
+    a.metric("Girl Orders", girl_orders)
+    b.metric("Girl Boxes", girl_boxes)
+    c.metric("Booth Orders", booth_orders)
+    d.metric("Booth Boxes", booth_boxes)
+
+    st.divider()
+
+    # --------------------------------------------------
+    # COOKIE INFOGRAPHIC
+    # --------------------------------------------------
+    st.markdown("### 🍪 Cookies Sold by Type")
+
+    cookie_totals = get_cookie_totals(year)
+    if cookie_totals:
+        cols = st.columns(len(cookie_totals))
+        for col, c in zip(cols, cookie_totals):
+            with col:
+                st.metric(c.display_name, int(c.total_boxes))
     else:
-        deposits_received_df = pd.DataFrame({'amountReceived': [0]})
-        styled_received = style_dataframe(deposits_received_df)
-        moneyRec_totals = 0
-    
-    # Inventory
-    inventory_qry = f"FROM {ss.indexes['index_inventory']} | LIMIT 1000"
-    # st.write(girl_order_qry)
-    response = es.esql.query(
-        query=inventory_qry,
-        format="csv")
-    # st.write(response)
-    all_inventory_dat = pd.read_csv(io.StringIO(response.body))
-    # st.write(all_inventory_dat)
-    sum_inventory_boxes_sum = all_inventory_dat.sum(numeric_only=True, axis=0).sum()
-    # st.write(sum_inventory_boxes_sum)
-    all_inventory = au.just_renamer(all_inventory_dat)
-    all_inventory.loc['Total']= all_inventory.sum(axis=0) # umeric_only=True,
-    # sum_inventory_boxes = all_inventory.loc['Total'].iloc[:9] # .sum(numeric_only=True, axis=0)
-
-
-    # Display Tables and Graphics
-    st.divider()
-
-    if ss.is_admin:
-        st.subheader("Paper Orders")
-        # metric cards for paper Orders - ADMIN
-        metric_paper = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-        # Row 1
-        metric_paper.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
-        metric_paper.write(':')
-        metric_paper.metric(label="Total Amt Due for Paper Orders",value=f"${paperOrder_totals['Amt']}")
-        metric_paper.write('--')
-        metric_paper.metric(label="Total Amount Received", value=f"${moneyRec_totals}")
-        metric_paper.write('=')
-        metric_paper.metric(label="Total Amount Owed", value=f"${paperOrder_totals['Amt'] - moneyRec_totals}")
-        style_metric_cards()
-
-        st.divider()
-        st.subheader("Digital Orders")
-
-        st.subheader("Payments received for Digital Cookie are not shown")
-        metric_digital = grid([2,.15,2,.25,2,.25,2], vertical_align="center")
-        metric_digital.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
-        style_metric_cards()
-    else:
-        metric_paper_dig = grid(4, vertical_align="top")
-        metric_paper_dig.metric(label="Total Paper Order Boxes", value=paperOrder_totals['Qty'])
-        metric_paper_dig.metric(label="Total Digital Cookie Girl Delivery Boxes", value=digitalOrder_totals['Qty'])
+        st.info("No cookie breakdown available.")
 
     st.divider()
 
-    # Status Metrics Cards
-    metric_grid = grid(4, vertical_align="center")
-    # Row 1
-    metric_grid.metric(label='Total Ordered Boxes', value=cookie_totals.loc['Qty']) 
-    metric_grid.metric(label='Pending Boxes', value=total_pending_qty)
-    metric_grid.metric(label='Boxes Ready for Pickup', value=total_ready_qty)
-    metric_grid.metric(label='Boxes Picked Up', value=total_completed_qty)
-    
+    # --------------------------------------------------
+    # SEASON SUMMARY
+    # --------------------------------------------------
+    balance = total_sales - total_paid
+
+    st.markdown("### 💵 Season Totals")
+
+    e, f, g = st.columns(3)
+    e.metric("Total Sales", f"${total_sales:,.2f}")
+    f.metric("Total Paid", f"${total_paid:,.2f}")
+    g.metric("Outstanding Balance", f"${balance:,.2f}")
+
     st.divider()
-    st.header('Total Orders by Cookie Type')
-    st.subheader('Girl Orders & Sold Booths')
-    sold_totals = all_ord_md[
-        (all_ord_md["Order Type"] != "Booth") | 
-        ((all_ord_md["Order Type"] == "Booth") & (all_ord_md["Status"] == "Ordered"))
-    ]
 
-    sold_totals.loc['Total']= sold_totals.sum(numeric_only=True, axis=0)
-    metric_paper = grid(3,9, vertical_align="center") # 4 Rows of 3 columns each
-    metric_paper.metric(label="Total Boxes", value=sold_totals.loc['Total','Qty'].astype('int'))
-    metric_paper.metric(label="Total $", value=sold_totals.loc['Total','Amt'].astype('int'))
-    metric_paper.metric(label="Oper. Cookie", value=sold_totals.loc['Total','OpC'].astype('int'))
-    metric_paper.metric(label="Adventurefuls", value=sold_totals.loc['Total','Adventurefuls'].astype('int'))
-    metric_paper.metric(label="Lemon-Ups", value=sold_totals.loc['Total','Lemon-Ups'].astype('int'))
-    metric_paper.metric(label="Trefoils", value=sold_totals.loc['Total','Trefoils'].astype('int'))
-    metric_paper.metric(label="Do-Si-Dos", value=sold_totals.loc['Total','Do-Si-Dos'].astype('int'))
-    metric_paper.metric(label="Samoas", value=sold_totals.loc['Total','Samoas'].astype('int'))
-    metric_paper.metric(label="S'Mores", value=sold_totals.loc['Total',"S'Mores"].astype('int'))
-    metric_paper.metric(label="Tagalongs", value=sold_totals.loc['Total','Tagalongs'].astype('int'))
-    metric_paper.metric(label="Thin Mint", value=sold_totals.loc['Total','Thin Mint'].astype('int'))
-    metric_paper.metric(label="Toffee Tastic", value=sold_totals.loc['Total','Toffee Tastic'].astype('int'))
-    
-    st.subheader('Planned Booths')
-    booth_totals = all_ord_md[(all_ord_md["Order Type"] == "Booth") & (all_ord_md["Status"] != "Ordered")]
-    booth_totals.loc['Total']= booth_totals.sum(numeric_only=True, axis=0)
-    metric_paper = grid(3,9, vertical_align="center") # 4 Rows of 3 columns each
-    metric_paper.metric(label="Total Boxes", value=booth_totals.loc['Total','Qty'].astype('int'))
-    metric_paper.metric(label="Total $", value=booth_totals.loc['Total','Amt'].astype('int'))
-    metric_paper.metric(label="Oper. Cookie", value=booth_totals.loc['Total','OpC'].astype('int'))
-    metric_paper.metric(label="Adventurefuls", value=booth_totals.loc['Total','Adventurefuls'].astype('int'))
-    metric_paper.metric(label="Lemon-Ups", value=booth_totals.loc['Total','Lemon-Ups'].astype('int'))
-    metric_paper.metric(label="Trefoils", value=booth_totals.loc['Total','Trefoils'].astype('int'))
-    metric_paper.metric(label="Do-Si-Dos", value=booth_totals.loc['Total','Do-Si-Dos'].astype('int'))
-    metric_paper.metric(label="Samoas", value=booth_totals.loc['Total','Samoas'].astype('int'))
-    metric_paper.metric(label="S'Mores", value=booth_totals.loc['Total',"S'Mores"].astype('int'))
-    metric_paper.metric(label="Tagalongs", value=booth_totals.loc['Total','Tagalongs'].astype('int'))
-    metric_paper.metric(label="Thin Mint", value=booth_totals.loc['Total','Thin Mint'].astype('int'))
-    metric_paper.metric(label="Toffee Tastic", value=booth_totals.loc['Total','Toffee Tastic'].astype('int'))
-    style_metric_cards()
 
-    if ss.is_admin:
-        st.divider()
-        st.header('~ ~ Additional Metrics for Admins ~ ~')
-        # Inventory #'s
-        st.subheader('Received Inventory')
-        metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
-        metric_inventory.metric(label="Total Boxes", value= sum_inventory_boxes_sum.astype('int'))
-        metric_inventory.metric(label="Total $ Due", value= sum_inventory_boxes_sum*6)
-    
-        metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int'))
-        metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int'))
-        metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int'))
-        metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int'))
-        metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int'))
-        metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int'))
-        metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int'))
-        metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int'))
-        metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int'))
-        
-        # Inventory #'s
-        st.subheader('Inventory - Girl Orders = Inventory for Booths')
-        metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
-        metric_inventory.metric(label="Delta Total Boxes", value= sum_inventory_boxes_sum.astype('int')-sold_totals.loc['Total','Qty'])
-        metric_inventory.metric(label="Delta Total $ Due", value= sum_inventory_boxes_sum*6 - sold_totals.loc['Total','Amt'].astype('int'))
-    
-        metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int') - sold_totals.loc['Total','Adventurefuls'].astype('int'))
-        metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int')-sold_totals.loc['Total','Lemon-Ups'].astype('int'))
-        metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int')-sold_totals.loc['Total','Trefoils'].astype('int'))
-        metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int')-sold_totals.loc['Total','Do-Si-Dos'].astype('int'))
-        metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int')-sold_totals.loc['Total','Samoas'].astype('int'))
-        metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int')-sold_totals.loc['Total',"S'Mores"].astype('int'))
-        metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int')-sold_totals.loc['Total','Tagalongs'].astype('int'))
-        metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int')-sold_totals.loc['Total','Thin Mint'].astype('int'))
-        metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int')-sold_totals.loc['Total','Toffee Tastic'].astype('int'))
-        
-        # % of Inventory
-        metric_inventory = grid(9, vertical_align="center")
-        st.write('At the end of cookies we want these to be Zero')
-        metric_inventory.metric(label="% Adv", value=f"{(all_inventory.loc['Total','Adventurefuls'].astype('int') - sold_totals.loc['Total','Adventurefuls'].astype('int'))/all_inventory.loc['Total','Adventurefuls'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Lemon-Ups", value=f"{(all_inventory.loc['Total','Lemon-Ups'].astype('int')-sold_totals.loc['Total','Lemon-Ups'].astype('int'))/all_inventory.loc['Total','Lemon-Ups'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Trefoils", value=f"{(all_inventory.loc['Total','Trefoils'].astype('int')-sold_totals.loc['Total','Trefoils'].astype('int'))/all_inventory.loc['Total','Trefoils'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Do-Si-Dos", value=f"{(all_inventory.loc['Total','Do-Si-Dos'].astype('int')-sold_totals.loc['Total','Do-Si-Dos'].astype('int'))/all_inventory.loc['Total','Do-Si-Dos'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Samoas", value=f"{(all_inventory.loc['Total','Samoas'].astype('int')-sold_totals.loc['Total','Samoas'].astype('int'))/all_inventory.loc['Total','Samoas'].astype('int'):.2f}")
-        metric_inventory.metric(label="% S'Mores", value=f"""{(all_inventory.loc['Total',"S'Mores"].astype('int')-sold_totals.loc['Total',"S'Mores"].astype('int'))/all_inventory.loc['Total',"S'Mores"].astype('int'):.2f}""")
-        metric_inventory.metric(label="% Tagalongs", value=f"{(all_inventory.loc['Total','Tagalongs'].astype('int')-sold_totals.loc['Total','Tagalongs'].astype('int'))/all_inventory.loc['Total','Tagalongs'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Thin Mint", value=f"{(all_inventory.loc['Total','Thin Mint'].astype('int')-sold_totals.loc['Total','Thin Mint'].astype('int'))/all_inventory.loc['Total','Thin Mint'].astype('int'):.2f}")
-        metric_inventory.metric(label="% Toffee Tastic", value=f"{(all_inventory.loc['Total','Toffee Tastic'].astype('int')-sold_totals.loc['Total','Toffee Tastic'].astype('int'))/all_inventory.loc['Total','Toffee Tastic'].astype('int'):.2f}")
-        
-
-        st.subheader('Inventory - Girl Orders - Booth Order = Inventory')
-        metric_inventory = grid(2,9, vertical_align="center") # 4 Rows of 3 columns each
-        metric_inventory.metric(label="Delta Total Boxes", value= sum_inventory_boxes_sum.astype('int')-sold_totals.loc['Total','Qty'])
-        metric_inventory.metric(label="Delta Total $ Due", value= sum_inventory_boxes_sum*6 - sold_totals.loc['Total','Amt'].astype('int'))
-    
-        metric_inventory.metric(label="Adventurefuls", value=all_inventory.loc['Total','Adventurefuls'].astype('int') - sold_totals.loc['Total','Adventurefuls'].astype('int') - booth_totals.loc['Total','Adventurefuls'].astype('int'))
-        metric_inventory.metric(label="Lemon-Ups", value=all_inventory.loc['Total','Lemon-Ups'].astype('int')-sold_totals.loc['Total','Lemon-Ups'].astype('int') - booth_totals.loc['Total','Lemon-Ups'].astype('int'))
-        metric_inventory.metric(label="Trefoils", value=all_inventory.loc['Total','Trefoils'].astype('int')-sold_totals.loc['Total','Trefoils'].astype('int') - booth_totals.loc['Total','Trefoils'].astype('int'))
-        metric_inventory.metric(label="Do-Si-Dos", value=all_inventory.loc['Total','Do-Si-Dos'].astype('int')-sold_totals.loc['Total','Do-Si-Dos'].astype('int') -booth_totals.loc['Total','Do-Si-Dos'].astype('int'))
-        metric_inventory.metric(label="Samoas", value=all_inventory.loc['Total','Samoas'].astype('int')-sold_totals.loc['Total','Samoas'].astype('int') -booth_totals.loc['Total','Samoas'].astype('int'))
-        metric_inventory.metric(label="S'Mores", value=all_inventory.loc['Total',"S'Mores"].astype('int')-sold_totals.loc['Total',"S'Mores"].astype('int') -booth_totals.loc['Total',"S'Mores"].astype('int'))
-        metric_inventory.metric(label="Tagalongs", value=all_inventory.loc['Total','Tagalongs'].astype('int')-sold_totals.loc['Total','Tagalongs'].astype('int') -booth_totals.loc['Total','Tagalongs'].astype('int'))
-        metric_inventory.metric(label="Thin Mint", value=all_inventory.loc['Total','Thin Mint'].astype('int')-sold_totals.loc['Total','Thin Mint'].astype('int')-booth_totals.loc['Total','Thin Mint'].astype('int'))
-        metric_inventory.metric(label="Toffee Tastic", value=all_inventory.loc['Total','Toffee Tastic'].astype('int')-sold_totals.loc['Total','Toffee Tastic'].astype('int') -booth_totals.loc['Total','Toffee Tastic'].astype('int'))
-        
-if __name__ == '__main__':
-
-    setup.config_site(page_title="Troop Order Overview",initial_sidebar_state='expanded')
-    # Initialization
-    init_ss()
+# --------------------------------------------------
+# Entry
+# --------------------------------------------------
+if __name__ == "__main__":
+    setup.config_site(
+        page_title="Troop Orders Overview",
+        initial_sidebar_state="expanded"
+    )
     main()
