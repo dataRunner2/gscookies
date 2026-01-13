@@ -7,21 +7,9 @@ from sqlalchemy import create_engine, text
 
 from utils.app_utils import setup
 
+from utils.db_utils import get_engine
 
-# --------------------------------------------------
-# DB connection
-# --------------------------------------------------
-DB_HOST = "136.118.19.164"
-DB_PORT = "5432"
-DB_NAME = "cookies"
-DB_USER = "cookie_admin"
-DB_PASS = st.secrets["general"]["DB_PASSWORD"]
-
-engine = create_engine(
-    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-    pool_pre_ping=True,
-)
-
+engine = get_engine()
 
 # --------------------------------------------------
 # Session checks
@@ -151,15 +139,9 @@ def main():
         format_func=lambda s: f"{s.first_name} {s.last_name}"
     )
 
-    # ---- Year ----
-    current_year = datetime.now().year
-    year = st.selectbox(
-        "Program Year",
-        [current_year - 1, current_year, current_year + 1],
-        index=1
-    )
-
-    orders = get_orders_for_scout(scout.scout_id, year)
+    # ---- Get Current Year Orders ----
+    
+    orders = get_orders_for_scout(scout.scout_id, ss.current_year)
     if not orders:
         st.info("No orders found.")
         return

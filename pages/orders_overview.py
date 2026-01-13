@@ -23,6 +23,12 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
+# --------------------------------------------------
+# Session init
+# --------------------------------------------------
+def init_ss():
+    if 'current_year' not in ss:
+        ss.current_year = datetime.now().year
 
 # --------------------------------------------------
 # Session checks

@@ -77,8 +77,7 @@ class setup:
                 setup.is_admin()
 
         st.sidebar.page_link("Home.py", label='Account')
-        st.sidebar.page_link('pages/training_reference.py',label='Training Reference')
-        st.sidebar.page_link("pages/portal_home.py", label='Dates and Reminders')
+        st.sidebar.page_link('pages/training_reference.py',label='Training & Dates')
         st.sidebar.page_link('pages/add_scouts.py',label='Add Scouts')
         st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')  # all and admin content
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
@@ -98,9 +97,12 @@ class setup:
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
             st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
             st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
+            st.sidebar.page_link('pages/admin_import_DOC_orders.py',label='Import DOC')
+            st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
+
         if ss.super_admin:
             st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
-            st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
+            st.sidebar.page_link('pages/move_es_data.py',label='Move Data')
 
         st.sidebar.divider()
         if st.sidebar.button("Log out"):
@@ -261,4 +263,13 @@ class apputils:
                         except Exception as e:
                             st.warning(f"Invalid regex: {e}")
             return filtered_df
-                
+    
+
+    def send_reset_email(email: str, code: str):
+        # plug into SendGrid / SES later
+        st.write(f"[EMAIL to {email}] Reset code: {code}")
+
+
+    def send_reset_sms(phone: str, code: str):
+        # plug into Twilio later
+        st.write(f"[SMS to {phone}] Reset code: {code}")

@@ -5,33 +5,19 @@ from streamlit import session_state as ss
 from datetime import time, datetime, timedelta
 from uuid import uuid4
 from utils.app_utils import setup
-
-
-# --------------------------------------------------
-# DB
-# --------------------------------------------------
-engine = create_engine(
-    f"postgresql+psycopg2://cookie_admin:{st.secrets['general']['DB_PASSWORD']}@136.118.19.164:5432/cookies",
-    pool_pre_ping=True,
-)
-
+from utils.db_utils import engine, require_admin
+from utils.order_utils import fetch_all
 
 # --------------------------------------------------
-# Guards
+# Session init
 # --------------------------------------------------
-def require_admin():
-    if not ss.get("authenticated") or not ss.get("is_admin"):
-        st.error("Admin access required.")
-        st.stop()
-
+def init_ss():
+    if 'current_year' not in ss:
+        ss.current_year = datetime.now().year
 
 # --------------------------------------------------
 # Data helpers
 # --------------------------------------------------
-def fetch_all(sql, params=None):
-    with engine.connect() as conn:
-        return conn.execute(text(sql), params or {}).fetchall()
-
 
 def execute(sql, params=None):
     with engine.begin() as conn:
@@ -304,7 +290,7 @@ def main():
                         VALUES (:bid, :year, :code, :qty)
                     """), {
                         "bid": booth_id,
-                        "year": PROGRAM_YEAR,
+                        "year": ss.current_year,
                         "code": code,
                         "qty": qty,
                     })

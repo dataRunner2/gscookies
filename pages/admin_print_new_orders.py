@@ -1,18 +1,27 @@
 import io
 import pandas as pd
 import streamlit as st
+from streamlit import session_state as ss
 
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
+import datetime
 
 from utils.db_utils import require_admin
 from utils.app_utils import setup, apputils
 from utils.order_utils import get_admin_print_orders, mark_orders_printed
 
 
-STATUS_OPTIONS = ["NEW", "PRINTED", "PICKED_UP"]
+STATUS_OPTIONS = ["NEW","IMPORTED", "PRINTED", "PICKED_UP"]
 
+
+# --------------------------------------------------
+# Session init
+# --------------------------------------------------
+def init_ss():
+    if 'current_year' not in ss:
+        ss.current_year = datetime.now().year
 
 # =========================
 # PDF BUILDER
@@ -229,7 +238,7 @@ def main():
 
     st.subheader("Orders")
     df_view = apputils.filter_dataframe(df_orders)
-    st.dataframe(df_view, use_container_width=True, hide_index=True)
+    st.dataframe(df_view, width='stretch', hide_index=True)
 
     st.divider()
 
@@ -244,7 +253,7 @@ def main():
             pdf,
             "packing_pickup_sheets.pdf",
             "application/pdf",
-            use_container_width=True,
+            width='stretch',
         )
 
         if st.button("Mark PRINTED", type="primary"):

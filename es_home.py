@@ -370,7 +370,7 @@ def main():
 
             # Navigate to another page if authenticated
             with st.container(border=True):
-                st.page_link(label="🍪 **Click Here to get Cookies** 🍪", use_container_width=True, page="pages/portal_home.py")
+                st.page_link(label="🍪 **Click Here to get Cookies** 🍪", width='stretch', page="pages/portal_home.py")
 
     if ss.is_admin:
         if st.button('Get Admin Data & Page Navigation'):

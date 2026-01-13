@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Iterable, Optional
-
-from utils.db_utils import fetch_all, fetch_one, execute_sql
+import pandas as pd
+from utils.db_utils import fetch_all, fetch_one, execute_sql, execute_many_sql
+from sqlalchemy import text
+import uuid
 
 
 # ==================================================
@@ -36,10 +38,76 @@ def _initial_order_window_sql() -> str:
          AND o.submit_dt <  make_date(o.program_year, 2, 1))
     """
 
+def get_cookie_codes_for_year(program_year: int) -> list[str]:
+    """
+    Returns ordered list of cookie codes for a program year.
+    Used for admin grids, print pages, etc.
+    """
+    rows = fetch_all("""
+        SELECT cookie_code
+        FROM cookies_app.cookie_years
+        WHERE program_year = :year
+          AND active = true
+        ORDER BY display_order
+    """, {"year": program_year})
+    
+    return [r["cookie_code"] for r in rows]
+
+def get_cookies_for_year(program_year):
+    rows = fetch_all("""
+        SELECT cookie_code, display_name, price_per_box
+        FROM cookies_app.cookie_years
+        WHERE program_year = :year
+          AND active = TRUE
+        ORDER BY display_order
+    """,{"year": program_year})
+    return rows
+    
+
+def build_cookie_rename_map(program_year: int) -> dict:
+    cookies = get_cookies_for_year(program_year)
+
+    return {
+        row["display_name"]: row["cookie_code"]
+        for row in cookies
+    }
+
+
+def aggregate_orders_by_cookie(df: pd.DataFrame) -> pd.DataFrame:
+    return (
+        df.groupby("cookie_name", as_index=False)
+          .agg(total_boxes=("quantity", "sum"))
+          .sort_values("cookie_name")
+    )
+
 
 # ==================================================
 # Core: order header + items
 # ==================================================
+def get_orders_for_scout_summary(scout_id: str) -> pd.DataFrame:
+    rows = fetch_all("""
+        SELECT
+            cy.display_name AS cookie_name,
+            oi.quantity,
+            o.order_type,
+            o.submit_dt,
+            o.order_id
+        FROM cookies_app.orders o
+        JOIN cookies_app.order_items oi
+          ON oi.order_id = o.order_id
+        JOIN cookies_app.cookie_years cy
+          ON cy.cookie_code = oi.cookie_code
+         AND cy.program_year = o.program_year
+        WHERE o.scout_id = :sid
+        ORDER BY o.submit_dt DESC
+    """, {"sid": scout_id})
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df.rename(columns={"quantity": "quantity"}, inplace=True)
+    return df
 
 def get_order_header(order_id: str):
     return fetch_one("""
@@ -62,7 +130,6 @@ def get_order_header(order_id: str):
         WHERE o.order_id = :oid
     """, {"oid": order_id})
 
-
 def get_order_items(order_id: str, program_year: int):
     """
     Returns cookie line items with price and display name (for that year).
@@ -82,6 +149,273 @@ def get_order_items(order_id: str, program_year: int):
           AND oi.program_year = :year
         ORDER BY cy.display_order
     """, {"oid": order_id, "year": program_year})
+
+def insert_order_header(
+    parent_id, scout_id, program_year, order_ref, order_type, comments,
+    total_boxes, order_amount, status, external_order_id = None
+):
+    order_id = uuid.uuid4()
+
+    sql = """
+        INSERT INTO cookies_app.orders (
+            order_id,
+            parent_id,
+            scout_id,
+            program_year,
+            order_ref,
+            order_type,
+            status,
+            order_qty_boxes,
+            order_amount,
+            comments,
+            external_order_id,
+            submit_dt,
+            created_at            
+        )
+        VALUES (
+            :order_id,
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :order_ref,
+            :order_type,
+            :status,
+            :order_qty_boxes,
+            :order_amount,
+            :comments,
+            :external_order_id,
+            now(),
+            now()
+        )
+    """
+
+    execute_sql(sql, {
+            "order_id": str(order_id),
+            "parent_id": str(parent_id),
+            "scout_id": str(scout_id),
+            "program_year": program_year,
+            "order_ref": order_ref,
+            "order_type": order_type,
+            "status": status,
+            "order_qty_boxes": total_boxes,
+            "order_amount": order_amount,
+            "comments": comments,
+            "external_order_id": external_order_id
+        })
+
+    return order_id
+
+def insert_order_items(order_id, parent_id, scout_id, program_year, items):
+    sql = text("""
+        INSERT INTO cookies_app.order_items (
+            order_item_id,
+            order_id,
+            parent_id,
+            scout_id,
+            program_year,
+            cookie_code,
+            quantity
+        )
+        VALUES (
+            gen_random_uuid(),
+            :order_id,
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :cookie_code,
+            :quantity
+        )
+    """)
+
+    for code, qty in items.items():
+        if qty != 0:
+            execute_sql(sql, {
+                "order_id": str(order_id),
+                "parent_id": str(parent_id),
+                "scout_id": str(scout_id),
+                "program_year": program_year,
+                "cookie_code": code,
+                "quantity": qty
+            })
+
+def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items):
+    sql = text("""
+        INSERT INTO cookies_app.inventory_ledger (
+            inventory_event_id,
+            parent_id,
+            scout_id,
+            program_year,
+            cookie_code,
+            quantity,
+            event_type,
+            status,
+            related_order_id,
+            event_dt
+        )
+        VALUES (
+            gen_random_uuid(),
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :cookie_code,
+            :quantity,
+            'ORDER_SUBMITTED',
+            'PLANNED',
+            :order_id,
+            now()
+        )
+    """)
+
+    
+    for code, qty in items.items():
+        if qty != 0:
+            execute_sql(sql, {
+                "parent_id": str(parent_id),
+                "scout_id": str(scout_id),
+                "program_year": program_year,
+                "cookie_code": code,
+                "quantity": -abs(qty),
+                "order_id": str(order_id)
+            })
+
+def bulk_insert_order_headers(engine, df):
+    sql = text("""
+        INSERT INTO cookies_app.orders (
+            order_id,
+            parent_id,
+            scout_id,
+            program_year,
+            order_ref,
+            order_type,
+            status,
+            order_qty_boxes,
+            order_amount,
+            comments,
+            submit_dt,
+            created_at
+        )
+        VALUES (
+            :order_id,
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :order_ref,
+            :order_type,
+            :status,
+            :order_qty_boxes,
+            :order_amount,
+            :comments,
+            now(),
+            now()
+        )
+    """)
+
+    payload = []
+
+    for r in df.itertuples():
+        order_id = uuid.uuid4()
+
+        payload.append({
+            "order_id": str(order_id),
+            "parent_id": str(r.parent_id),
+            "scout_id": str(r.scout_id),
+            "program_year": r.program_year,
+            "order_ref": r.order_ref,
+            "order_type": r.order_type,
+            "status": r.status,
+            "order_qty_boxes": r.total_boxes,
+            "order_amount": r.order_amount,
+            "comments": r.comments,
+        })
+
+        # store for downstream inserts
+        df.at[r.Index, "order_id"] = order_id
+
+    execute_many_sql(sql, payload)
+
+def bulk_insert_order_items(engine, df):
+    # send in orders df, this will submit to dict lik {"TM": 4,"TT":2}
+    sql = text("""
+        INSERT INTO cookies_app.order_items (
+            order_item_id,
+            order_id,
+            parent_id,
+            scout_id,
+            program_year,
+            cookie_code,
+            qty
+        )
+        VALUES (
+            :order_item_id,
+            :order_id,
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :cookie_code,
+            :qty
+        )
+    """)
+
+    payload = []
+
+    for r in df.itertuples():
+        for cookie_code, qty in r.cookie_inputs.items():
+            if qty > 0:
+                payload.append({
+                    "order_item_id": str(uuid.uuid4()),
+                    "order_id": str(r.order_id),
+                    "parent_id": str(r.parent_id),
+                    "scout_id": str(r.scout_id),
+                    "program_year": r.program_year,
+                    "cookie_code": cookie_code,
+                    "qty": qty,
+                })
+
+    execute_many_sql(sql, payload)
+
+def bulk_insert_planned_inventory(engine, df):
+    sql = text("""
+        INSERT INTO cookies_app.planned_inventory (
+            inventory_id,
+            parent_id,
+            scout_id,
+            program_year,
+            order_id,
+            cookie_code,
+            qty
+        )
+        VALUES (
+            :inventory_id,
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :order_id,
+            :cookie_code,
+            :qty
+        )
+    """)
+
+    payload = []
+
+    for r in df.itertuples():
+        for cookie_code, qty in r.cookie_inputs.items():
+            if qty > 0:
+                payload.append({
+                    "inventory_id": str(uuid.uuid4()),
+                    "parent_id": str(r.parent_id),
+                    "scout_id": str(r.scout_id),
+                    "program_year": r.program_year,
+                    "order_id": str(r.order_id),
+                    "cookie_code": cookie_code,
+                    "qty": qty,
+                })
+
+    execute_many_sql(sql, payload)
+
+def bulk_insert_orders(df):
+    bulk_insert_order_headers(df)
+    bulk_insert_order_items(df)
+    bulk_insert_planned_inventory(df)
 
 
 # ==================================================
@@ -290,19 +624,18 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None):
 # ==================================================
 # ADMIN COOKIE MANAGEMENT (admin_order_management page)
 # ==================================================
-
 def get_admin_orders_flat(program_year: int):
     """
-    Returns rows for admin order management (pivot-friendly):
-      One row per (order_id, scout_id, cookie_code)
+    Admin Order Management data source.
 
-    Column naming is intentionally aligned to the *old ES page expectations*
-    to avoid KeyErrors:
-      orderId, orderType, orderStatus, paymentStatus, addEbudde, verifiedDigitalCookie,
-      initialOrder, scoutName, guardianNm, guardianPh, cookieCode, qty, pricePerBox, submit_dt, etc.
+    Returns one row per (order_id, cookie_code) with stable column names
+    expected by the admin grid:
+      orderId, orderType, orderStatus, paymentStatus, addEbudde,
+      initialOrder, verifiedDigitalCookie, comments, submit_dt,
+      scoutName, boothId, cookieCode, qty, pricePerBox
     """
 
-    rows = fetch_all(f"""
+    rows = fetch_all("""
         WITH paid AS (
             SELECT
                 related_order_id AS order_id,
@@ -311,56 +644,78 @@ def get_admin_orders_flat(program_year: int):
             GROUP BY related_order_id
         )
         SELECT
-            o.order_id                    AS "orderId",
-            o.program_year                AS "programYear",
-            o.order_type                  AS "orderType",
-            o.status                      AS "orderStatus",
-            o.submit_dt                   AS "submit_dt",
-            o.order_amount                AS "orderAmount",
-            o.order_qty_boxes             AS "orderQtyBoxes",
-            o.comments                    AS "comments",
-            o.parent_id                   AS "parentId",
-            o.scout_id                    AS "scoutId",
-            o.booth_id                    AS "boothId",
+            o.order_id                         AS "orderId",
+            o.program_year                     AS "programYear",
+            o.order_type                       AS "orderType",
+            o.status                           AS "orderStatus",
+            o.submit_dt                        AS "submit_dt",
+            o.order_amount                     AS "orderAmount",
+            o.order_qty_boxes                  AS "orderQtyBoxes",
+            o.comments                         AS "comments",
+            o.booth_id                         AS "boothId",
 
-            COALESCE(o.initial_order, {_initial_order_window_sql()}) AS "initialOrder",
-            COALESCE(o.add_ebudde, false)                           AS "addEbudde",
-            COALESCE(o.verified_digital_cookie, false)              AS "verifiedDigitalCookie",
+            COALESCE(
+                o.initial_order,
+                (o.submit_dt >= make_date(o.program_year, 1, 5)
+                 AND o.submit_dt <  make_date(o.program_year, 2, 1))
+            )                                  AS "initialOrder",
 
-            (p.parent_firstname || ' ' || p.parent_lastname)        AS "guardianNm",
-            p.parent_phone                                          AS "guardianPh",
+            COALESCE(o.add_ebudde, false)      AS "addEbudde",
+            COALESCE(o.verified_digital_cookie, false)
+                                               AS "verifiedDigitalCookie",
 
-            (s.first_name || ' ' || s.last_name)                    AS "scoutName",
+            (s.first_name || ' ' || s.last_name)
+                                               AS "scoutName",
 
-            oi.cookie_code                                          AS "cookieCode",
-            oi.quantity                                             AS "qty",
-            cy.price_per_box                                        AS "pricePerBox",
+            oi.cookie_code                     AS "cookieCode",
+            oi.quantity                        AS "qty",
 
-            COALESCE(paid.paid_amount, 0)                           AS "paidAmount"
+            cy.price_per_box                   AS "pricePerBox",
+
+            COALESCE(paid.paid_amount, 0)      AS "paidAmount"
+
         FROM cookies_app.orders o
-        LEFT JOIN paid ON paid.order_id = o.order_id
-        LEFT JOIN cookies_app.parents p ON p.parent_id = o.parent_id
-        LEFT JOIN cookies_app.scouts  s ON s.scout_id  = COALESCE(oi.scout_id, o.scout_id)
-        JOIN cookies_app.order_items oi ON oi.order_id = o.order_id
+        JOIN cookies_app.order_items oi
+          ON oi.order_id = o.order_id
+         AND oi.program_year = o.program_year
+
         JOIN cookies_app.cookie_years cy
           ON cy.cookie_code = oi.cookie_code
-         AND cy.program_year = oi.program_year
+         AND cy.program_year = o.program_year
+
+        LEFT JOIN cookies_app.scouts s
+          ON s.scout_id = o.scout_id
+
+        LEFT JOIN paid
+          ON paid.order_id = o.order_id
+
         WHERE o.program_year = :year
-        ORDER BY o.submit_dt DESC, o.order_id, cy.display_order
+
+        ORDER BY
+            o.submit_dt DESC,
+            o.order_id,
+            cy.display_order
     """, {"year": program_year})
 
-    # Add computed paymentStatus in python (keeps SQL simpler + consistent)
-    for r in rows:
-        order_type = r["orderType"]
-        due = _dec(r["orderAmount"])
-        paid_amt = _dec(r["paidAmount"])
-        r["paymentStatus"] = get_payment_status(order_type, due, paid_amt)
+    out: list[dict] = []
 
-        # Non-digital orders: "verifiedDigitalCookie" should not be meaningful
-        if not _is_digital(order_type):
+    for r in rows:
+        r = dict(r)  # RowMapping → dict (CRITICAL)
+
+        # Compute paymentStatus in python (single source of truth)
+        r["paymentStatus"] = get_payment_status(
+            r.get("orderType"),
+            r.get("orderAmount"),
+            r.get("paidAmount"),
+        )
+
+        # Non-digital orders should never appear "verified"
+        if not _is_digital(r.get("orderType")):
             r["verifiedDigitalCookie"] = False
 
-    return rows
+        out.append(r)
+
+    return out
 
 
 # ==================================================
@@ -405,3 +760,12 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]]):
             WHERE order_id = :oid
         """
         execute_sql(sql, params)
+
+def fetch_existing_external_orders(order_source: str) -> set:
+    rows = fetch_all("""
+        SELECT external_order_id
+        FROM cookies_app.orders
+        WHERE order_type = :source
+    """, {"source": order_source})
+    return [r[0] for r in rows]
+    

@@ -217,7 +217,7 @@ def main():
     st.markdown("### Orders")
     st.dataframe(
         pd.DataFrame(table_rows),
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
 

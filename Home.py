@@ -3,35 +3,24 @@ from streamlit import session_state as ss
 import os
 import pandas as pd
 import bcrypt
+from datetime import datetime
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from utils.app_utils import apputils as au, setup
+from utils.db_utils import (
+    verify_username_and_phone,
+    reset_password_with_username_phone,
+    get_engine
+)
+
+engine = get_engine()
 
 def init_ss():
     if 'scouts_df' not in ss:
         ss.scouts_df = pd.DataFrame()
-# --------------------------------------------------
-# Page config
-# --------------------------------------------------
-# st.set_page_config(
-#     page_title="Cookie Program",
-#     layout="wide",
-#     initial_sidebar_state="collapsed"
-# )
+    if 'current_year' not in ss:
+        ss.current_year = datetime.now().year
 
-# --------------------------------------------------
-# Database connection
-# --------------------------------------------------
-DB_HOST = "136.118.19.164"
-DB_PORT = "5432"
-DB_NAME = "cookies"
-DB_USER = "cookie_admin"
-DB_PASS = st.secrets["general"]["DB_PASSWORD"]
-
-
-engine = create_engine(
-    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-    pool_pre_ping=True
-)
 
 # --------------------------------------------------
 # Auth helpers
@@ -122,7 +111,7 @@ def main():
     # --------------------------------------------------
     if "authenticated" not in ss:
         ss.authenticated = False
-
+    
     # --------------------------------------------------
     # Header
     # --------------------------------------------------
@@ -157,6 +146,35 @@ def main():
                 if ss.is_admin: setup.check_admin()
 
                 st.rerun()
+
+
+            st.divider()
+            st.subheader("Forgot your password?")
+
+
+            with st.expander("Reset password"):
+                username = st.text_input("Username")
+                phone = st.text_input(
+                    "Phone number",
+                    help="Must match what you used when registering"
+                )
+
+                new_password = st.text_input("New password", type="password")
+                confirm_password = st.text_input("Confirm new password", type="password")
+
+                if st.button("Reset password"):
+                    if new_password != confirm_password:
+                        st.error("Passwords do not match.")
+                    elif not verify_username_and_phone(username, phone):
+                        st.error("Username and phone number do not match our records.")
+                    else:
+                        reset_password_with_username_phone(
+                            username,
+                            phone,
+                            new_password,
+                        )
+                        st.success("Password updated! You can now log in.")
+
 
         with tab_create:
             with st.form("create_account_form"):
@@ -203,29 +221,6 @@ def main():
     # AFTER LOGIN
     # --------------------------------------------------
     else:
-        # with st.sidebar:
-        #     st.subheader(ss.parent_name)
-        #     st.page_link("Home.py", label="Home")
-        #     st.page_link("pages/add_scouts.py", label="Manage Scouts")
-
-        #     if ss.is_admin:   
-        #         # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
-        #         st.sidebar.write('----- ADMIN ------')
-        #         st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
-        #         st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
-        #         st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
-        #         st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
-        #         st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
-        #         st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
-        #     # if ss.super_admin:
-        #     #     st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
-        #     #     st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
-        #     #     st.sidebar.page_link('pages/admin_print_booths.py',label='Print Booths')
-
-        #     st.divider()
-        #     if st.button("Log out"):
-        #         ss.clear()
-        #         st.rerun()
 
         try:
             ss.scouts_df = get_scouts(ss.parent_id)
@@ -239,7 +234,7 @@ def main():
 
         st.dataframe(
             ss.scouts_df.drop(columns=["scout_id"]),
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
 

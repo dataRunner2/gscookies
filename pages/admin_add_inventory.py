@@ -119,7 +119,7 @@ def main():
     
     
     st.write('Click in a cell to edit it')
-    edited_data = st.data_editor(all_inventory, num_rows='fixed', key='update_inventory_dat', use_container_width=True, column_order = column_order)
+    edited_data = st.data_editor(all_inventory, num_rows='fixed', key='update_inventory_dat', width='stretch', column_order = column_order)
 
     # if edited_data is not None:
     #     # Drop the "Total" row before comparison
