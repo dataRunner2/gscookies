@@ -36,8 +36,8 @@ class esu:
         resp = es.update_doc(indexnm=indexnm,id=id, doc=doc)
         return resp
 
-    def get_dat(es, indexnm, field=None):
-        sq1 = es.search(index = indexnm, query={"match_all": {}},size=60)
+    def get_dat(es, indexnm, field=None,size=1000):
+        sq1 = es.search(index = indexnm, query={"match_all": {}},size=size)
         print(f"There are {sq1['hits']['total']['value']} documents in the index {indexnm}\n")
         if field:
             fresp = sq1['hits']['hits']
@@ -45,7 +45,7 @@ class esu:
         else:
             fresp=sq1['hits']['hits']
 
-        return fresp
+        return fresp, sq1
     
     def get_all_scts(es):
         all_scout_qrydat = es.search(index = ss.indexes['index_scouts'], size=100, source='scout_details', query={"nested": {"path": "scout_details", "query": {"match_all":{} }}})['hits']['hits']

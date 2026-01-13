@@ -55,7 +55,7 @@ def main():
 
     # shade every other row
     styled_df = order_money_df.style.apply(alternate_rows, axis=0)
-    st.dataframe(styled_df, height=900,use_container_width=True)
+    st.dataframe(styled_df, height=900, width='stretch')
 
 if __name__ == '__main__':
 
