@@ -19,11 +19,11 @@ def get_engine() -> Engine:
     """
     return create_engine(
         f"postgresql+psycopg2://"
-        f"{st.secrets['general']['DB_USER']}:"
-        f"{st.secrets['general']['DB_PASSWORD']}@"
-        f"{st.secrets['general']['DB_HOST']}:"
-        f"{st.secrets['general'].get('DB_PORT', 5432)}/"
-        f"{st.secrets['general']['DB_NAME']}",
+        f"{st.secrets['connections.sql']['DB_USER']}:"
+        f"{st.secrets['connections.sql']['DB_PASSWORD']}@"
+        f"{st.secrets['connections.sql']['DB_HOST']}:"
+        f"{st.secrets['connections.sql'].get('DB_PORT', 5432)}/"
+        f"{st.secrets['connections.sql']['DB_NAME']}",
         pool_pre_ping=True
     )
 
