@@ -206,7 +206,7 @@ def insert_order_header(
     return order_id
 
 def insert_order_items(order_id, parent_id, scout_id, program_year, items):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.order_items (
             order_item_id,
             order_id,
@@ -225,7 +225,7 @@ def insert_order_items(order_id, parent_id, scout_id, program_year, items):
             :cookie_code,
             :quantity
         )
-    """)
+    """
 
     for code, qty in items.items():
         if qty != 0:
@@ -239,7 +239,7 @@ def insert_order_items(order_id, parent_id, scout_id, program_year, items):
             })
 
 def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.inventory_ledger (
             inventory_event_id,
             parent_id,
@@ -264,7 +264,7 @@ def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items)
             :order_id,
             now()
         )
-    """)
+    """
 
     
     for code, qty in items.items():
