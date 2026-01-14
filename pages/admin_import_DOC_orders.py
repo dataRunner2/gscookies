@@ -5,14 +5,12 @@ import uuid
 from datetime import datetime
 
 from utils.app_utils import setup
-from utils.db_utils import (
-    get_all_scouts,
-    require_admin,
-    update_scout_gsusa_id
-)
+from utils.db_utils import require_admin
 from utils.order_utils import (
     fetch_existing_external_orders,
-    bulk_insert_orders, build_cookie_rename_map
+    bulk_insert_orders, build_cookie_rename_map,
+    get_all_scouts,
+    update_scout_gsusa_id
 )
 
 # --------------------------------------------------
@@ -116,7 +114,7 @@ def rename_cookie_columns(order_df: pd.DataFrame, program_year: int) -> pd.DataF
         if col in rename_map
     }
 
-    return order_df.rename(columns=valid_map)
+    return order_df.rename(columns=valid_map), rename_map
 
     
 
@@ -244,7 +242,9 @@ def main():
     matched["order_ref"] = matched["external_order_id"].astype(str)
 
     # Rename cookie display names -> cookie codes (must ASSIGN result)
-    matched = rename_cookie_columns(matched, int(ss.current_year))
+    matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
+    st.write(cookie_nm_map)
+    st.write(list(cookie_nm_map.values()))
 
     
     # Get existing orders as to not create duplicates
@@ -269,8 +269,8 @@ def main():
     st.dataframe(
         new_orders[[
             "parent_id","scout_id","program_year","order_ref",
-            "order_type","comments","total_boxes","order_amount",
-            "status","cookie_inputs"
+            "order_type","comments","Total Packages (Excluding Donation)","Digital Cookie Subtotal",
+            "status",""
         ]],
         width='stretch',
     )

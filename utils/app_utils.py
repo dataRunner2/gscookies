@@ -102,7 +102,7 @@ class setup:
             st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
 
         if ss.super_admin:
-            st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
+            # st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
             st.sidebar.page_link('pages/move_es_data.py',label='Move Data')
 
         st.sidebar.divider()
