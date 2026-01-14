@@ -168,7 +168,7 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
 
         # ----- ADMIN RECEIPT -----
         c.setFont("Helvetica-Bold", 13)
-        c.drawString(LEFT, y, "Packing + Pickup (Admin Receipt)")
+        c.drawString(LEFT, y, "Packing + Pickup (Cookie Crew Receipt)")
         y -= 0.25 * inch
 
         y, widths = table_header(y, cookie_cols)
