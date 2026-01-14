@@ -6,6 +6,7 @@ from typing import IO
 import bcrypt
 import secrets
 from datetime import datetime, timedelta
+import pandas as pd
 
 
 
@@ -97,148 +98,14 @@ def require_login():
         st.error("Please log in.")
         st.stop()
 
-
-# ==================================================
-# Common data lookups
-# ==================================================
-def get_all_scouts():
-    return fetch_all("""
-        SELECT scout_id, first_name, last_name, gsusa_id, parent_id
-        FROM cookies_app.scouts
-        ORDER BY last_name, first_name
-    """)
-
-def fetch_scout_aliases(conn):
-    query = "SELECT alias_name, scout_id FROM scout_aliases"
-    rows = conn.execute(query).fetchall()
-    return {r[0].lower(): r[1] for r in rows}
-
-def insert_scout_alias(conn, alias_name: str, scout_id: int):
-    conn.execute(
-        """
-        INSERT INTO scout_aliases (alias_name, scout_id)
-        VALUES (%s, %s)
-        ON CONFLICT (alias_name) DO NOTHING
-        """,
-        (alias_name, scout_id),
-    )
-    conn.commit()
-
-def get_all_parents():
-    return fetch_all("""
-        SELECT parent_id, parent_firstname, parent_lastname
-        FROM cookies_app.parents
-        ORDER BY parent_lastname, parent_firstname
-    """)
-
-def update_scout_gsusa_id(scout_id, gsusa_id):
-    with engine().begin() as conn:
-        conn.execute(
-            text("""
-                UPDATE scouts
-                SET gsusa_id = :gsusa_id
-                WHERE scout_id = :scout_id
-                  AND gsusa_id IS NULL
-            """),
-            {
-                "scout_id": scout_id,
-                "gsusa_id": str(gsusa_id),
-            },
-        )
-
-def get_outstanding_non_booth_orders(program_year=None):
-    params = {}
-    year_filter = ""
-
-    if program_year:
-        year_filter = "AND o.program_year = :year"
-        params["year"] = program_year
-
-    return fetch_all(f"""
-        SELECT
-            o.order_id,
-            o.parent_id,
-            o.program_year,
-            o.submit_dt,
-            p.parent_firstname,
-            p.parent_lastname,
-            p.parent_phone
-        FROM cookies_app.orders o
-        JOIN cookies_app.parents p ON p.parent_id = o.parent_id
-        WHERE o.order_type <> 'BOOTH'
-          AND o.status <> 'PICKED_UP'
-          {year_filter}
-        ORDER BY p.parent_lastname, p.parent_firstname, o.submit_dt
-    """, params)
-
-
-def fetch_orders_for_scout(scout_id):
-    return fetch_all("""
-        SELECT
-            o.order_id,
-            o.scout_id,
-            o.order_qty_boxes,
-            o.order_type,
-            o.order_source,
-            o.submit_date,
-            o.program_year,
-            o.status
-        FROM orders o
-        WHERE o.scout_id = {scout_id}
-    """)
-
-def fetch_orders_for_scout_with_fallback(
-    scout_id,
-    scout_first_name: str,
-    scout_last_name: str,
-):
-    """
-    Fetch cookie-level order items for a scout.
-
-    Priority:
-    1) Match on scout_id
-    2) Fallback to first + last name for legacy rows
-    """
-
-    sql = """
-        SELECT
-            oi.cookie_name,
-            oi.qty_boxes,
-            o.order_type,
-            o.submit_dt,
-            o.order_id
-        FROM order_items oi
-        JOIN orders o
-          ON o.order_id = oi.order_id
-        WHERE o.scout_id = :scout_id
-
-        UNION ALL
-
-        SELECT
-            oi.cookie_name,
-            oi.qty_boxes,
-            o.order_type,
-            o.submit_dt,
-            o.order_id
-        FROM order_items oi
-        JOIN orders o
-          ON o.order_id = oi.order_id
-        WHERE o.scout_id IS NULL
-          
-    """
-
-    return fetch_all(
-        sql,
-        {
-            "scout_id": scout_id,
-            "first_name": scout_first_name,
-            "last_name": scout_last_name,
-        },
-    )
-
 # ==================================================
 # Upload Data
 # ==================================================
+def to_pacific(ts):
+    return (
+        pd.to_datetime(ts, utc=True)
+          .tz_convert("US/Pacific")
+    )
 
 
 def show_engine_conn():

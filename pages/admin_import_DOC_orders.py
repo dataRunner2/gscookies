@@ -238,7 +238,7 @@ def main():
     matched["order_source"] = "Digital Cookie Import"
     matched["submit_dt"] = pd.to_datetime(matched["submit_dt"])
     matched["created_at"] = datetime.utcnow()
-    matched['order_type'] = matched['order_type'].replace('In-Person Delivery','Dig. Cookie Delivery')
+    matched['order_type'] = matched['order_type'].replace('In-Person Delivery','Digital')
     matched['comments'] = [f"{cust_first} {cust_last} ${total}" for cust_first,cust_last,total in zip(matched['Customer First Name'],matched['Customer Last Name'],matched['Order Total'])]
     matched["status"] = "IMPORTED"
     matched["order_ref"] = matched["external_order_id"].astype(str)
@@ -279,7 +279,7 @@ def main():
         st.success("All eligible orders already imported.")
         return
 
-    if st.button("Import Digital Orders", type="primary"):
+    if st.button("Import Digitals", type="primary"):
         st.success(f"Imported {len(new_orders)} digital orders 🎉")
         bulk_insert_orders(new_orders)
         

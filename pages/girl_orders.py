@@ -90,7 +90,7 @@ def main():
     with st.form("order_form", clear_on_submit=True):
         order_type = st.selectbox(
             "Order Type",
-            ["Paper Order", "Dig. Cookie Delivery"]
+            ["Paper", "Digital"]
         )
 
         st.markdown("### Cookie Quantities")

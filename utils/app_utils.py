@@ -79,7 +79,7 @@ class setup:
 
         st.sidebar.page_link("Home.py", label='Account')
         st.sidebar.page_link('pages/training_reference.py',label='Training & Dates')
-        st.sidebar.page_link('pages/add_scouts.py',label='Add Scouts')
+        st.sidebar.page_link('pages/add_scouts.py',label='Add or Modify Scout Info')
         st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')  # all and admin content
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')

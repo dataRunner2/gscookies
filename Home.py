@@ -12,12 +12,13 @@ from utils.db_utils import (
     reset_password_with_username_phone,
     get_engine
 )
+from utils.order_utils import get_scouts_byparent
 
 engine = get_engine()
 
 def init_ss():
-    if 'scouts_df' not in ss:
-        ss.scouts_df = pd.DataFrame()
+    if 'scouts_dict' not in ss:
+        ss.scouts_dict = pd.DataFrame()
     if 'current_year' not in ss:
         ss.current_year = datetime.now().year
 
@@ -90,21 +91,6 @@ def create_parent(username, email, password, first, last, phone):
         }).scalar()
 
 
-def get_scouts(parent_id):
-    sql = text("""
-        SELECT
-            scout_id,
-            first_name,
-            last_name,
-            tshirt_size,
-            goals
-        FROM cookies_app.scouts
-        WHERE parent_id = :parent_id
-        ORDER BY last_name, first_name
-    """)
-    with engine.connect() as conn:
-        return pd.read_sql(sql, conn, params={"parent_id": parent_id})
-
 def main():
     # --------------------------------------------------
     # Session defaults
@@ -150,7 +136,7 @@ def main():
 
             st.divider()
             st.subheader("Forgot your password?")
-
+            
 
             with st.expander("Reset password"):
                 username = st.text_input("Username")
@@ -220,26 +206,39 @@ def main():
     # --------------------------------------------------
     # AFTER LOGIN
     # --------------------------------------------------
-    else:
-
+    elif ss.authenticated:
+        # st.write(f'you have access: {ss.authenticated}|  parentid:{ss.parent_id}')
         try:
-            ss.scouts_df = get_scouts(ss.parent_id)
+            ss.scouts_dict = get_scouts_byparent(ss.parent_id)
+            # rows = get_scouts_byparent(ss.parent_id)
+            # scouts_df = pd.DataFrame([dict(r) for r in rows])
+
         except:
             st.switch_page("pages/add_scouts.py")
 
-        if ss.scouts_df.empty:
-            st.switch_page("pages/add_scouts.py")
-
+        # if ss.scouts_df.empty:
+        #     st.switch_page("pages/add_scouts.py")
+    if len(ss.scouts_dict)>0:
         st.subheader("Your Scouts")
 
+        
         st.dataframe(
-            ss.scouts_df.drop(columns=["scout_id"]),
+            ss.scouts_dict,
             width='stretch',
-            hide_index=True
+            hide_index=True,
+            column_order=["first_name", "tshirt_size","goals","award_preferences"],
+            column_config={
+                "first_name": st.column_config.TextColumn("First Name"),
+                "last_name": st.column_config.TextColumn("Last Name"),
+                "tshirt_size": st.column_config.TextColumn("Tshirt Size"),
+                "goals": st.column_config.TextColumn("Goal"),
+                "award_preferences": st.column_config.TextColumn("Award"),
+                "parent_id": None,
+                "scout_id": None 
+            },
         )
+        st.page_link('pages/add_scouts.py',label='Add or Modify Scout Info')
 
-        total_goal = ss.scouts_df["goals"].fillna(0).sum()
-        st.caption(f"Combined cookie goal: {int(total_goal)}")
 
 if __name__ == '__main__':
 
