@@ -8,7 +8,8 @@ from utils.app_utils import setup
 from utils.db_utils import require_admin
 from utils.order_utils import (
     fetch_existing_external_orders,
-    bulk_insert_orders, build_cookie_rename_map,
+    bulk_insert_order_headers, bulk_insert_order_items,
+    build_cookie_rename_map,
     get_all_scouts,
     update_scout_gsusa_id
 )
@@ -38,9 +39,13 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
             "Order Status": "order_status",
             "Customer Name": "customer_name",
             "Customer Email": "customer_email",
-            "Cookie Variety": "cookie_name",
+            "Customer First Name": "customer_first_name",
+            "Customer Last Name": "customer_last_name",
+            "Order Total": "order_total",
             "Quantity": "order_qty_boxes",
             "Total": "order_amount",
+            "Original Cookie Subtotal": "order_amount",
+            "Total Packages (Excluding Donation)": "order_qty_boxes",
         }
     )
 
@@ -125,8 +130,7 @@ def rename_cookie_columns(order_df: pd.DataFrame, program_year: int) -> pd.DataF
 
 def main():
     require_admin()
-    st.title("Import Digital Cookie Orders")
-
+    
     uploaded_file = st.file_uploader(
         "Upload Digital Cookie Excel Export",
         type=["xlsx"],
@@ -139,9 +143,13 @@ def main():
     # ----------------------------------
     # Load + Filter
     # ----------------------------------
-
+    st.write('Raw data')
+    
+    raw_dat  = (pd.read_excel(uploaded_file).head())
+    st.write(raw_dat.columns.tolist())
+    st.dataframe(raw_dat.head())
     uploaded_df = normalize_columns(pd.read_excel(uploaded_file))
-    st.dataframe(uploaded_df)
+    
 
     filtered_df = uploaded_df[
         (uploaded_df["order_type"] == "In-Person Delivery")
@@ -163,11 +171,11 @@ def main():
     # aliases = fetch_scout_aliases()
 
     ss.scout_name_lookup = {
-        (s.first_name, s.last_name): s.scout_id
+        (s["first_name"], s["last_name"]): s["scout_id"]
         for s in scouts
         }
     ss.parent_id_lookup = {
-        s.scout_id: s.parent_id
+        s["scout_id"]: s["parent_id"]
         for s in scouts
         }
     
@@ -175,17 +183,17 @@ def main():
 
     # Update Scouts Table with GSU_ID
     scout_updates = build_scout_updates(scouts, ss.gsuid_map)
-    st.write(f'Scouts table Updates: \n\n{scout_updates[:2]}')
+    # st.write(f'Scouts table Updates: \n\n{scout_updates[:2]}')
 
     #### 
     updated_df = attach_scout_id(filtered_df)
-    st.dataframe(updated_df) #[['scout_id','external_order_id','scout_gsusa_id','scout_first_name']])
+    # st.dataframe(updated_df) #[['scout_id','external_order_id','scout_gsusa_id','scout_first_name']])
     
 
     unmatched = updated_df[updated_df["scout_id"].isna()].copy()
     matched = updated_df[updated_df["scout_id"].notna()].copy()
-    st.write('matched:\n')
-    st.dataframe(matched)
+    # st.write('matched:\n')
+    # st.dataframe(matched)
     # ----------------------------------
     # Alias Resolution UI
     # ----------------------------------
@@ -193,7 +201,7 @@ def main():
         st.warning("Some scout names need to be matched")
 
         scout_options = {
-            f"{s.first_name} {s.last_name}": s.scout_id for s in scouts
+            f"{s['first_name']} {s['last_name']}": s["scout_id"] for s in scouts
         }
 
         for idx, row in unmatched.iterrows():
@@ -237,15 +245,14 @@ def main():
     matched["submit_dt"] = pd.to_datetime(matched["submit_dt"])
     matched["created_at"] = datetime.utcnow()
     matched['order_type'] = matched['order_type'].replace('In-Person Delivery','Digital')
-    matched['comments'] = [f"{cust_first} {cust_last} ${total}" for cust_first,cust_last,total in zip(matched['Customer First Name'],matched['Customer Last Name'],matched['Order Total'])]
+    matched['comments'] = [f"Customer Info: {cust_first} {cust_last} ${total}" for cust_first,cust_last,total in zip(matched['customer_first_name'],matched['customer_last_name'],matched['order_total'])]
     matched["status"] = "IMPORTED"
     matched["order_ref"] = matched["external_order_id"].astype(str)
 
     # Rename cookie display names -> cookie codes (must ASSIGN result)
     matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
-    st.write(cookie_nm_map)
-    st.write(list(cookie_nm_map.values()))
-
+    # st.write(cookie_nm_map)
+    # st.write(list(cookie_nm_map.values()))
     
     # Get existing orders as to not create duplicates
     existing_ids = fetch_existing_external_orders(
@@ -254,24 +261,24 @@ def main():
     if len(existing_ids) == 0:
         st.write('There are no existing DOC orders, importing all of them.')
 
+    matched["external_order_id"] = matched["external_order_id"].astype(str)
+
     new_orders = matched[
         ~matched["external_order_id"].isin(existing_ids)
     ].copy()
-    new_orders["order_id"] = [uuid.uuid4() for _ in range(len(new_orders))]
-    st.write(f'New Orders to be added {len(new_orders)}')
-    st.dataframe(new_orders)
+    # new_orders["order_id"] = [uuid.uuid4() for _ in range(len(new_orders))]
+    # st.write(f'New Orders to be added {len(new_orders)}')
+    
     # ----------------------------------
     # Review + Import
     # ----------------------------------
 
     st.metric("New Orders to Import", len(new_orders))
-    
+    cols_to_import = ["parent_id","scout_id","program_year","order_ref",
+            "order_type","comments","order_qty_boxes","order_amount",
+            "status"] + list(cookie_nm_map.values())
     st.dataframe(
-        new_orders[[
-            "parent_id","scout_id","program_year","order_ref",
-            "order_type","comments","Total Packages (Excluding Donation)","Digital Cookie Subtotal",
-            "status",""
-        ]],
+        new_orders[cols_to_import],
         width='stretch',
     )
 
@@ -281,7 +288,8 @@ def main():
 
     if st.button("Import Digitals", type="primary"):
         st.success(f"Imported {len(new_orders)} digital orders 🎉")
-        bulk_insert_orders(new_orders)
+        bulk_insert_order_headers(new_orders)
+        bulk_insert_order_items(new_orders)
         
         st.success(f"Orders submitted successfully!")
 

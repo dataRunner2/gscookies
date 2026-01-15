@@ -49,7 +49,7 @@ def get_draft_booth_orders():
             b.end_time
         FROM cookies_app.orders o
         JOIN cookies_app.booths b ON o.booth_id = b.booth_id
-        WHERE o.order_type = 'BOOTH'
+        WHERE o.order_type = 'Booth'
           AND o.verification_status = 'DRAFT'
         ORDER BY b.booth_date DESC
     """)
@@ -442,7 +442,7 @@ def main():
                 o.square_total
             FROM cookies_app.orders o
             JOIN cookies_app.booths b ON b.booth_id = o.booth_id
-            WHERE o.order_type = 'BOOTH'
+            WHERE o.order_type = 'Booth'
             AND o.verification_status = 'DRAFT'
             ORDER BY b.booth_date DESC, b.start_time
         """)

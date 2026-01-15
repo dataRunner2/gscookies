@@ -7,6 +7,7 @@ from utils.db_utils import require_admin
 from utils.order_utils import (
         aggregate_orders_by_cookie,
         get_orders_for_scout,
+        get_orders_for_scout_summary,
         get_all_scouts
     )
 
@@ -57,10 +58,10 @@ def main():
     # Fetch Orders
     # ----------------------------------
     
-    orders_df = get_orders_for_scout(scout_id,year)
+    orders_df = get_orders_for_scout_summary(scout_id)
     st.data_editor(orders_df)
 
-    if orders_df is None:
+    if orders_df.empty:
         st.warning("No orders found for this scout.")
     
     else:

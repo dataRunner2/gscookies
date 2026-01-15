@@ -411,7 +411,7 @@ def get_order_header(order_id: str):
             o.comments,
             o.initial_order,
             o.add_ebudde,
-            o.verified_digital_cookie
+            o.verified_digital
         FROM cookies_app.orders o
         WHERE o.order_id = :oid
     """, {"oid": order_id})
@@ -455,6 +455,7 @@ def insert_order_header(
             order_amount,
             comments,
             external_order_id,
+            initial_order,
             submit_dt,
             created_at            
         )
@@ -470,6 +471,7 @@ def insert_order_header(
             :order_amount,
             :comments,
             :external_order_id,
+            (now() >= make_date(:program_year, 1, 5) AND now() < make_date(:program_year, 2, 1)),
             now(),
             now()
         )
@@ -565,7 +567,7 @@ def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items)
             })
 
 def bulk_insert_order_headers(df):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.orders (
             order_id,
             parent_id,
@@ -577,6 +579,8 @@ def bulk_insert_order_headers(df):
             order_qty_boxes,
             order_amount,
             comments,
+            external_order_id,
+            order_source,
             submit_dt,
             created_at
         )
@@ -591,10 +595,12 @@ def bulk_insert_order_headers(df):
             :order_qty_boxes,
             :order_amount,
             :comments,
+            :external_order_id,
+            :order_source,
             now(),
             now()
         )
-    """)
+    """
 
     payload = []
 
@@ -609,9 +615,11 @@ def bulk_insert_order_headers(df):
             "order_ref": r.order_ref,
             "order_type": r.order_type,
             "status": r.status,
-            "order_qty_boxes": r.total_boxes,
+            "order_qty_boxes": r.order_qty_boxes,
             "order_amount": r.order_amount,
             "comments": r.comments,
+            "external_order_id": r.external_order_id,
+            "order_source": r.order_source,
         })
 
         # store for downstream inserts
@@ -621,7 +629,7 @@ def bulk_insert_order_headers(df):
 
 def bulk_insert_order_items(df):
     # send in orders df, this will submit to dict lik {"TM": 4,"TT":2}
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.order_items (
             order_item_id,
             order_id,
@@ -629,7 +637,7 @@ def bulk_insert_order_items(df):
             scout_id,
             program_year,
             cookie_code,
-            qty
+            quantity
         )
         VALUES (
             :order_item_id,
@@ -638,63 +646,107 @@ def bulk_insert_order_items(df):
             :scout_id,
             :program_year,
             :cookie_code,
-            :qty
+            :quantity
         )
-    """)
+    """
 
     payload = []
 
-    for r in df.itertuples():
-        for cookie_code, qty in r.cookie_inputs.items():
-            if qty > 0:
+    if 'cookie_code' in df.columns and 'quantity' in df.columns:
+        # Long format: one row per item
+        for r in df.itertuples():
+            if getattr(r, 'quantity', 0) > 0:
                 payload.append({
                     "order_item_id": str(uuid.uuid4()),
                     "order_id": str(r.order_id),
                     "parent_id": str(r.parent_id),
                     "scout_id": str(r.scout_id),
                     "program_year": r.program_year,
-                    "cookie_code": cookie_code,
-                    "qty": qty,
+                    "cookie_code": r.cookie_code,
+                    "quantity": r.quantity,
                 })
+    else:
+        # Wide format: columns are cookie codes
+        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at'}
+
+        for r in df.itertuples():
+            for col in df.columns:
+                if col in meta_cols:
+                    continue
+                qty = getattr(r, col)
+                if qty > 0:
+                    payload.append({
+                        "order_item_id": str(uuid.uuid4()),
+                        "order_id": str(r.order_id),
+                        "parent_id": str(r.parent_id),
+                        "scout_id": str(r.scout_id),
+                        "program_year": r.program_year,
+                        "cookie_code": col,
+                        "quantity": qty,
+                    })
 
     execute_many_sql(sql, payload)
 
 def bulk_insert_planned_inventory(df):
-    sql = text("""
-        INSERT INTO cookies_app.planned_inventory (
-            inventory_id,
+    sql = """
+        INSERT INTO cookies_app.inventory_ledger (
+            inventory_event_id,
             parent_id,
             scout_id,
             program_year,
-            order_id,
             cookie_code,
-            qty
+            quantity,
+            event_type,
+            status,
+            related_order_id,
+            event_dt
         )
         VALUES (
-            :inventory_id,
+            gen_random_uuid(),
             :parent_id,
             :scout_id,
             :program_year,
-            :order_id,
             :cookie_code,
-            :qty
+            :quantity,
+            'ORDER_SUBMITTED',
+            'PENDING',
+            :order_id,
+            now()
         )
-    """)
+    """
 
     payload = []
 
-    for r in df.itertuples():
-        for cookie_code, qty in r.cookie_inputs.items():
-            if qty > 0:
+    if 'cookie_code' in df.columns and 'quantity' in df.columns:
+        # Long format
+        for r in df.itertuples():
+            if getattr(r, 'quantity', 0) > 0:
                 payload.append({
-                    "inventory_id": str(uuid.uuid4()),
                     "parent_id": str(r.parent_id),
                     "scout_id": str(r.scout_id),
                     "program_year": r.program_year,
+                    "cookie_code": r.cookie_code,
+                    "quantity": r.quantity,
                     "order_id": str(r.order_id),
-                    "cookie_code": cookie_code,
-                    "qty": qty,
                 })
+    else:
+        # Wide format
+        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at'}
+
+        for r in df.itertuples():
+            for col in df.columns:
+                if col in meta_cols:
+                    continue
+                qty = getattr(r, col)
+                if qty > 0:
+                    payload.append({
+                        "parent_id": str(r.parent_id),
+                        "scout_id": str(r.scout_id),
+                        "program_year": r.program_year,
+                        "cookie_code": col,
+                        "quantity": qty,
+                        "order_id": str(r.order_id),
+                    })
 
     execute_many_sql(sql, payload)
 
@@ -797,7 +849,7 @@ def set_add_ebudde(order_id: str, add_ebudde: bool):
 def set_verified_digital_cookie(order_id: str, verified: bool):
     execute_sql("""
         UPDATE cookies_app.orders
-        SET verified_digital_cookie = :v
+        SET verified_digital = :v
         WHERE order_id = :oid
     """, {"oid": order_id, "v": bool(verified)})
 
@@ -947,7 +999,7 @@ def get_admin_orders_flat(program_year: int):
             )                                  AS "initialOrder",
 
             COALESCE(o.add_ebudde, false)      AS "addEbudde",
-            COALESCE(o.verified_digital_cookie, false)
+            COALESCE(o.verified_digital, false)
                                                AS "verifiedDigitalCookie",
 
             (s.first_name || ' ' || s.last_name)
@@ -1018,7 +1070,7 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]]):
     allowed = {
         "initialOrder": "initial_order",
         "addEbudde": "add_ebudde",
-        "verifiedDigitalCookie": "verified_digital_cookie",
+        "verifiedDigitalCookie": "verified_digital",
         "orderStatus": "status",
         "comments": "comments",
         "orderType": "order_type",
@@ -1051,7 +1103,7 @@ def fetch_existing_external_orders(order_source: str) -> set:
     rows = fetch_all("""
         SELECT external_order_id
         FROM cookies_app.orders
-        WHERE order_type = :source
+        WHERE order_source = :source
     """, {"source": order_source})
-    return [r[0] for r in rows]
+    return [r['external_order_id'] for r in rows]
     

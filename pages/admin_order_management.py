@@ -11,6 +11,7 @@ from utils.order_utils import (
     get_admin_orders_flat,
     admin_update_orders_bulk,
     get_cookie_codes_for_year,
+    get_all_scouts,
 )
 
 # -----------------------------
@@ -159,13 +160,16 @@ def main():
 
     df_all = pivot_orders(rows)
 
+    scouts = get_all_scouts()
+    all_scout_names = sorted([f"{s['first_name']} {s['last_name']}" for s in scouts])
+
     # ---------------- Filters ----------------
     st.subheader("Filters")
 
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        status_vals = sorted(df_all["orderStatus"].dropna().unique())
+        status_vals = sorted(df_all["orderStatus"].dropna().unique())  if "orderStatus" in df_all.columns else []
         status_filter = st.multiselect(
             "Status",
             options=status_vals,
@@ -175,7 +179,7 @@ def main():
     with c2:
         scout_filter = st.multiselect(
             "Scout",
-            options=sorted(df_all["scoutName"].dropna().unique()),
+            options=all_scout_names,
         )
 
     with c3:
@@ -189,13 +193,13 @@ def main():
     if scout_filter:
         df = df[df["scoutName"].isin(scout_filter)]
 
-    if initial_only:
+    if initial_only and "initialOrder" in df.columns:
         df = df[df["initialOrder"] == True]
 
     df = apputils.filter_dataframe(df)
 
     # ---------------- Columns ----------------
-    cookie_codes = get_cookie_codes_for_year(int(ss.current_year))
+    cookie_codes = get_cookie_codes_for_year(int(ss.current_year)) or []
     cookie_cols = [c for c in cookie_codes if c in df.columns]
 
     default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + cookie_cols
@@ -237,7 +241,7 @@ def main():
             "comments": st.column_config.TextColumn("Comments"),
             "orderType": st.column_config.SelectboxColumn(
                 "Order Type",
-                options=["IN_PERSON", "DIGITAL", "BOOTH"],
+                options=["Paper", "Digital", "Booth"],
             ),
         },
     )
@@ -249,10 +253,13 @@ def main():
         updates, diffs = diff_updates(df_view, edited)
 
         if updates:
-            admin_update_orders_bulk(updates)
+            try:
+                admin_update_orders_bulk(updates)
+            except Exception as e:
+                st.error(f"Update failed: {e}")
 
             st.subheader("Changes Applied")
-            st.dataframe(diffs, use_container_width=True, hide_index=True)
+            st.dataframe(diffs.reset_index(drop=True), width='stretch', hide_index=True)
 
             st.success(f"Updated {len(updates)} order(s)")
             st.rerun()
