@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Iterable, Optional
 import pandas as pd
-from utils.db_utils import fetch_all, fetch_one, execute_sql, execute_many_sql
+from utils.db_utils import get_engine,fetch_all, fetch_one, execute_sql, execute_many_sql, to_pacific
+
 from sqlalchemy import text
 import uuid
 
@@ -38,6 +39,137 @@ def _initial_order_window_sql() -> str:
          AND o.submit_dt <  make_date(o.program_year, 2, 1))
     """
 
+# ==================================================
+# Scout helpers
+# ==================================================
+def get_scouts_byparent(parent_id):
+    return fetch_all("""
+        SELECT scout_id, first_name, last_name, tshirt_size,
+            goals, award_preferences,parent_id
+        FROM cookies_app.scouts
+        WHERE parent_id = :parent_id
+        ORDER BY last_name, first_name
+    """,{"parent_id": parent_id}
+    )
+
+
+    
+def get_all_scouts():
+    return fetch_all("""
+        SELECT scout_id, first_name, last_name, gsusa_id, parent_id
+        FROM cookies_app.scouts
+        ORDER BY last_name, first_name
+    """)
+
+def add_scout(parent_id, first_name, last_name, goals, award_preferences):
+    sql = """
+        INSERT INTO cookies_app.scouts (
+            parent_id,
+            first_name,
+            last_name,
+            goals,
+            award_preferences
+        )
+        VALUES (
+            :parent_id,
+            :first_name,
+            :last_name,
+            :goals,
+            :award_preferences
+        )
+        RETURNING scout_id
+    """
+    engine = get_engine()
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(sql),
+            {
+                "parent_id": str(parent_id),
+                "first_name": first_name,
+                "last_name": last_name,
+                "goals": goals,
+                "award_preferences": award_preferences,
+            }
+        )
+        scout_id = result.scalar()
+
+    return scout_id
+    
+def update_scout(
+    scout_id: str,
+    goals: int | None = None,
+    award_preferences: str | None = None
+):
+    """
+    Update scout goal and/or award preferences.
+    """
+    fields = []
+    params = {"scout_id": scout_id}
+
+    if goals is not None:
+        fields.append("goals = :goals")
+        params["goals"] = goals
+
+    if award_preferences is not None:
+        fields.append("award_preferences = :award_preferences")
+        params["award_preferences"] = award_preferences
+
+    if not fields:
+        return
+
+    sql = f"""
+        UPDATE cookies_app.scouts
+        SET {", ".join(fields)}
+        WHERE scout_id = :scout_id
+    """
+
+    engine = get_engine()
+    with engine.begin() as conn:
+        conn.execute(text(sql), params)
+
+
+def fetch_scout_aliases(conn):
+    query = "SELECT alias_name, scout_id FROM scout_aliases"
+    rows = conn.execute(query).fetchall()
+    return {r[0].lower(): r[1] for r in rows}
+
+def insert_scout_alias(conn, alias_name: str, scout_id: int):
+    conn.execute(
+        """
+        INSERT INTO scout_aliases (alias_name, scout_id)
+        VALUES (%s, %s)
+        ON CONFLICT (alias_name) DO NOTHING
+        """,
+        (alias_name, scout_id),
+    )
+    conn.commit()
+
+def get_all_parents():
+    return fetch_all("""
+        SELECT parent_id, parent_firstname, parent_lastname
+        FROM cookies_app.parents
+        ORDER BY parent_lastname, parent_firstname
+    """)
+
+def update_scout_gsusa_id(scout_id, gsusa_id):
+    engine = get_engine()
+    with engine().begin() as conn:
+        conn.execute(
+            text("""
+                UPDATE scouts
+                SET gsusa_id = :gsusa_id
+                WHERE scout_id = :scout_id
+                  AND gsusa_id IS NULL
+            """),
+            {
+                "scout_id": scout_id,
+                "gsusa_id": str(gsusa_id),
+            },
+        )
+
+# ==================================================
+# Cookie helpers
+# ==================================================
 def get_cookie_codes_for_year(program_year: int) -> list[str]:
     """
     Returns ordered list of cookie codes for a program year.
@@ -82,9 +214,10 @@ def aggregate_orders_by_cookie(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==================================================
-# Core: order header + items
+# Order header + items
 # ==================================================
 def get_orders_for_scout_summary(scout_id: str) -> pd.DataFrame:
+    # Used in admin girl order summary - joins the header and the cookie details
     rows = fetch_all("""
         SELECT
             cy.display_name AS cookie_name,
@@ -106,8 +239,160 @@ def get_orders_for_scout_summary(scout_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
-    df.rename(columns={"quantity": "quantity"}, inplace=True)
     return df
+
+def get_orders_for_scout(scout_id, year):
+    """
+    Returns orders + total paid so far (paper only).
+    Digital orders are treated as fully paid.
+    """
+    rows = fetch_all("""
+        SELECT
+            o.order_id,
+            o.order_ref,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status AS order_status,
+            o.comments,
+            COALESCE(SUM(m.amount), 0) AS paid_amount
+        FROM cookies_app.orders o
+        LEFT JOIN cookies_app.money_ledger m
+          ON o.order_id = m.related_order_id
+        WHERE o.scout_id = :scout_id
+          AND o.program_year = :year
+        GROUP BY
+            o.order_id,
+            o.order_ref,
+            o.submit_dt,
+            o.order_type,
+            o.order_qty_boxes,
+            o.order_amount,
+            o.status
+        ORDER BY o.submit_dt DESC
+    """, { "scout_id": scout_id,
+            "year": year
+        })
+    if not rows:
+        return pd.DataFrame()
+
+    cln_rows = {str(r["order_id"]): r for r in rows}
+
+    # # Build dataframe
+    df = pd.DataFrame(list(cln_rows.values()))
+    df['submit_dt'] = [to_pacific(subdat) for subdat in df['submit_dt']]
+
+    return df
+
+def get_order_items(order_id):
+    rows = fetch_all("""
+        SELECT
+            cy.display_name,
+            oi.quantity
+        FROM cookies_app.order_items oi
+        JOIN cookies_app.cookie_years cy
+          ON oi.cookie_code = cy.cookie_code
+         AND oi.program_year = cy.program_year
+        WHERE oi.order_id = :order_id
+        ORDER BY cy.display_order
+    """, {"order_id": order_id})
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+
+
+def get_outstanding_non_booth_orders(program_year=None):
+    params = {}
+    year_filter = ""
+
+    if program_year:
+        year_filter = "AND o.program_year = :year"
+        params["year"] = program_year
+
+    return fetch_all(f"""
+        SELECT
+            o.order_id,
+            o.parent_id,
+            o.program_year,
+            o.submit_dt,
+            p.parent_firstname,
+            p.parent_lastname,
+            p.parent_phone
+        FROM cookies_app.orders o
+        JOIN cookies_app.parents p ON p.parent_id = o.parent_id
+        WHERE o.order_type <> 'BOOTH'
+          AND o.status <> 'PICKED_UP'
+          {year_filter}
+        ORDER BY p.parent_lastname, p.parent_firstname, o.submit_dt
+    """, params)
+
+
+def fetch_orders_for_scout(scout_id):
+    return fetch_all("""
+        SELECT
+            o.order_id,
+            o.scout_id,
+            o.order_qty_boxes,
+            o.order_type,
+            o.order_source,
+            o.submit_date,
+            o.program_year,
+            o.status
+        FROM orders o
+        WHERE o.scout_id = {scout_id}
+    """)
+
+def fetch_orders_for_scout_with_fallback(
+    scout_id,
+    scout_first_name: str,
+    scout_last_name: str,
+):
+    """
+    Fetch cookie-level order items for a scout.
+
+    Priority:
+    1) Match on scout_id
+    2) Fallback to first + last name for legacy rows
+    """
+
+    sql = """
+        SELECT
+            oi.cookie_name,
+            oi.qty_boxes,
+            o.order_type,
+            o.submit_dt,
+            o.order_id
+        FROM order_items oi
+        JOIN orders o
+          ON o.order_id = oi.order_id
+        WHERE o.scout_id = :scout_id
+
+        UNION ALL
+
+        SELECT
+            oi.cookie_name,
+            oi.qty_boxes,
+            o.order_type,
+            o.submit_dt,
+            o.order_id
+        FROM order_items oi
+        JOIN orders o
+          ON o.order_id = oi.order_id
+        WHERE o.scout_id IS NULL
+          
+    """
+
+    return fetch_all(
+        sql,
+        {
+            "scout_id": scout_id,
+            "first_name": scout_first_name,
+            "last_name": scout_last_name,
+        },
+    )
+
 
 def get_order_header(order_id: str):
     return fetch_one("""
@@ -206,7 +491,7 @@ def insert_order_header(
     return order_id
 
 def insert_order_items(order_id, parent_id, scout_id, program_year, items):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.order_items (
             order_item_id,
             order_id,
@@ -225,7 +510,7 @@ def insert_order_items(order_id, parent_id, scout_id, program_year, items):
             :cookie_code,
             :quantity
         )
-    """)
+    """
 
     for code, qty in items.items():
         if qty != 0:
@@ -239,7 +524,7 @@ def insert_order_items(order_id, parent_id, scout_id, program_year, items):
             })
 
 def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.inventory_ledger (
             inventory_event_id,
             parent_id,
@@ -264,7 +549,7 @@ def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items)
             :order_id,
             now()
         )
-    """)
+    """
 
     
     for code, qty in items.items():
@@ -278,7 +563,7 @@ def insert_planned_inventory(parent_id, scout_id, program_year, order_id, items)
                 "order_id": str(order_id)
             })
 
-def bulk_insert_order_headers(engine, df):
+def bulk_insert_order_headers(df):
     sql = text("""
         INSERT INTO cookies_app.orders (
             order_id,
@@ -333,7 +618,7 @@ def bulk_insert_order_headers(engine, df):
 
     execute_many_sql(sql, payload)
 
-def bulk_insert_order_items(engine, df):
+def bulk_insert_order_items(df):
     # send in orders df, this will submit to dict lik {"TM": 4,"TT":2}
     sql = text("""
         INSERT INTO cookies_app.order_items (
@@ -373,7 +658,7 @@ def bulk_insert_order_items(engine, df):
 
     execute_many_sql(sql, payload)
 
-def bulk_insert_planned_inventory(engine, df):
+def bulk_insert_planned_inventory(df):
     sql = text("""
         INSERT INTO cookies_app.planned_inventory (
             inventory_id,

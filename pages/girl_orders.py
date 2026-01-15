@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import create_engine, text
 import pandas as pd
 
-from utils.app_utils import apputils as au, setup
+from utils.app_utils import apputils as au, setup, cookie_celebration
 from utils.order_utils import get_cookies_for_year, insert_order_header, insert_order_items, insert_planned_inventory
 from utils.db_utils import get_engine
 
@@ -90,7 +90,7 @@ def main():
     with st.form("order_form", clear_on_submit=True):
         order_type = st.selectbox(
             "Order Type",
-            ["Paper Order", "Dig. Cookie Delivery"]
+            ["Paper", "Digital"]
         )
 
         st.markdown("### Cookie Quantities")
@@ -154,6 +154,8 @@ def main():
 
             st.success(f"Order submitted successfully! Reference: {order_ref}")
             st.balloons()
+            # cookie_celebration()
+
 
 
 if __name__ == "__main__":

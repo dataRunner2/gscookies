@@ -6,7 +6,7 @@ from utils.app_utils import setup
 from utils.db_utils import get_all_scouts, require_admin
 from utils.order_utils import (
         aggregate_orders_by_cookie,
-        get_orders_for_scout_summary,
+        get_orders_for_scout,
     )
 
 import datetime
@@ -24,7 +24,7 @@ def init_ss():
 
 def main():
     require_admin()
-
+    year = ss.current_year
     # ----------------------------------
     # Scout Selection
     # ----------------------------------
@@ -56,26 +56,26 @@ def main():
     # Fetch Orders
     # ----------------------------------
     
+    orders_df = get_orders_for_scout(scout_id,year)
+    st.data_editor(orders_df)
 
-    orders_df = get_orders_for_scout_summary(scout_id)
-
-    if orders_df.empty:
+    if orders_df is None:
         st.warning("No orders found for this scout.")
-        return
+    
+    else:
+        summary_df = aggregate_orders_by_cookie(orders_df)
 
-    summary_df = aggregate_orders_by_cookie(orders_df)
+        total_boxes = int(summary_df["total_boxes"].sum())
+        st.metric("Total Boxes Sold", total_boxes)
 
-    total_boxes = int(summary_df["total_boxes"].sum())
-    st.metric("Total Boxes Sold", total_boxes)
+        st.subheader("Boxes by Cookie Type")
+        st.dataframe(summary_df, use_container_width=True)
 
-    st.subheader("Boxes by Cookie Type")
-    st.dataframe(summary_df, use_container_width=True)
-
-    with st.expander("View Individual Orders"):
-        st.dataframe(
-            orders_df.sort_values("submit_dt", ascending=False),
-            use_container_width=True,
-        )
+        with st.expander("View Individual Orders"):
+            st.dataframe(
+                orders_df.sort_values("submit_dt", ascending=False),
+                use_container_width=True,
+            )
 
 
 

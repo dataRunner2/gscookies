@@ -12,7 +12,8 @@ from PIL import Image
 import re
 from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime64_any_dtype
 from utils.db_utils import fetch_all, fetch_one, execute_sql
-from typing import Any, Iterable, Optional
+import random
+
 
 p = Path.cwd()
 
@@ -78,7 +79,7 @@ class setup:
 
         st.sidebar.page_link("Home.py", label='Account')
         st.sidebar.page_link('pages/training_reference.py',label='Training & Dates')
-        st.sidebar.page_link('pages/add_scouts.py',label='Add Scouts')
+        st.sidebar.page_link('pages/add_scouts.py',label='Add or Modify Scout Info')
         st.sidebar.page_link('pages/orders_overview.py',label='Troop Order Overview')  # all and admin content
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
@@ -101,7 +102,7 @@ class setup:
             st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
 
         if ss.super_admin:
-            st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
+            # st.sidebar.page_link('pages/admin_show_session.py',label='Manage Backups & SS')
             st.sidebar.page_link('pages/move_es_data.py',label='Move Data')
 
         st.sidebar.divider()
@@ -273,3 +274,52 @@ class apputils:
     def send_reset_sms(phone: str, code: str):
         # plug into Twilio later
         st.write(f"[SMS to {phone}] Reset code: {code}")
+
+
+
+def cookie_celebration(
+    message="🍪 Cookies coming your way! 🍪",
+    num_items=20
+):
+    emojis = ["🍪", "🍪", "🍪", "🎉", "✨"]
+
+    items = "".join(
+        f"<span class='float'>{random.choice(emojis)}</span>"
+        for _ in range(num_items)
+    )
+
+    html = f"""
+    <style>
+    .container {{
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        pointer-events: none;
+        z-index: 9999;
+        text-align: center;
+    }}
+
+    .float {{
+        position: relative;
+        display: inline-block;
+        font-size: 2.2rem;
+        animation: rise 4s ease-in forwards;
+        margin: 0 6px;
+    }}
+
+    @keyframes rise {{
+        0% {{ transform: translateY(0); opacity: 1; }}
+        100% {{ transform: translateY(-400px); opacity: 0; }}
+    }}
+    </style>
+
+    <div class="container">
+        <div style="font-size:1.4rem;font-weight:600;margin-bottom:12px;">
+            {message}
+        </div>
+        {items}
+    </div>
+    """
+
+    st.components.v1.html(html, height=0)

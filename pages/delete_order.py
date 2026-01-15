@@ -179,7 +179,7 @@ def main():
     with st.form("modify_order"):
         new_order_type = st.selectbox(
             "Order Type",
-            ["Paper Order", "Digital Cookie Girl Delivery"],
+            ["Paper", "Digital"],
             index=1 if is_digital(order.order_type) else 0
         )
 
