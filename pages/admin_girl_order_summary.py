@@ -3,10 +3,11 @@ from streamlit import session_state as ss
 import pandas as pd
 
 from utils.app_utils import setup
-from utils.db_utils import get_all_scouts, require_admin
+from utils.db_utils import require_admin
 from utils.order_utils import (
         aggregate_orders_by_cookie,
         get_orders_for_scout,
+        get_all_scouts
     )
 
 import datetime
