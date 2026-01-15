@@ -4,24 +4,13 @@ from datetime import datetime
 from decimal import Decimal
 
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from utils.app_utils import setup
+from utils.db_utils import get_engine
 
+engine = get_engine()
 
-# --------------------------------------------------
-# DB connection
-# --------------------------------------------------
-DB_HOST = "136.118.19.164"
-DB_PORT = "5432"
-DB_NAME = "cookies"
-DB_USER = "cookie_admin"
-DB_PASS = st.secrets["general"]["DB_PASSWORD"]
-
-engine = create_engine(
-    f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-    pool_pre_ping=True,
-)
 
 # --------------------------------------------------
 # Session init

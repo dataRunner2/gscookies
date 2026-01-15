@@ -80,6 +80,7 @@ def add_scout(parent_id, first_name, last_name, goals, award_preferences):
         RETURNING scout_id
     """
     engine = get_engine()
+    
     with engine.begin() as conn:
         result = conn.execute(
             text(sql),

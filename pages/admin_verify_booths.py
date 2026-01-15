@@ -4,17 +4,9 @@ from sqlalchemy import create_engine, text
 from streamlit import session_state as ss
 
 from utils.app_utils import setup
+from utils.db_utils import get_engine
 
-
-# -------------------------------
-# DB
-# -------------------------------
-engine = create_engine(
-    f"postgresql+psycopg2://cookie_admin:{st.secrets['general']['DB_PASSWORD']}@136.118.19.164:5432/cookies",
-    pool_pre_ping=True,
-)
-
-
+engine = get_engine()
 # -------------------------------
 # Guards
 # -------------------------------

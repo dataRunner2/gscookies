@@ -182,9 +182,6 @@ def load_jsonl_to_staging(
 
 
 
-RESET_EXPIRY_MINUTES = 15
-
-
 def generate_reset_code():
     return f"{secrets.randbelow(1_000_000):06d}"
 
