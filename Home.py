@@ -4,17 +4,19 @@ import os
 import pandas as pd
 import bcrypt
 from datetime import datetime
+import sqlalchemy as sa
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from utils.app_utils import apputils as au, setup
 from utils.db_utils import (
     verify_username_and_phone,
     reset_password_with_username_phone,
-    get_engine
+    get_engine, show_engine_conn
 )
 from utils.order_utils import get_scouts_byparent
 
 engine = get_engine()
+
 
 def init_ss():
     if 'scouts_dict' not in ss:
@@ -103,7 +105,7 @@ def main():
     # --------------------------------------------------
     # st.title("Cookie Tracker")
     st.caption("Troop43202 Parent portal for managing cookie orders")
-    # st.write("DB_PASSWORD loaded:", bool(st.secrets['general']['DB_PASSWORD']))
+    show_engine_conn()
 
 
     # --------------------------------------------------

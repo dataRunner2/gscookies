@@ -13,19 +13,22 @@ import pandas as pd
 # ==================================================
 # Database connection
 # ==================================================
-def get_engine() -> Engine:
+
+def get_engine():
     """
     Central Postgres engine.
     Uses Streamlit secrets.
     """
+    db = st.secrets["general"]
+
     return create_engine(
-        f"postgresql+psycopg2://"
-        f"{st.secrets['general']['DB_USER']}:"
-        f"{st.secrets['general']['DB_PASSWORD']}@"
-        f"{st.secrets['general']['DB_HOST']}:"
-        f"{st.secrets['general'].get('DB_PORT', 5432)}/"
-        f"{st.secrets['general']['DB_NAME']}",
-        pool_pre_ping=True
+        f"postgresql+psycopg2://{db['DB_USER']}:{db['DB_PASSWORD']}@"
+        f"{db['DB_HOST']}:{db['DB_PORT']}/{db['DB_NAME']}?sslmode={db['sslmode']}",
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=2,
+        pool_timeout=30,
+        pool_recycle=1800,
     )
 
 _ENGINE = None
@@ -109,15 +112,14 @@ def to_pacific(ts):
 
 
 def show_engine_conn():
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT
-                current_database() AS db,
-                current_user       AS user,
-                current_schema()   AS schema;
-        """)).mappings().first()
+    row = fetch_one("""
+        SELECT
+            current_database() AS db,
+            current_user       AS user,
+            current_schema()   AS schema
+    """)
 
-    st.write("Connected DB info:", result)
+    st.write("Connected DB info:", row)
 
 def mk_sql_table(table_name='stg_es_scouts_docs'):
     with engine.begin() as conn:
