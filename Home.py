@@ -15,8 +15,6 @@ from utils.db_utils import (
 )
 from utils.order_utils import get_scouts_byparent
 
-engine = get_engine()
-
 
 def init_ss():
     if 'scouts_dict' not in ss:
@@ -243,7 +241,7 @@ def main():
 
 
 if __name__ == '__main__':
-
+    engine = get_engine()
     setup.config_site(page_title="Home")
     # Initialization
     init_ss()
