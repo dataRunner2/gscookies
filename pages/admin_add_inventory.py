@@ -72,7 +72,7 @@ def main():
         row2.number_input(label='Samoas',step=1,min_value=-5, value=0, key='inv_sam')
         row2.number_input(label='Tagalongs',step=1,min_value=-5, value=0, key='inv_tags')
         row2.number_input(label='Thin Mints',step=1,min_value=-5, value=0, key='inv_tmint')
-        row2.number_input(label="S'mores",step=1,min_value=-5, value=0, key='inv_smr')
+        row2.number_input(label="Exploremores",step=1,min_value=-5, value=0, key='inv_smr')
         row2.number_input(label='Toffee-Tastic',step=1,min_value=-5, value=0, key='inv_toff')
         
  

@@ -72,8 +72,8 @@ def main():
         **Jan 5** – Digital Cookie setup email  
         **Jan 6 – Feb 1** – Pre-orders  
         **Feb 1** – Initial Orders Due  
-        **Feb 13–24** – Cookies arrive at Maple Valley Distribution *(Volunteers Needed)*  
-        **Feb 26 – Mar 15** – Cookie Booths (3 weekends)  
+        **Feb 14** – Cookies arrive at Maple Valley Distribution *(Volunteers Needed)*  
+        **Feb 26 – Mar 15** – Cookie Booths (3 weekends)
         **Mar 9** – Last in-person delivery & initial money due  
         **Mar 15** – Digital Cookie ends  
         **Mar 17** – Family money due  
@@ -157,7 +157,7 @@ def main():
             - TF: Trefoils
             - SAM: Samoas
             - Tags: Tagalongs
-            - Smr: S’mores
+            - EXP: Exploremores
             - TT:Toffee-tastic
             - OpC: Operation Cookie Donation
         """)

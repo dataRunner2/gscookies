@@ -42,7 +42,7 @@ def main():
     orders = get_orders_for_scout(scout.scout_id, current_year)
     if orders.empty:
         st.info("No orders found for this scout and year.")
-        
+        st.stop()
 
     # --------------------------------------------------
     # SUMMARY METRICS
