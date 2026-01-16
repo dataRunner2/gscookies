@@ -103,7 +103,7 @@ def main():
     # --------------------------------------------------
     # st.title("Cookie Tracker")
     st.caption("Troop43202 Parent portal for managing cookie orders")
-    show_engine_conn()
+    # show_engine_conn()
 
 
     # --------------------------------------------------
