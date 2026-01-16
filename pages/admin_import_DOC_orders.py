@@ -289,6 +289,8 @@ def main():
     if st.button("Import Digitals", type="primary"):
         st.success(f"Imported {len(new_orders)} digital orders 🎉")
         bulk_insert_order_headers(new_orders)
+        st.write("Columns in new_orders:", new_orders.columns.tolist())
+        st.write("Sample row:", new_orders.iloc[0].to_dict() if not new_orders.empty else "Empty")
         bulk_insert_order_items(new_orders)
         
         st.success(f"Orders submitted successfully!")
