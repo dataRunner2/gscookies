@@ -345,7 +345,11 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
                  AND o.submit_dt <  make_date(o.program_year, 2, 1))
             ) AS "initialOrder",
             
-            (s.first_name || ' ' || s.last_name) AS "scoutName",
+            COALESCE(
+                (s.first_name || ' ' || s.last_name),
+                (p.parent_firstname || ' ' || p.parent_lastname),
+                ''
+            ) AS "scoutName",
             
             COALESCE(paid.paid_amount, 0) AS "paidAmount",
             
@@ -358,6 +362,8 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
          AND oi.program_year = o.program_year
         LEFT JOIN cookies_app.scouts s
           ON s.scout_id = o.scout_id
+        LEFT JOIN cookies_app.parents p
+          ON p.parent_id = o.parent_id
         LEFT JOIN paid
           ON paid.order_id = o.order_id
         {year_filter}
@@ -1162,8 +1168,8 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None):
             s.scout_id,
             (s.first_name || ' ' || s.last_name) AS scout_name,
 
-            COALESCE(o.guardian_name, p.parent_firstname || ' ' || p.parent_lastname) AS guardian_name,
-            COALESCE(o.guardian_phone, p.parent_phone) AS guardian_phone,
+            p.parent_firstname || ' ' || p.parent_lastname AS guardian_name,
+            p.parent_phone AS guardian_phone,
 
             oi.cookie_code,
             oi.quantity,
@@ -1332,4 +1338,95 @@ def fetch_existing_external_orders(order_source: str) -> set:
         WHERE order_source = :source
     """, {"source": order_source})
     return [r['external_order_id'] for r in rows]
+
+
+# =====================================================
+# Safe deletion utilities (for cleanup/admin use)
+# =====================================================
+
+def delete_order_cascade(order_id: str) -> bool:
+    """
+    Delete an order and all related data in the correct order.
     
+    Note: If CASCADE DELETE constraints are enabled in the database,
+    only the final DELETE FROM orders is needed. This function provides
+    a fallback for manual cascading if constraints aren't set up.
+    
+    Args:
+        order_id: UUID of the order to delete
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Delete in reverse dependency order
+        # With CASCADE DELETE enabled, these are automatic, but safe to call anyway
+        execute_sql("DELETE FROM cookies_app.inventory_ledger WHERE related_order_id = :oid", {"oid": order_id})
+        execute_sql("DELETE FROM cookies_app.money_ledger WHERE related_order_id = :oid", {"oid": order_id})
+        execute_sql("DELETE FROM cookies_app.order_items WHERE order_id = :oid", {"oid": order_id})
+        execute_sql("DELETE FROM cookies_app.orders WHERE order_id = :oid", {"oid": order_id})
+        return True
+    except Exception as e:
+        print(f"Error deleting order {order_id}: {e}")
+        return False
+
+
+def delete_booth_cascade(booth_id: str) -> bool:
+    """
+    Delete a booth and all related data in the correct order.
+    
+    With CASCADE DELETE constraints enabled, deleting the booth will
+    automatically delete:
+    - booth_scouts entries
+    - booth_inventory_plan entries
+    - orders with this booth_id (and their cascading deletes)
+    
+    Args:
+        booth_id: UUID of the booth to delete
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # With CASCADE DELETE enabled, this single delete handles everything
+        execute_sql("DELETE FROM cookies_app.booths WHERE booth_id = :bid", {"bid": booth_id})
+        return True
+    except Exception as e:
+        print(f"Error deleting booth {booth_id}: {e}")
+        return False
+
+
+def delete_booth_cascade_manual(booth_id: str) -> bool:
+    """
+    Delete a booth and all related data manually (if CASCADE not enabled).
+    
+    This is a fallback version that manually deletes all related data
+    in the correct order. Use this if CASCADE DELETE constraints
+    haven't been applied to the database.
+    
+    Args:
+        booth_id: UUID of the booth to delete
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # First, get all orders for this booth
+        booth_orders = fetch_all(
+            "SELECT order_id FROM cookies_app.orders WHERE booth_id = :bid",
+            {"bid": booth_id}
+        )
+        
+        # Delete each booth order with cascade
+        for order in booth_orders:
+            delete_order_cascade(str(order['order_id']))
+        
+        # Now delete booth-specific data
+        execute_sql("DELETE FROM cookies_app.booth_inventory_plan WHERE booth_id = :bid", {"bid": booth_id})
+        execute_sql("DELETE FROM cookies_app.booth_scouts WHERE booth_id = :bid", {"bid": booth_id})
+        execute_sql("DELETE FROM cookies_app.booths WHERE booth_id = :bid", {"bid": booth_id})
+        return True
+    except Exception as e:
+        print(f"Error deleting booth {booth_id}: {e}")
+        return False
+

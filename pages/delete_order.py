@@ -6,8 +6,8 @@ from decimal import Decimal
 from sqlalchemy import create_engine, text
 
 from utils.app_utils import setup
-
 from utils.db_utils import get_engine
+from utils.order_utils import delete_order_cascade
 
 engine = get_engine()
 
@@ -82,26 +82,11 @@ def update_order(order_id, order_type, comments):
         })
 
 
+# NOTE: delete_order function now uses utility from order_utils
+# Kept for backwards compatibility, but delegates to the shared utility
 def delete_order(order_id):
-    sql_items = text("""
-        DELETE FROM cookies_app.order_items
-        WHERE order_id = :order_id
-    """)
-
-    sql_inventory = text("""
-        DELETE FROM cookies_app.inventory_ledger
-        WHERE related_order_id = :order_id
-    """)
-
-    sql_order = text("""
-        DELETE FROM cookies_app.orders
-        WHERE order_id = :order_id
-    """)
-
-    with engine.begin() as conn:
-        conn.execute(sql_items, {"order_id": order_id})
-        conn.execute(sql_inventory, {"order_id": order_id})
-        conn.execute(sql_order, {"order_id": order_id})
+    """Delete an order using the shared CASCADE delete utility."""
+    return delete_order_cascade(str(order_id))
 
 
 # --------------------------------------------------

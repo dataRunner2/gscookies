@@ -5,7 +5,7 @@ from datetime import time, datetime, timedelta
 from uuid import uuid4
 from utils.app_utils import setup
 from utils.db_utils import require_admin, execute_sql, fetch_all
-from utils.order_utils import get_order_items, get_cookies_for_year
+from utils.order_utils import delete_booth_cascade
 
 # --------------------------------------------------
 # Session init
@@ -143,11 +143,12 @@ def main():
 
     st.subheader("Booth Administration")
 
-    tab_add, tab_print, tab_verify, tab_delete = st.tabs([
+    tab_add, tab_view, tab_print, tab_verify, tab_delete = st.tabs([
         "➕ Add / Manage Booths",
+        "📋 View All Booths",
         "🖨️ Print Booth Sheet",
         "✅ Verify Booth",
-        "🗑️ Delete Booth"
+        "🗑️ Delete Booth",
     ])
 
     # ==================================================
@@ -198,7 +199,7 @@ def main():
 
         col1, col2,col3, col4 = st.columns(4)
         location = col1.text_input("Location")
-        booth_date = col2.date_input("Booth Date")
+        booth_date = col2.date_input("Booth Date", format="MM/DD/YYYY")
 
         start_time = col3.time_input(
             "Start Time",
@@ -260,59 +261,75 @@ def main():
         )
 
         if st.button("Create Booth"):
-            booth_id = str(uuid4())
-            
-            # Create booth
-            execute_sql("""
-                INSERT INTO cookies_app.booths (
-                    booth_id, location, booth_date,
-                    start_time, end_time,
-                    quantity_multiplier, weekend_number,
-                    created_at
-                )
-                VALUES (
-                    :bid, :loc, :date,
-                    :start, :end,
-                    :mult, :wk,
-                    now()
-                )
+            # Check for duplicate booth (same location, date, and start time)
+            existing = fetch_all("""
+                SELECT booth_id, location
+                FROM cookies_app.booths
+                WHERE location = :loc
+                  AND booth_date = :date
+                  AND start_time = :start
             """, {
-                "bid": booth_id,
                 "loc": location,
                 "date": booth_date,
-                "start": start_time,
-                "end": end_time,
-                "mult": multiplier,
-                "wk": weekend_number,
+                "start": start_time
             })
-
-            # Add planned inventory
-            for code, qty in planned.items():
+            
+            if existing:
+                st.error(f"⚠️ A booth already exists for {location} on {booth_date.strftime('%b %d')} at {start_time.strftime('%I:%M %p')}. Please use a different location, date, or time.")
+            else:
+                booth_id = str(uuid4())
+                
+                # Create booth
                 execute_sql("""
-                    INSERT INTO cookies_app.booth_inventory_plan (
-                        booth_id, program_year,
-                        cookie_code, planned_quantity
+                    INSERT INTO cookies_app.booths (
+                        booth_id, location, booth_date,
+                        start_time, end_time,
+                        quantity_multiplier, weekend_number,
+                        created_at
                     )
-                    VALUES (:bid, :year, :code, :qty)
+                    VALUES (
+                        :bid, :loc, :date,
+                        :start, :end,
+                        :mult, :wk,
+                        now()
+                    )
                 """, {
                     "bid": booth_id,
-                    "year": ss.current_year,
-                    "code": code,
-                    "qty": qty,
+                    "loc": location,
+                    "date": booth_date,
+                    "start": start_time,
+                    "end": end_time,
+                    "mult": multiplier,
+                    "wk": weekend_number,
                 })
 
-            # Assign scouts
-            for sid in scout_ids:
-                execute_sql("""
-                    INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
-                    VALUES (:bid, :sid)
-                """, {
-                    "bid": booth_id,
-                    "sid": sid,
-                })
+                # Add planned inventory
+                for code, qty in planned.items():
+                    execute_sql("""
+                        INSERT INTO cookies_app.booth_inventory_plan (
+                            booth_id, program_year,
+                            cookie_code, planned_quantity
+                        )
+                        VALUES (:bid, :year, :code, :qty)
+                    """, {
+                        "bid": booth_id,
+                        "year": ss.current_year,
+                        "code": code,
+                        "qty": qty,
+                    })
 
-            st.success("Booth created successfully.")
-            st.rerun()
+                # Assign scouts
+                for sid in scout_ids:
+                    execute_sql("""
+                        INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
+                        VALUES (:bid, :sid)
+                    """, {
+                        "bid": booth_id,
+                        "sid": sid,
+                    })
+
+                st.toast(f"✅ Booth created: {location} on {booth_date.strftime('%b %d')} at {start_time.strftime('%I:%M %p')}", icon="🎉")
+                st.rerun()
 
     # ==================================================
     # TAB 2 — PRINT BOOTH
@@ -324,7 +341,6 @@ def main():
         
         if not booths:
             st.info("No booths have been created yet.")
-            st.stop()
         
         booth = st.selectbox(
             "Select Booth",
@@ -337,17 +353,23 @@ def main():
         )
 
         cookies = fetch_all("""
-            SELECT display_name, price_per_box
-            FROM cookies_app.cookie_years
-            WHERE program_year = :year
-              AND active = true
-            ORDER BY display_order
-        """, {"year": booth.booth_date.year})
+            SELECT 
+                cy.display_name, 
+                cy.price_per_box,
+                bip.planned_quantity
+            FROM cookies_app.booth_inventory_plan bip
+            JOIN cookies_app.cookie_years cy 
+                ON cy.cookie_code = bip.cookie_code 
+                AND cy.program_year = bip.program_year
+            WHERE bip.booth_id = :bid
+              AND bip.program_year = :year
+            ORDER BY cy.display_order
+        """, {"bid": booth.booth_id, "year": ss.current_year})
 
         st.table([
             {
                 "Cookie": c.display_name,
-                "Start Qty": "",
+                "Start Qty": c.planned_quantity,
                 "End Qty": "",
                 "Sold": "",
                 "Price": f"${c.price_per_box:.2f}",
@@ -400,164 +422,156 @@ def main():
 
         if not booths:
             st.success("No booths awaiting verification.")
-            st.stop()
-
-        booth = st.selectbox(
-            "Select Booth",
-            booths,
-            format_func=lambda b: (
-                f"{b.booth_date.strftime('%b %d')} "
-                f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
-                f"{b.location}"
-            )
-        )
-
-        # ----------------------------------
-        # Load planned inventory (START)
-        # ----------------------------------
-        items = fetch_all("""
-            SELECT
-                bip.cookie_code,
-                cy.display_name,
-                cy.price_per_box,
-                bip.planned_quantity AS start_qty
-            FROM cookies_app.booth_inventory_plan bip
-            JOIN cookies_app.cookie_years cy
-            ON cy.cookie_code = bip.cookie_code
-            AND cy.program_year = bip.program_year
-            WHERE bip.booth_id = :bid
-            AND bip.program_year = :year
-            ORDER BY cy.display_order
-        """, {
-            "bid": booth.booth_id,
-            "year": booth.program_year
-        })
-
-        if not items:
-            st.warning("No planned inventory found for this booth.")
-            st.stop()
-
-        # ----------------------------------
-        # Cookie Count Table (Admin Editable)
-        # ----------------------------------
-        st.markdown("### 🍪 Cookie Counts")
-
-        header = st.columns([3, 2, 2, 2, 2])
-        header[0].markdown("**Cookie**")
-        header[1].markdown("**Start**")
-        header[2].markdown("**End**")
-        header[3].markdown("**Sold**")
-        header[4].markdown("**Revenue**")
-
-        total_sold = 0
-        expected_revenue = Decimal("0.00")
-
-        verified_items = []
-
-        for i in items:
-            row = st.columns([3, 2, 2, 2, 2])
-
-            row[0].markdown(f"**{i.display_name}**  \n${Decimal(i.price_per_box):.2f}")
-
-            start_qty = int(i.start_qty)
-
-            end_qty = row[2].number_input(
-                label="",
-                min_value=0,
-                value=0,
-                step=1,
-                key=f"end_{i.cookie_code}"
+        else:
+            booth = st.selectbox(
+                "Select Booth",
+                booths,
+                format_func=lambda b: (
+                    f"{b.booth_date.strftime('%b %d')} "
+                    f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
+                    f"{b.location}"
+                )
             )
 
-            row[1].markdown(f"{start_qty}")
-
-            sold = start_qty - end_qty
-            sold = max(sold, 0)
-
-            revenue = Decimal(sold) * Decimal(i.price_per_box)
-
-            row[3].markdown(f"{sold}")
-            row[4].markdown(f"${revenue:.2f}")
-
-            total_sold += sold
-            expected_revenue += revenue
-
-            verified_items.append({
-                "cookie_code": i.cookie_code,
-                "sold": sold
+            # ----------------------------------
+            # Load planned inventory (START)
+            # ----------------------------------
+            items = fetch_all("""
+                SELECT
+                    bip.cookie_code,
+                    cy.display_name,
+                    cy.price_per_box,
+                    bip.planned_quantity AS start_qty
+                FROM cookies_app.booth_inventory_plan bip
+                JOIN cookies_app.cookie_years cy
+                ON cy.cookie_code = bip.cookie_code
+                AND cy.program_year = bip.program_year
+                WHERE bip.booth_id = :bid
+                AND bip.program_year = :year
+                ORDER BY cy.display_order
+            """, {
+                "bid": booth.booth_id,
+                "year": booth.program_year
             })
 
-        # ----------------------------------
-        # Totals
-        # ----------------------------------
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        col1.metric("Total Boxes Sold", total_sold)
-        col2.metric("Expected Revenue", f"${expected_revenue:.2f}")
+            if not items:
+                st.warning("No planned inventory found for this booth.")
+            else:
+                st.markdown(f"### Booth: {booth.location} on {booth.booth_date.strftime('%b %d, %Y')}")
+                # ----------------------------------
+                # Cookie Count Table (Admin Editable)
+                # ----------------------------------
+                st.markdown("### 🍪 Cookie Counts")
 
-        # ----------------------------------
-        # Money Reconciliation
-        # ----------------------------------
-        st.markdown("---")
-        st.markdown("### 💵 Money Reconciliation")
+                header = st.columns([3, 2, 2, 2, 2])
+                header[0].markdown("**Cookie**")
+                header[1].markdown("**Start**")
+                header[2].markdown("**End**")
+                header[3].markdown("**Sold**")
+                header[4].markdown("**Revenue**")
 
-        starting_cash = Decimal(booth.starting_cash or 0)
-        ending_cash = Decimal(booth.ending_cash or 0)
-        square_total = Decimal(booth.square_total or 0)
+                total_sold = 0
+                expected_revenue = Decimal("0.00")
 
-        ending_money = ending_cash + square_total
-        actual_revenue = ending_money - starting_cash
-        diff = actual_revenue - expected_revenue
+                verified_items = []
 
-        st.write(f"Starting Cash: ${starting_cash:.2f}")
-        st.write(f"Ending Cash: ${ending_cash:.2f}")
-        st.write(f"Square / Credit: ${square_total:.2f}")
-        st.write(f"Ending Money: ${ending_money:.2f}")
-        st.write(f"Actual Revenue: ${actual_revenue:.2f}")
-        st.write(f"Over / Under: ${diff:.2f}")
+                for i in items:
+                    row = st.columns([3, 2, 2, 2, 2])
 
-        opc_boxes = int(
-            (diff / Decimal("6")).to_integral_value(rounding=ROUND_FLOOR)
-            if diff > 0 else 0
-        )
+                    row[0].markdown(f"**{i.display_name}**  \n${Decimal(i.price_per_box):.2f}")
 
-        st.write(f"**OPC Boxes:** {opc_boxes}")
+                    start_qty = int(i.start_qty)
 
-        # ----------------------------------
-        # Verification Controls
-        # ----------------------------------
-        st.markdown("---")
-        st.markdown("### ✅ Verification")
+                    end_qty = row[2].number_input(
+                        label="",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key=f"end_{i.cookie_code}"
+                    )
 
-        verify_cookies = st.checkbox("I verify cookie counts")
-        verify_money = st.checkbox("I verify money totals")
+                    row[1].markdown(f"{start_qty}")
 
-        notes = st.text_area("Admin Notes (required)", height=80)
+                    sold = start_qty - end_qty
+                    sold = max(sold, 0)
 
-        admin_name = ss.get("user_name", "Admin")
+                    revenue = Decimal(sold) * Decimal(i.price_per_box)
 
-        if st.button("Booth Verified"):
-            if not verify_cookies or not verify_money:
-                st.error("Both verification checkboxes must be checked.")
-                st.stop()
+                    row[3].markdown(f"{sold}")
+                    row[4].markdown(f"${revenue:.2f}")
 
-            if not notes.strip():
-                st.error("Verification notes are required.")
-                st.stop()
+                    total_sold += sold
+                    expected_revenue += revenue
 
-            verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
+                    verified_items.append({
+                        "cookie_code": i.cookie_code,
+                        "sold": sold
+                    })
 
-            st.success(f"Booth verified by {admin_name}. Inventory updated.")
-            st.rerun()
+                # ----------------------------------
+                # Totals
+                # ----------------------------------
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                col1.metric("Total Boxes Sold", total_sold)
+                col2.metric("Expected Revenue", f"${expected_revenue:.2f}")
+
+                # ----------------------------------
+                # Money Reconciliation
+                # ----------------------------------
+                st.markdown("---")
+                st.markdown("### 💵 Money Reconciliation")
+
+                starting_cash = Decimal(booth.starting_cash or 0)
+                ending_cash = Decimal(booth.ending_cash or 0)
+                square_total = Decimal(booth.square_total or 0)
+
+                ending_money = ending_cash + square_total
+                actual_revenue = ending_money - starting_cash
+                diff = actual_revenue - expected_revenue
+
+                st.write(f"Starting Cash: ${starting_cash:.2f}")
+                st.write(f"Ending Cash: ${ending_cash:.2f}")
+                st.write(f"Square / Credit: ${square_total:.2f}")
+                st.write(f"Ending Money: ${ending_money:.2f}")
+                st.write(f"Actual Revenue: ${actual_revenue:.2f}")
+                st.write(f"Over / Under: ${diff:.2f}")
+
+                opc_boxes = int(
+                    (diff / Decimal("6")).to_integral_value(rounding=ROUND_FLOOR)
+                    if diff > 0 else 0
+                )
+
+                st.write(f"**OPC Boxes:** {opc_boxes}")
+
+                # ----------------------------------
+                # Verification Controls
+                # ----------------------------------
+                st.markdown("---")
+                st.markdown("### ✅ Verification")
+
+                verify_cookies = st.checkbox("I verify cookie counts")
+                verify_money = st.checkbox("I verify money totals")
+
+                notes = st.text_area("Admin Notes (required)", height=80)
+
+                admin_name = ss.get("user_name", "Admin")
+
+                if st.button("Booth Verified"):
+                    if not verify_cookies or not verify_money:
+                        st.error("Both verification checkboxes must be checked.")
+                    elif not notes.strip():
+                        st.error("Verification notes are required.")
+                    else:
+                        verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
+                        st.success(f"Booth verified by {admin_name}. Inventory updated.")
+                        st.rerun()
 
     # ==================================================
     # TAB 4 — DELETE BOOTH
     # ==================================================
     with tab_delete:
         try:
-            st.title("DELETE BOOTH TAB - YOU ARE HERE")
-            st.error("THIS IS A TEST - IF YOU SEE THIS, THE TAB IS WORKING")
-            
             st.markdown("## 🗑️ Delete Booth")
 
             st.warning("⚠️ Deleting a booth will permanently delete the booth and all associated data (inventory, money records, etc.). This action cannot be undone.")
@@ -574,13 +588,9 @@ def main():
                 ORDER BY b.booth_date DESC, b.start_time
             """)
             
-            st.write(f"DEBUG: all_booths type = {type(all_booths)}")
-            st.write(f"DEBUG: all_booths length = {len(all_booths) if all_booths else 'None'}")
-            
             if not all_booths:
                 st.info("No booths available for deletion.")
             else:
-                st.success(f"Found {len(all_booths)} booth(s)")
                 booth = st.selectbox(
                     "Select Booth to Delete",
                     all_booths,
@@ -607,21 +617,96 @@ def main():
                         if not confirm or not confirm_permanent:
                             st.error("Please confirm both checkboxes before deleting.")
                         else:
-                            try:
-                                execute_sql("""
-                                    DELETE FROM cookies_app.booths
-                                    WHERE booth_id = :bid
-                                """, {"bid": booth.booth_id})
-
-                                st.success(f"✓ Booth on {booth.booth_date.strftime('%b %d')} at {booth.location} has been deleted.")
-                                st.balloons()
+                            # Use CASCADE DELETE utility function
+                            success = delete_booth_cascade(str(booth.booth_id))
+                            
+                            if success:
+                                st.toast(f"✓ Deleted: {booth.location} on {booth.booth_date.strftime('%b %d')}", icon="🗑️")
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Error deleting booth: {str(e)}")
-        except Exception as e:
-            st.error(f"EXCEPTION IN DELETE TAB: {str(e)}")
+                            else:
+                                st.error("Failed to delete booth. Check logs for details.")
+        except Exception as ex:
+            st.error(f"🚨 EXCEPTION: {str(ex)}")
             import traceback
             st.code(traceback.format_exc())
+
+    # ==================================================
+    # TAB 5 — VIEW ALL BOOTHS
+    # ==================================================
+    with tab_view:
+        st.markdown("## 📋 All Booths")
+        
+        booths = fetch_all("""
+            SELECT
+                b.booth_id,
+                b.location,
+                b.booth_date,
+                b.start_time,
+                b.end_time,
+                b.weekend_number,
+                b.quantity_multiplier,
+                b.created_at
+            FROM cookies_app.booths b
+            ORDER BY b.booth_date DESC, b.start_time
+        """)
+        
+        if not booths:
+            st.info("No booths have been created yet.")
+        else:
+            st.write(f"**Total Booths:** {len(booths)}")
+            
+            for booth in booths:
+                with st.expander(f"{booth.location} - {booth.booth_date.strftime('%b %d, %Y')} {booth.start_time.strftime('%I:%M %p')}–{booth.end_time.strftime('%I:%M %p')}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**Booth ID:** `{booth.booth_id}`")
+                        st.write(f"**Location:** {booth.location}")
+                        st.write(f"**Date:** {booth.booth_date.strftime('%A, %B %d, %Y')}")
+                        st.write(f"**Time:** {booth.start_time.strftime('%I:%M %p')} - {booth.end_time.strftime('%I:%M %p')}")
+                    
+                    with col2:
+                        st.write(f"**Weekend #:** {booth.weekend_number}")
+                        st.write(f"**Multiplier:** {float(booth.quantity_multiplier):.0%}")
+                        st.write(f"**Created:** {booth.created_at.strftime('%b %d, %Y %I:%M %p')}")
+                    
+                    # Get planned inventory
+                    inventory = fetch_all("""
+                        SELECT
+                            bip.cookie_code,
+                            cy.display_name,
+                            bip.planned_quantity
+                        FROM cookies_app.booth_inventory_plan bip
+                        JOIN cookies_app.cookie_years cy
+                        ON cy.cookie_code = bip.cookie_code
+                        AND cy.program_year = bip.program_year
+                        WHERE bip.booth_id = :bid
+                        ORDER BY cy.display_order
+                    """, {"bid": booth.booth_id})
+                    
+                    if inventory:
+                        st.markdown("**Planned Inventory:**")
+                        inv_cols = st.columns(3)
+                        for idx, item in enumerate(inventory):
+                            col = inv_cols[idx % 3]
+                            col.write(f"**{item.cookie_code}:** {item.planned_quantity} boxes")
+                        
+                        total_boxes = sum(item.planned_quantity for item in inventory)
+                        st.write(f"**Total Boxes:** {total_boxes}")
+                    
+                    # Get assigned scouts
+                    scouts = fetch_all("""
+                        SELECT s.first_name, s.last_name
+                        FROM cookies_app.booth_scouts bs
+                        JOIN cookies_app.scouts s ON bs.scout_id = s.scout_id
+                        WHERE bs.booth_id = :bid
+                        ORDER BY s.last_name, s.first_name
+                    """, {"bid": booth.booth_id})
+                    
+                    if scouts:
+                        st.markdown("**Assigned Scouts:**")
+                        scout_names = ", ".join([f"{s.first_name} {s.last_name}" for s in scouts])
+                        st.write(scout_names)
 
 # --------------------------------------------------
 if __name__ == "__main__":

@@ -49,8 +49,6 @@ def main():
 
     if selected_name:
         scout_id = scout_options[selected_name]
-        st.write(scout_id)
-        st.write(selected_name)
         first_name=selected_name.split(' ')[0]
         last_name= selected_name.split(' ')[1]
 
@@ -59,7 +57,6 @@ def main():
     # ----------------------------------
     
     orders_df = get_orders_for_scout_summary(scout_id)
-    st.data_editor(orders_df)
 
     if orders_df.empty:
         st.warning("No orders found for this scout.")

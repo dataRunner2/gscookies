@@ -81,27 +81,40 @@ def main():
     meta_cols = {'orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
                  'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
                  'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paymentStatus', 'paidAmount'}
+    
+    # Get all cookie columns (includes configured cookies + any others like DON)
     cookie_cols = [col for col in orders.columns if col not in meta_cols]
+    # Sort alphabetically to ensure consistent display (DON will be with other codes)
+    cookie_cols = sorted(cookie_cols)
     
     # Split into distributed (booth validated or picked up) vs pending
     distributed_mask = orders['orderStatus'].isin(['PICKED_UP', 'BOOTH_VALIDATED'])
     distributed_orders = orders[distributed_mask]
     pending_orders = orders[~distributed_mask]
     
+    # Further split pending into booth and scout orders
+    booth_pending_mask = (orders['orderType'] == 'BOOTH') & (~distributed_mask)
+    scout_pending_mask = (orders['orderType'] != 'BOOTH') & (~distributed_mask)
+    booth_pending_orders = orders[booth_pending_mask]
+    scout_pending_orders = orders[scout_pending_mask]
+    
     cookie_totals = {}
     cookie_distributed = {}
-    cookie_pending = {}
+    cookie_booth_pending = {}
+    cookie_scout_pending = {}
     
     for col in cookie_cols:
         if col in orders.columns:
             total = orders[col].fillna(0).sum()
             distributed = distributed_orders[col].fillna(0).sum()
-            pending = pending_orders[col].fillna(0).sum()
+            booth_pending = booth_pending_orders[col].fillna(0).sum()
+            scout_pending = scout_pending_orders[col].fillna(0).sum()
             
             if total > 0:
                 cookie_totals[col] = int(total)
                 cookie_distributed[col] = int(distributed)
-                cookie_pending[col] = int(pending)
+                cookie_booth_pending[col] = int(booth_pending)
+                cookie_scout_pending[col] = int(scout_pending)
 
     for _, o in orders.iterrows():
         order_type = str(o.get('orderType', '')).lower()
@@ -168,14 +181,26 @@ def main():
     st.markdown("### 🍪 Cookies Sold by Type")
 
     if cookie_totals:
-        # Pending row
-        st.markdown("#### ⏳ Pending")
+        # Booth Pending row
+        st.markdown("#### ⏳ Booth Pending")
         cols = st.columns(len(cookie_totals))
         for col, cookie_code in zip(cols, cookie_totals.keys()):
             with col:
-                pending_qty = cookie_pending.get(cookie_code, 0)
-                pct = (pending_qty / total_boxes * 100) if total_boxes > 0 else 0
-                st.metric(cookie_code, pending_qty)
+                booth_pending_qty = cookie_booth_pending.get(cookie_code, 0)
+                pct = (booth_pending_qty / total_boxes * 100) if total_boxes > 0 else 0
+                st.metric(cookie_code, booth_pending_qty)
+                st.caption(f"{pct:.1f}% of total")
+        
+        st.markdown("")  # spacing
+
+        # Scout Orders Pending row
+        st.markdown("#### ⏳ Scout Orders Pending")
+        cols = st.columns(len(cookie_totals))
+        for col, cookie_code in zip(cols, cookie_totals.keys()):
+            with col:
+                scout_pending_qty = cookie_scout_pending.get(cookie_code, 0)
+                pct = (scout_pending_qty / total_boxes * 100) if total_boxes > 0 else 0
+                st.metric(cookie_code, scout_pending_qty)
                 st.caption(f"{pct:.1f}% of total")
         
         st.markdown("")  # spacing

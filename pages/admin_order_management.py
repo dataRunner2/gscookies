@@ -108,6 +108,10 @@ def main():
         st.info("No orders found.")
         return
 
+    # Clean up blank orderType values (fill with empty string so selectbox works)
+    if "orderType" in df_all.columns:
+        df_all["orderType"] = df_all["orderType"].fillna("")
+
     # ---------------- Filters ----------------
     st.subheader("Filters")
 
@@ -136,23 +140,30 @@ def main():
         df = df[df["orderStatus"].isin(status_filter)]
 
     if scout_filter:
-        df = df[df["scoutName"].isin(scout_filter)]
+        # Make sure filter values are also cleaned for comparison
+        df = df[df["scoutName"].str.strip().isin(scout_filter)]
 
     if initial_only and "initialOrder" in df.columns:
         df = df[df["initialOrder"] == True]
 
-    df = apputils.filter_dataframe(df)
-
-    # ---------------- Columns ----------------
+    # Get all cookie columns BEFORE filtering (to include DON and other codes)
+    meta_cols = {'orderId', 'program_year', 'scoutName', 'orderType', 'orderStatus', 'paymentStatus', 
+                 'addEbudde', 'initialOrder', 'comments', 'orderAmount', 'orderQtyBoxes',
+                 'submit_dt', 'boothId', 'verifiedDigitalCookie'}
+    actual_cookie_cols = [c for c in df.columns if c not in meta_cols]
     cookie_codes = get_cookie_codes_for_year(int(ss.current_year)) or []
-    cookie_cols = [c for c in cookie_codes if c in df.columns]
+    # Include configured cookies (even if not in current data) + actual data columns
+    cookie_cols = list(dict.fromkeys(cookie_codes + actual_cookie_cols))
+    
+    # Build default columns - include all configured cookies in the order they're configured
+    default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + cookie_codes
 
-    default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + cookie_cols
+    df = apputils.filter_dataframe(df)
 
     column_choices = st.multiselect(
         "Columns",
         options=list(df.columns),
-        default=default_cols,
+        default=[c for c in default_cols if c in df.columns],
     )
 
     if "orderId" not in column_choices:
@@ -186,7 +197,7 @@ def main():
             "comments": st.column_config.TextColumn("Comments"),
             "orderType": st.column_config.SelectboxColumn(
                 "Order Type",
-                options=["Paper", "Digital", "Booth"],
+                options=["", "Paper", "Digital", "Booth"],
             ),
         },
     )
