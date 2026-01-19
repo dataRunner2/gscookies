@@ -1,12 +1,11 @@
 import streamlit as st
 from decimal import Decimal, ROUND_FLOOR
-from sqlalchemy import create_engine, text
 from streamlit import session_state as ss
 from datetime import time, datetime, timedelta
 from uuid import uuid4
 from utils.app_utils import setup
-from utils.db_utils import engine, require_admin
-from utils.order_utils import fetch_all
+from utils.db_utils import require_admin, execute_sql, fetch_all
+from utils.order_utils import get_order_items, get_cookies_for_year
 
 # --------------------------------------------------
 # Session init
@@ -14,16 +13,41 @@ from utils.order_utils import fetch_all
 def init_ss():
     if 'current_year' not in ss:
         ss.current_year = datetime.now().year
+    if 'weekend_number' not in ss:
+        ss.weekend_number = 1
+    if 'percent_override' not in ss:
+        ss.percent_override = 1.0
+    
+    # Initialize cookie quantity session state keys
+    DEFAULT_BOOTH_QTY = {
+        "TM": 36, "SAM": 24, "TAG": 24, "ADV": 12, "EXP": 6,
+        "TRE": 6, "LEM": 6, "DOS": 8, "TOF": 6,
+    }
+    for code, default in DEFAULT_BOOTH_QTY.items():
+        key = f"plan_{code}"
+        if key not in ss:
+            ss[key] = default
+
+
 
 # --------------------------------------------------
 # Data helpers
 # --------------------------------------------------
 
-def execute(sql, params=None):
-    with engine.begin() as conn:
-        conn.execute(text(sql), params or {})
+def update_weekend_override():
+    """Update percent_override when weekend selection changes"""
+    weekend = ss.weekend_number
+    ss.percent_override = {1: 1.0, 2: 0.75, 3: 0.50}[weekend]
 
-# --------------------------------------------------
+def update_initial_quantities(default_qty, cookie_codes):
+    """Update session state with calculated quantities based on current multiplier"""
+    multiplier = Decimal(ss.percent_override)
+    for code in cookie_codes:
+        default = default_qty[code]
+        adjusted = int((Decimal(default) * multiplier).to_integral_value())
+        ss[f"plan_{code}"] = adjusted
+
+
 # Booth queries
 # --------------------------------------------------
 def get_booths():
@@ -55,94 +79,75 @@ def get_draft_booth_orders():
     """)
 
 
-def get_order_items(order_id, year):
-    return fetch_all("""
-        SELECT
-            oi.cookie_code,
-            cy.display_name,
-            cy.price_per_box,
-            oi.quantity AS sold
-        FROM cookies_app.order_items oi
-        JOIN cookies_app.cookie_years cy
-          ON oi.cookie_code = cy.cookie_code
-         AND cy.program_year = :year
-        WHERE oi.order_id = :oid
-        ORDER BY cy.display_order
-    """, {"oid": order_id, "year": year})
-
-
-# --------------------------------------------------
-# Inventory + verification
-# --------------------------------------------------
+# Booth queries
 def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
-    with engine.begin() as conn:
+    # Mark order verified
+    execute_sql("""
+        UPDATE cookies_app.orders
+        SET verification_status = 'VERIFIED',
+            verified_by = :by,
+            verified_at = now(),
+            verification_notes = :notes,
+            opc_boxes = :opc
+        WHERE order_id = :oid
+          AND verification_status <> 'VERIFIED'
+    """, {
+        "oid": order_id,
+        "by": admin_name,
+        "notes": notes,
+        "opc": opc_boxes,
+    })
 
-        result = conn.execute(text("""
-            UPDATE cookies_app.orders
-            SET verification_status = 'VERIFIED',
-                verified_by = :by,
-                verified_at = now(),
-                verification_notes = :notes,
-                opc_boxes = :opc
-            WHERE order_id = :oid
-              AND verification_status <> 'VERIFIED'
-        """), {
+    # Record inventory movements
+    for i in items:
+        if i.get('sold', 0) == 0:
+            continue
+        
+        execute_sql("""
+            INSERT INTO cookies_app.inventory_ledger (
+                inventory_event_id,
+                program_year,
+                cookie_code,
+                quantity,
+                event_type,
+                status,
+                related_order_id,
+                event_dt,
+                notes
+            )
+            VALUES (
+                gen_random_uuid(),
+                :year,
+                :cookie,
+                :qty,
+                'BOOTH_SALE',
+                'ACTUAL',
+                :oid,
+                now(),
+                'Booth verified'
+            )
+        """, {
+            "year": year,
+            "cookie": i.get('cookie_code'),
+            "qty": -i.get('sold', 0),
             "oid": order_id,
-            "by": admin_name,
-            "notes": notes,
-            "opc": opc_boxes,
         })
-
-        if result.rowcount == 0:
-            raise ValueError("Booth already verified or not found")
-
-        for i in items:
-            if i.sold == 0:
-                continue
-
-            conn.execute(text("""
-                INSERT INTO cookies_app.inventory_ledger (
-                    inventory_event_id,
-                    program_year,
-                    cookie_code,
-                    quantity,
-                    event_type,
-                    status,
-                    related_order_id,
-                    event_dt,
-                    notes
-                )
-                VALUES (
-                    gen_random_uuid(),
-                    :year,
-                    :cookie,
-                    :qty,
-                    'BOOTH_SALE',
-                    'ACTUAL',
-                    :oid,
-                    now(),
-                    'Booth verified'
-                )
-            """), {
-                "year": year,
-                "cookie": i.cookie_code,
-                "qty": -i.sold,
-                "oid": order_id,
-            })
 
 
 # --------------------------------------------------
 # Page
 # --------------------------------------------------
 def main():
+    init_ss()
     require_admin()
 
     st.subheader("Booth Administration")
 
-    tab_add, tab_print, tab_verify = st.tabs([
+    tab_add, tab_print, tab_verify, tab_delete = st.tabs([
         "➕ Add / Manage Booths",
         "🖨️ Print Booth Sheet",
-        "✅ Verify Booth"
+        "✅ Verify Booth",
+        "🗑️ Delete Booth"
     ])
 
     # ==================================================
@@ -159,11 +164,11 @@ def main():
         "SAM": 24,  # Samoas
         "TAG": 24,  # Tagalongs
         "ADV": 12,  # Adventurefuls
-        "EXP": 0,   # Explorermores
+        "EXP": 6,   # Explorermores
         "TRE": 6,   # Trefoils
         "LEM": 6,   # Lemon-Ups
         "DOS": 8,   # Do-si-dos
-        "TOF": 0,   # Toffee-Tastic
+        "TOF": 6,   # Toffee-Tastic
     }
 
     COOKIE_LAYOUT = [
@@ -191,53 +196,53 @@ def main():
     with tab_add:
         st.subheader("➕ Create Booth")
 
-        col1, col2 = st.columns(2)
+        col1, col2,col3, col4 = st.columns(4)
         location = col1.text_input("Location")
         booth_date = col2.date_input("Booth Date")
 
-        col1, col2 = st.columns(2)
-        start_time = col1.time_input(
+        start_time = col3.time_input(
             "Start Time",
             value=time(8, 0),
             step=1800,  # 30 min
         )
         end_time = (datetime.combine(datetime.today(), start_time) + timedelta(hours=2)).time()
-        col2.markdown(f"**End Time:** {end_time.strftime('%I:%M %p')}")
+        col4.markdown(f"\n**End Time:** {end_time.strftime('%I:%M %p')}")
 
-        col1, col2 = st.columns(2)
+        
         weekend_number = col1.selectbox(
             "Weekend",
             options=[1, 2, 3],
             format_func=lambda x: f"Weekend {x}",
+            index=ss.weekend_number - 1,
+            key="weekend_number",
+            on_change=update_weekend_override,
         )
         percent_override = col2.number_input(
             "or % Override",
             min_value=0.0,
             max_value=2.0,
             step=0.05,
-            value=1.0,
+            key="percent_override",
         )
 
-        multiplier = Decimal(
-            percent_override if percent_override != 1.0 else
-            {1: 1.0, 2: 0.75, 3: 0.50}[weekend_number]
-        )
+        # Button to update initial quantities based on current multiplier
+        all_cookie_codes = [code for row in COOKIE_LAYOUT for code in row]
+        if st.button("📦 Update Initial Quantities"):
+            update_initial_quantities(DEFAULT_BOOTH_QTY, all_cookie_codes)
+
+        multiplier = Decimal(ss.percent_override)
 
         st.markdown("### 🍪 Planned Cookie Inventory")
-
         planned = {}
 
         for col_codes in COOKIE_LAYOUT:
             c1, c2, c3 = st.columns(3)
             for col, code in zip([c1, c2, c3], col_codes):
                 with col:
-                    default = DEFAULT_BOOTH_QTY[code]
-                    adjusted = int((Decimal(default) * multiplier).to_integral_value())
                     planned[code] = st.number_input(
                         f"{code} ({COOKIE_AVG_PCT[code]})",
                         min_value=0,
                         step=1,
-                        value=adjusted,
                         key=f"plan_{code}",
                     )
 
@@ -255,118 +260,59 @@ def main():
         )
 
         if st.button("Create Booth"):
-            with engine.begin() as conn:
-                booth_id = conn.execute(text("SELECT gen_random_uuid()")).scalar()
+            booth_id = str(uuid4())
+            
+            # Create booth
+            execute_sql("""
+                INSERT INTO cookies_app.booths (
+                    booth_id, location, booth_date,
+                    start_time, end_time,
+                    quantity_multiplier, weekend_number,
+                    created_at
+                )
+                VALUES (
+                    :bid, :loc, :date,
+                    :start, :end,
+                    :mult, :wk,
+                    now()
+                )
+            """, {
+                "bid": booth_id,
+                "loc": location,
+                "date": booth_date,
+                "start": start_time,
+                "end": end_time,
+                "mult": multiplier,
+                "wk": weekend_number,
+            })
 
-                conn.execute(text("""
-                    INSERT INTO cookies_app.booths (
-                        booth_id, location, booth_date,
-                        start_time, end_time,
-                        quantity_multiplier, weekend_number,
-                        created_at
+            # Add planned inventory
+            for code, qty in planned.items():
+                execute_sql("""
+                    INSERT INTO cookies_app.booth_inventory_plan (
+                        booth_id, program_year,
+                        cookie_code, planned_quantity
                     )
-                    VALUES (
-                        :bid, :loc, :date,
-                        :start, :end,
-                        :mult, :wk,
-                        now()
-                    )
-                """), {
+                    VALUES (:bid, :year, :code, :qty)
+                """, {
                     "bid": booth_id,
-                    "loc": location,
-                    "date": booth_date,
-                    "start": start_time,
-                    "end": end_time,
-                    "mult": multiplier,
-                    "wk": weekend_number,
+                    "year": ss.current_year,
+                    "code": code,
+                    "qty": qty,
                 })
 
-                for code, qty in planned.items():
-                    conn.execute(text("""
-                        INSERT INTO cookies_app.booth_inventory_plan (
-                            booth_id, program_year,
-                            cookie_code, planned_quantity
-                        )
-                        VALUES (:bid, :year, :code, :qty)
-                    """), {
-                        "bid": booth_id,
-                        "year": ss.current_year,
-                        "code": code,
-                        "qty": qty,
-                    })
-
-                for sid in scout_ids:
-                    conn.execute(text("""
-                        INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
-                        VALUES (:bid, :sid)
-                    """), {
-                        "bid": booth_id,
-                        "sid": sid,
-                    })
+            # Assign scouts
+            for sid in scout_ids:
+                execute_sql("""
+                    INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
+                    VALUES (:bid, :sid)
+                """, {
+                    "bid": booth_id,
+                    "sid": sid,
+                })
 
             st.success("Booth created successfully.")
             st.rerun()
-
-
-            # -----------------------------
-            # Create Booth
-            # -----------------------------
-            if st.button("Create Booth"):
-                with engine.begin() as conn:
-                    booth_id = conn.execute(text("""
-                        INSERT INTO cookies_app.booths (
-                            booth_id,
-                            location,
-                            booth_date,
-                            start_time,
-                            end_time,
-                            weekend_number,
-                            quantity_multiplier,
-                            created_at
-                        )
-                        VALUES (
-                            gen_random_uuid(),
-                            :loc, :date, :start, :end, :weekend, :mult, now()
-                        )
-                        RETURNING booth_id
-                    """), {
-                        "loc": location,
-                        "date": booth_date,
-                        "start": start_time,
-                        "end": end_time,
-                        "weekend": weekend,
-                        "mult": multiplier,
-                    }).scalar()
-
-                    # Save planned inventory
-                    for code, qty in planned_quantities.items():
-                        conn.execute(text("""
-                            INSERT INTO cookies_app.booth_inventory_plan (
-                                booth_id,
-                                program_year,
-                                cookie_code,
-                                planned_quantity
-                            )
-                            VALUES (:bid, :year, :code, :qty)
-                        """), {
-                            "bid": booth_id,
-                            "year": booth_date.year,
-                            "code": code,
-                            "qty": qty,
-                        })
-
-                    # Save booth scouts
-                    for scout in selected_scouts:
-                        conn.execute(text("""
-                            INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
-                            VALUES (:bid, :sid)
-                        """), {
-                            "bid": booth_id,
-                            "sid": scout.scout_id,
-                        })
-
-                st.success("Booth created with planned inventory and scouts assigned.")
-                st.rerun()
 
     # ==================================================
     # TAB 2 — PRINT BOOTH
@@ -375,6 +321,11 @@ def main():
         st.markdown("### Printable Booth Sheet")
 
         booths = get_booths()
+        
+        if not booths:
+            st.info("No booths have been created yet.")
+            st.stop()
+        
         booth = st.selectbox(
             "Select Booth",
             booths,
@@ -594,58 +545,83 @@ def main():
                 st.error("Verification notes are required.")
                 st.stop()
 
-            with engine.begin() as conn:
-                # Mark order verified
-                conn.execute(text("""
-                    UPDATE cookies_app.orders
-                    SET verification_status = 'VERIFIED',
-                        verified_by = :by,
-                        verified_at = now(),
-                        verification_notes = :notes,
-                        opc_boxes = :opc
-                    WHERE order_id = :oid
-                """), {
-                    "oid": booth.order_id,
-                    "by": admin_name,
-                    "notes": notes,
-                    "opc": opc_boxes,
-                })
-
-                # Apply inventory movements
-                for v in verified_items:
-                    if v["sold"] > 0:
-                        conn.execute(text("""
-                            INSERT INTO cookies_app.inventory_ledger (
-                                inventory_event_id,
-                                program_year,
-                                cookie_code,
-                                quantity,
-                                event_type,
-                                status,
-                                related_order_id,
-                                event_dt,
-                                notes
-                            )
-                            VALUES (
-                                gen_random_uuid(),
-                                :year,
-                                :cookie,
-                                :qty,
-                                'BOOTH_SALE',
-                                'ACTUAL',
-                                :oid,
-                                now(),
-                                'Booth verified'
-                            )
-                        """), {
-                            "year": booth.program_year,
-                            "cookie": v["cookie_code"],
-                            "qty": -v["sold"],
-                            "oid": booth.order_id,
-                        })
+            verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
 
             st.success(f"Booth verified by {admin_name}. Inventory updated.")
             st.rerun()
+
+    # ==================================================
+    # TAB 4 — DELETE BOOTH
+    # ==================================================
+    with tab_delete:
+        try:
+            st.title("DELETE BOOTH TAB - YOU ARE HERE")
+            st.error("THIS IS A TEST - IF YOU SEE THIS, THE TAB IS WORKING")
+            
+            st.markdown("## 🗑️ Delete Booth")
+
+            st.warning("⚠️ Deleting a booth will permanently delete the booth and all associated data (inventory, money records, etc.). This action cannot be undone.")
+
+            # Get all booths
+            all_booths = fetch_all("""
+                SELECT
+                    b.booth_id,
+                    b.location,
+                    b.booth_date,
+                    b.start_time,
+                    b.end_time
+                FROM cookies_app.booths b
+                ORDER BY b.booth_date DESC, b.start_time
+            """)
+            
+            st.write(f"DEBUG: all_booths type = {type(all_booths)}")
+            st.write(f"DEBUG: all_booths length = {len(all_booths) if all_booths else 'None'}")
+            
+            if not all_booths:
+                st.info("No booths available for deletion.")
+            else:
+                st.success(f"Found {len(all_booths)} booth(s)")
+                booth = st.selectbox(
+                    "Select Booth to Delete",
+                    all_booths,
+                    format_func=lambda b: (
+                        f"{b.booth_date.strftime('%b %d')} "
+                        f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
+                        f"{b.location}"
+                    ),
+                    key="delete_booth_select"
+                )
+
+                st.markdown("---")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    confirm = st.checkbox("I want to delete this booth")
+                
+                with col2:
+                    confirm_permanent = st.checkbox("This is permanent and cannot be undone")
+
+                with col3:
+                    if st.button("🗑️ Delete Booth", type="secondary"):
+                        if not confirm or not confirm_permanent:
+                            st.error("Please confirm both checkboxes before deleting.")
+                        else:
+                            try:
+                                execute_sql("""
+                                    DELETE FROM cookies_app.booths
+                                    WHERE booth_id = :bid
+                                """, {"bid": booth.booth_id})
+
+                                st.success(f"✓ Booth on {booth.booth_date.strftime('%b %d')} at {booth.location} has been deleted.")
+                                st.balloons()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error deleting booth: {str(e)}")
+        except Exception as e:
+            st.error(f"EXCEPTION IN DELETE TAB: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
 # --------------------------------------------------
 if __name__ == "__main__":
