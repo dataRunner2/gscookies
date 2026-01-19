@@ -1,11 +1,12 @@
 import streamlit as st
 from decimal import Decimal
 from uuid import uuid4
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from streamlit import session_state as ss
 
 from utils.app_utils import setup
-from utils.db_utils import get_engine
+from utils.db_utils import get_engine, execute_sql
+from utils.order_utils import get_cookies_for_year
 
 engine = get_engine()
 
@@ -37,33 +38,19 @@ def get_booths():
         return conn.execute(sql).fetchall()
 
 
-def get_cookies(program_year):
-    sql = text("""
-        SELECT
-            cookie_code,
-            display_name,
-            price_per_box,
-            display_order
-        FROM cookies_app.cookie_years
-        WHERE program_year = :year
-          AND active = true
-        ORDER BY display_order
-    """)
-    with engine.connect() as conn:
-        return conn.execute(sql, {"year": program_year}).fetchall()
+# Uses get_cookies_for_year from order_utils
 
 
 def save_booth_order(booth_id, year, total_boxes, total_amount):
-    order_id = str(uuid4())
+    order_id = uuid4()
 
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.orders (
             order_id,
             booth_id,
             program_year,
             order_type,
             status,
-            verification_status,
             order_qty_boxes,
             order_amount,
             submit_dt,
@@ -75,54 +62,49 @@ def save_booth_order(booth_id, year, total_boxes, total_amount):
             :year,
             'BOOTH',
             'NEW',
-            'DRAFT',
             :qty,
             :amt,
             now(),
             now()
         )
-    """)
+    """
 
-    with engine.begin() as conn:
-        conn.execute(sql, {
-            "order_id": order_id,
-            "booth_id": booth_id,
-            "year": year,
-            "qty": total_boxes,
-            "amt": total_amount,
-        })
+    execute_sql(sql, {
+        "order_id": str(order_id),
+        "booth_id": str(booth_id),
+        "year": year,
+        "qty": total_boxes,
+        "amt": float(total_amount),
+    })
 
     return order_id
 
 
 def save_order_items(order_id, year, items):
-    sql = text("""
+    sql = """
         INSERT INTO cookies_app.order_items (
             order_item_id,
             order_id,
             program_year,
             cookie_code,
-            quantity,
-            created_at
+            quantity
         )
         VALUES (
             gen_random_uuid(),
             :order_id,
             :year,
             :code,
-            :qty,
-            now()
+            :qty
         )
-    """)
+    """
 
-    with engine.begin() as conn:
-        for i in items:
-            conn.execute(sql, {
-                "order_id": order_id,
-                "year": year,
-                "code": i["cookie_code"],
-                "qty": i["sold"],
-            })
+    for i in items:
+        execute_sql(sql, {
+            "order_id": str(order_id),
+            "year": year,
+            "code": i["cookie_code"],
+            "qty": i["sold"],
+        })
 
 
 # --------------------------------------------------
@@ -133,8 +115,13 @@ def main():
 
     st.subheader("Booth Entry Sheet")
     st.caption("Matches the paper booth worksheet. Saved as DRAFT until verified.")
-
+    st.error("This page is to be completed by booth parents AFTER the booth is completed. Make sure you select your booth location, date and time")
+    
     booths = get_booths()
+    if not booths:
+        st.info("No booths have been entered.")
+        st.stop()
+    
     booth = st.selectbox(
         "Choose Booth",
         booths,
@@ -146,7 +133,7 @@ def main():
     )
 
     year = booth.booth_date.year
-    cookies = get_cookies(year)
+    cookies = get_cookies_for_year(year)
 
     st.markdown("---")
     st.markdown(
