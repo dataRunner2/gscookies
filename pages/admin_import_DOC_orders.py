@@ -9,6 +9,7 @@ from utils.db_utils import require_admin
 from utils.order_utils import (
     fetch_existing_external_orders,
     bulk_insert_order_headers, bulk_insert_order_items,
+    bulk_insert_planned_inventory, bulk_insert_money_ledger,
     build_cookie_rename_map,
     get_all_scouts,
     update_scout_gsusa_id
@@ -143,10 +144,10 @@ def main():
     # ----------------------------------
     # Load + Filter
     # ----------------------------------
-    st.write('Raw data')
+    # st.write('Raw data')
     
     raw_dat  = (pd.read_excel(uploaded_file).head())
-    st.write(raw_dat.columns.tolist())
+    # st.write(raw_dat.columns.tolist())
     st.dataframe(raw_dat.head())
     uploaded_df = normalize_columns(pd.read_excel(uploaded_file))
     
@@ -167,7 +168,7 @@ def main():
     # ----------------------------------
 
     scouts = get_all_scouts()
-    st.write(scouts[:2])
+    # st.write(scouts[:2])
     # aliases = fetch_scout_aliases()
 
     ss.scout_name_lookup = {
@@ -204,36 +205,58 @@ def main():
             f"{s['first_name']} {s['last_name']}": s["scout_id"] for s in scouts
         }
 
-        for idx, row in unmatched.iterrows():
-            st.markdown(
-                f"**Digital Cookie Scout:** "
-                f"`{row['scout_first_name']} {row['scout_last_name']}` "
-            )
-            # if row.scout_gsusa_id.notna():
-            #     st.markdown(f"(GSUSA ID: {row.scout_gsusa_id})")
+        # Create unique scout mapping with order count
+        unmatched['scout_name'] = unmatched['scout_first_name'] + ' ' + unmatched['scout_last_name']
+        scout_order_counts = unmatched.groupby('scout_name').size()
+        
+        # Get unique scouts (no duplicates)
+        unique_scouts = sorted(scout_order_counts.index.tolist())
+
+        scout_matches = {}
+        for scout_name in unique_scouts:
+            order_count = scout_order_counts[scout_name]
+            st.markdown(f"**Digital Cookie Scout:** `{scout_name}` ({order_count} orders)")
 
             choice = st.selectbox(
                 "Match to Scout",
                 [""] + list(scout_options.keys()),
-                key=f"scout_match_{idx}",
+                key=f"scout_match_{scout_name.replace(' ', '_')}",
             )
 
             if choice:
-                scout_id = scout_options[choice]
-                unmatched.at[idx, "scout_id"] = scout_id
+                scout_matches[scout_name] = scout_options[choice]
 
-                if pd.notna(row.scout_gsusa_id):
-                    update_scout_gsusa_id(
-                        scout_id=scout_id,
-                        gsusa_id=row.scout_gsusa_id,
-                    )
-                unmatched.at[idx, "scout_id"] = scout_id
+        # Separate newly matched from still unmatched
+        newly_matched_list = []
+        still_unmatched = unmatched.copy()
 
-        if unmatched["scout_id"].isna().any():
-            pass
-            # st.stop()
+        for digital_scout_name, system_scout_id in scout_matches.items():
+            mask = still_unmatched['scout_name'] == digital_scout_name
+            newly_matched_subset = still_unmatched[mask].copy()
+            newly_matched_subset['scout_id'] = system_scout_id
+            newly_matched_list.append(newly_matched_subset)
+            
+            # Remove from still_unmatched
+            still_unmatched = still_unmatched[~mask].copy()
+            
+            # Store alias for future imports
+            system_scout_name = scout_options[
+                [k for k, v in scout_options.items() if v == system_scout_id][0]
+            ]
+            st.success(f"✓ Matched: {digital_scout_name} → {system_scout_name}")
 
-        # matched = pd.concat([matched, unmatched])
+        # Add newly matched orders to matched dataframe
+        if newly_matched_list:
+            matched = pd.concat([matched] + newly_matched_list, ignore_index=True)
+
+        # Display and handle remaining unmatched scouts
+        if not still_unmatched.empty:
+            st.warning(f"{len(still_unmatched)} orders remain unmatched (will be imported as new scouts)")
+            unmatched_scouts = still_unmatched['scout_name'].unique()
+            for scout in unmatched_scouts:
+                count = len(still_unmatched[still_unmatched['scout_name'] == scout])
+                st.info(f"  • {scout}: {count} orders")
+            matched = pd.concat([matched, still_unmatched], ignore_index=True)
 
     # ----------------------------------
     # Final Prep + Deduplication
@@ -251,8 +274,7 @@ def main():
 
     # Rename cookie display names -> cookie codes (must ASSIGN result)
     matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
-    # st.write(cookie_nm_map)
-    # st.write(list(cookie_nm_map.values()))
+
     
     # Get existing orders as to not create duplicates
     existing_ids = fetch_existing_external_orders(
@@ -274,6 +296,7 @@ def main():
     # ----------------------------------
 
     st.metric("New Orders to Import", len(new_orders))
+    # st.write(new_orders.columns.tolist())
     cols_to_import = ["parent_id","scout_id","program_year","order_ref",
             "order_type","comments","order_qty_boxes","order_amount",
             "status"] + list(cookie_nm_map.values())
@@ -287,12 +310,13 @@ def main():
         return
 
     if st.button("Import Digitals", type="primary"):
-        st.success(f"Imported {len(new_orders)} digital orders 🎉")
-        bulk_insert_order_headers(new_orders)
-        st.write("Columns in new_orders:", new_orders.columns.tolist())
-        st.write("Sample row:", new_orders.iloc[0].to_dict() if not new_orders.empty else "Empty")
-        bulk_insert_order_items(new_orders)
-        
+        # add st spinner or progress bar
+        with st.spinner("Importing orders..."):
+            updated_df = bulk_insert_order_headers(new_orders) # return adds the order_id
+            bulk_insert_order_items(updated_df)
+            bulk_insert_planned_inventory(updated_df)
+            bulk_insert_money_ledger(updated_df)
+            
         st.success(f"Orders submitted successfully!")
 
     

@@ -52,7 +52,6 @@ def get_scouts_byparent(parent_id):
     """,{"parent_id": parent_id}
     )
 
-
     
 def get_all_scouts():
     return fetch_all("""
@@ -328,29 +327,29 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
             GROUP BY related_order_id
         )
         SELECT
-            o.order_id AS orderId,
+            o.order_id AS "orderId",
             o.program_year,
             o.submit_dt,
-            o.order_type AS orderType,
-            o.status AS orderStatus,
-            o.order_amount AS orderAmount,
-            o.order_qty_boxes AS orderQtyBoxes,
+            o.order_type AS "orderType",
+            o.status AS "orderStatus",
+            o.order_amount AS "orderAmount",
+            o.order_qty_boxes AS "orderQtyBoxes",
             o.comments,
-            o.booth_id AS boothId,
+            o.booth_id AS "boothId",
             
-            COALESCE(o.add_ebudde, false) AS addEbudde,
-            COALESCE(o.verified_digital, false) AS verifiedDigitalCookie,
+            COALESCE(o.add_ebudde, false) AS "addEbudde",
+            COALESCE(o.verified_digital, false) AS "verifiedDigitalCookie",
             COALESCE(
                 o.initial_order,
                 (o.submit_dt >= make_date(o.program_year, 1, 5)
                  AND o.submit_dt <  make_date(o.program_year, 2, 1))
-            ) AS initialOrder,
+            ) AS "initialOrder",
             
-            (s.first_name || ' ' || s.last_name) AS scoutName,
+            (s.first_name || ' ' || s.last_name) AS "scoutName",
             
-            COALESCE(paid.paid_amount, 0) AS paidAmount,
+            COALESCE(paid.paid_amount, 0) AS "paidAmount",
             
-            oi.cookie_code AS cookieCode,
+            oi.cookie_code AS "cookieCode",
             oi.quantity
             
         FROM cookies_app.orders o
@@ -373,21 +372,41 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
     # Get all unique orders first (before pivoting)
     meta_cols = ['orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
                  'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
-                 'verifiedDigitalCookie', 'initialOrder', 'scoutName']
-    meta = df[meta_cols].drop_duplicates('orderId').set_index('orderId')
+                 'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paidAmount']
     
-    # Add paymentStatus
-    meta['paymentStatus'] = meta.index.map(payment_statuses)
+    # Only use columns that exist in the dataframe
+    available_meta_cols = [col for col in meta_cols if col in df.columns]
+    
+    if not available_meta_cols:
+        return pd.DataFrame()
+    
+    # Make sure orderId is included
+    if 'orderId' not in available_meta_cols:
+        return pd.DataFrame()
+    
+    meta = df[available_meta_cols].drop_duplicates('orderId').set_index('orderId')
+    
+    # Calculate payment status for each order
+    def calc_payment_status(row):
+        return get_payment_status(
+            row.get('orderType'),
+            Decimal(str(row.get('orderAmount', 0))),
+            Decimal(str(row.get('paidAmount', 0)))
+        )
+    
+    meta['paymentStatus'] = meta.apply(calc_payment_status, axis=1)
     
     # Pivot cookies by cookie_code, summing quantities
-    # Use dropna=False to keep orders without cookies
-    cookies = df[df['cookieCode'].notna()].pivot_table(
-        index='orderId',
-        columns='cookieCode',
-        values='quantity',
-        aggfunc='sum',
-        fill_value=0
-    ).astype(int)
+    if 'cookieCode' in df.columns and 'quantity' in df.columns:
+        cookies = df[df['cookieCode'].notna()].pivot_table(
+            index='orderId',
+            columns='cookieCode',
+            values='quantity',
+            aggfunc='sum',
+            fill_value=0
+        ).astype(int)
+    else:
+        cookies = pd.DataFrame()
     
     # Merge metadata with cookies, keeping all metadata rows
     if not cookies.empty:
@@ -396,10 +415,13 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
         # If no cookies at all, still include all orders
         result = meta.reset_index()
     
-    result['submit_dt'] = pd.to_datetime(result['submit_dt']).dt.date
+    # Convert submit_dt to date safely
+    if 'submit_dt' in result.columns:
+        result['submit_dt'] = pd.to_datetime(result['submit_dt'], errors='coerce').dt.date
     
     # Non-digital orders should never appear "verified"
-    result.loc[~result['orderType'].str.contains('Digital', case=False, na=False), 'verifiedDigitalCookie'] = False
+    if 'orderType' in result.columns and 'verifiedDigitalCookie' in result.columns:
+        result.loc[~result['orderType'].str.contains('Digital', case=False, na=False), 'verifiedDigitalCookie'] = False
     
     return result
 
@@ -705,6 +727,10 @@ def bulk_insert_order_headers(df):
     payload = []
 
     for r in df.itertuples():
+        # Skip orders without both scout_id and parent_id
+        if pd.isna(r.parent_id) or pd.isna(r.scout_id):
+            continue
+        
         order_id = uuid.uuid4()
 
         payload.append({
@@ -726,9 +752,15 @@ def bulk_insert_order_headers(df):
         df.at[r.Index, "order_id"] = order_id
 
     execute_many_sql(sql, payload)
+    return df
 
 def bulk_insert_order_items(df):
-    # send in orders df, this will submit to dict lik {"TM": 4,"TT":2}
+    """
+    Insert order items from a wide-format DataFrame.
+    
+    Expects columns: order_id, scout_id, parent_id, program_year, plus cookie code columns
+    (ADV, LEM, TRE, DSD, SAM, TAG, TM, EXP, TOF, DON)
+    """
     sql = """
         INSERT INTO cookies_app.order_items (
             order_item_id,
@@ -749,47 +781,56 @@ def bulk_insert_order_items(df):
             :quantity
         )
     """
-
+    
+    # Define all possible cookie codes
+    cookie_codes = ['ADV', 'LEM', 'TRE', 'DSD', 'SAM', 'TAG', 'TM', 'EXP', 'TOF', 'DON']
     payload = []
-
-    if 'cookie_code' in df.columns and 'quantity' in df.columns:
-        # Long format: one row per item
-        for r in df.itertuples():
-            if getattr(r, 'quantity', 0) > 0:
-                payload.append({
-                    "order_item_id": str(uuid.uuid4()),
-                    "order_id": str(r.order_id),
-                    "parent_id": str(r.parent_id),
-                    "scout_id": str(r.scout_id),
-                    "program_year": r.program_year,
-                    "cookie_code": r.cookie_code,
-                    "quantity": int(getattr(r, 'quantity', 0)),
-                })
-    else:
-        # Wide format: columns are cookie codes
-        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at', 'Customer Email Address', 'Payment Status', 'Council Name', 'Troop Number', 'Refund', 'Baker'}
-
-        for idx, row in df.iterrows():
-            for col in df.columns:
-                if col in meta_cols:
-                    continue
-                qty = pd.to_numeric(row[col], errors='coerce')
-                if pd.isna(qty):
-                    qty = 0
-                if qty > 0:
-                    payload.append({
-                        "order_item_id": str(uuid.uuid4()),
-                        "order_id": str(row['order_id']),
-                        "parent_id": str(row['parent_id']),
-                        "scout_id": str(row['scout_id']),
-                        "program_year": row['program_year'],
-                        "cookie_code": col,
-                        "quantity": int(qty),
-                    })
-
-    execute_many_sql(sql, payload)
+    
+    for _, row in df.iterrows():
+        order_id = row.get('order_id')
+        parent_id = row.get('parent_id')
+        scout_id = row.get('scout_id')
+        program_year = row.get('program_year')
+        
+        # Skip if missing required fields or if scout/parent not matched
+        if pd.isna(order_id) or pd.isna(parent_id) or pd.isna(scout_id):
+            continue
+        
+        # Iterate through each cookie code
+        for cookie_code in cookie_codes:
+            # Skip if column doesn't exist
+            if cookie_code not in df.columns:
+                continue
+            
+            qty = row.get(cookie_code)
+            
+            # Convert to numeric and skip if 0 or NaN
+            try:
+                qty = pd.to_numeric(qty, errors='coerce')
+            except (TypeError, ValueError):
+                qty = 0
+            
+            if pd.isna(qty) or qty == 0:
+                continue
+            
+            payload.append({
+                "order_item_id": str(uuid.uuid4()),
+                "order_id": str(order_id),
+                "parent_id": str(parent_id),
+                "scout_id": str(scout_id),
+                "program_year": int(program_year),
+                "cookie_code": cookie_code,
+                "quantity": int(qty),
+            })
+    
+    # Only execute if we have items to insert
+    if payload:
+        execute_many_sql(sql, payload)
 
 def bulk_insert_planned_inventory(df):
+    # Only accept known cookie codes to avoid pulling in extra columns like order_total
+    cookie_codes = ['ADV', 'LEM', 'TRE', 'DSD', 'SAM', 'TAG', 'TM', 'EXP', 'TOF', 'DON']
+
     sql = """
         INSERT INTO cookies_app.inventory_ledger (
             inventory_event_id,
@@ -822,15 +863,27 @@ def bulk_insert_planned_inventory(df):
     if 'cookie_code' in df.columns and 'quantity' in df.columns:
         # Long format
         for r in df.itertuples():
-            if getattr(r, 'quantity', 0) > 0:
-                payload.append({
-                    "parent_id": str(r.parent_id),
-                    "scout_id": str(r.scout_id),
-                    "program_year": r.program_year,
-                    "cookie_code": r.cookie_code,
-                    "quantity": r.quantity,
-                    "order_id": str(r.order_id),
-                })
+            qty = getattr(r, 'quantity', 0)
+            qty = pd.to_numeric(qty, errors='coerce')
+            if pd.isna(qty) or qty <= 0:
+                continue
+
+            # Require matched parent/scout
+            if pd.isna(r.parent_id) or pd.isna(r.scout_id):
+                continue
+
+            # Skip unknown cookie codes
+            if r.cookie_code not in cookie_codes:
+                continue
+
+            payload.append({
+                "parent_id": str(r.parent_id),
+                "scout_id": str(r.scout_id),
+                "program_year": r.program_year,
+                "cookie_code": r.cookie_code,
+                "quantity": int(qty),
+                "order_id": str(r.order_id),
+            })
     else:
         # Wide format
         meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at', 'Customer Email Address', 'Payment Status', 'Council Name', 'Troop Number', 'Refund', 'Baker'}
@@ -839,28 +892,99 @@ def bulk_insert_planned_inventory(df):
             for col in df.columns:
                 if col in meta_cols:
                     continue
+
+                # Skip columns that are not cookie codes
+                if col not in cookie_codes:
+                    continue
+
                 qty = getattr(r, col)
-                if qty > 0:
-                    payload.append({
-                        "parent_id": str(r.parent_id),
-                        "scout_id": str(r.scout_id),
-                        "program_year": r.program_year,
-                        "cookie_code": col,
-                        "quantity": qty,
-                        "order_id": str(r.order_id),
-                    })
+                # Coerce strings/None to numeric; skip non-positive or NaN
+                qty = pd.to_numeric(qty, errors='coerce')
+                if pd.isna(qty) or qty <= 0:
+                    continue
+
+                # Require matched parent/scout
+                if pd.isna(r.parent_id) or pd.isna(r.scout_id):
+                    continue
+
+                payload.append({
+                    "parent_id": str(r.parent_id),
+                    "scout_id": str(r.scout_id),
+                    "program_year": r.program_year,
+                    "cookie_code": col,
+                    "quantity": int(qty),
+                    "order_id": str(r.order_id),
+                })
 
     execute_many_sql(sql, payload)
-
-def bulk_insert_orders(df):
-    bulk_insert_order_headers(df)
-    bulk_insert_order_items(df)
-    bulk_insert_planned_inventory(df)
 
 
 # ==================================================
 # Payments & balances
 # ==================================================
+
+def bulk_insert_money_ledger(df):
+    """
+    Insert payment records for Digital Cookie orders (they come pre-paid).
+    Creates one money_ledger entry per order with full order_amount as payment.
+    """
+    sql = """
+        INSERT INTO cookies_app.money_ledger (
+            money_event_id,
+            parent_id,
+            scout_id,
+            program_year,
+            amount,
+            payment_method,
+            notes,
+            related_order_id,
+            received_dt,
+            created_at
+        )
+        VALUES (
+            gen_random_uuid(),
+            :parent_id,
+            :scout_id,
+            :program_year,
+            :amount,
+            :method,
+            :notes,
+            :order_id,
+            now(),
+            now()
+        )
+    """
+
+    payload = []
+
+    for _, row in df.iterrows():
+        order_id = row.get('order_id')
+        parent_id = row.get('parent_id')
+        scout_id = row.get('scout_id')
+        program_year = row.get('program_year')
+        order_amount = row.get('order_amount')
+        order_type = row.get('order_type')
+    
+        # Only create payment entry for Digital Cookie orders
+        if not _is_digital(order_type):
+            continue
+    
+        # Skip if missing required fields
+        if pd.isna(order_id) or pd.isna(parent_id) or pd.isna(scout_id) or pd.isna(order_amount):
+            continue
+    
+        payload.append({
+            "parent_id": str(parent_id),
+            "scout_id": str(scout_id),
+            "program_year": int(program_year),
+            "amount": float(order_amount),
+            "method": "DIGITAL_COOKIE",
+            "notes": "Digital Cookie import - pre-paid",
+            "order_id": str(order_id),
+        })
+
+    if payload:
+        execute_many_sql(sql, payload)
 
 def get_paid_amount_by_order(order_id: str) -> Decimal:
     row = fetch_one("""

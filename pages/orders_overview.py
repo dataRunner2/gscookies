@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from utils.app_utils import setup
 from utils.db_utils import get_engine, require_login, to_pacific
+from utils.order_utils import get_all_orders_wide
 
 engine = get_engine()
 
@@ -34,64 +35,11 @@ def payment_status(order_type, order_amount, paid_amount):
 # DB helpers
 # --------------------------------------------------
 def get_all_orders(year):
-    sql = text("""
-        SELECT
-            o.order_id,
-            o.submit_dt,
-            o.order_type,
-            o.order_qty_boxes,
-            o.order_amount,
-            o.status AS order_status,
-            o.parent_id,
-            o.scout_id,
-            o.booth_id,
-            p.parent_firstname || ' ' || p.parent_lastname AS parent_name,
-            s.first_name || ' ' || s.last_name AS scout_name,
-            COALESCE(SUM(m.amount), 0) AS paid_amount
-        FROM cookies_app.orders o
-        LEFT JOIN cookies_app.parents p
-          ON o.parent_id = p.parent_id
-        LEFT JOIN cookies_app.scouts s
-          ON o.scout_id = s.scout_id
-        LEFT JOIN cookies_app.money_ledger m
-          ON o.order_id = m.related_order_id
-        WHERE o.program_year = :year
-        GROUP BY
-            o.order_id,
-            o.submit_dt,
-            o.order_type,
-            o.order_qty_boxes,
-            o.order_amount,
-            o.status,
-            o.parent_id,
-            o.scout_id,
-            o.booth_id,
-            parent_name,
-            scout_name
-        ORDER BY o.submit_dt DESC
-    """)
-    with engine.connect() as conn:
-        return conn.execute(sql, {"year": year}).fetchall()
-
-
-def get_cookie_totals(year):
-    sql = text("""
-        SELECT
-            cy.display_name,
-            SUM(oi.quantity) AS total_boxes,
-            cy.display_order
-        FROM cookies_app.order_items oi
-        JOIN cookies_app.cookie_years cy
-          ON oi.cookie_code = cy.cookie_code
-         AND oi.program_year = cy.program_year
-        JOIN cookies_app.orders o
-          ON oi.order_id = o.order_id
-        WHERE o.program_year = :year
-        GROUP BY cy.display_name, cy.display_order
-        ORDER BY cy.display_order
-    """)
-    with engine.connect() as conn:
-        return conn.execute(sql, {"year": year}).fetchall()
+    """Get all orders for the year in wide format with cookie columns"""
+    df = get_all_orders_wide(year)
+    if df.empty:
+        return pd.DataFrame()
+    return df
 
 # --------------------------------------------------
 # UI
@@ -111,108 +59,156 @@ def main():
     )
 
     orders = get_all_orders(year)
-    if not orders:
+    if orders.empty:
         st.info("No orders found for this year.")
         return
 
     # --------------------------------------------------
     # Build aggregates
     # --------------------------------------------------
-    rows = []
-
-    girl_orders = 0
     booth_orders = 0
+    digital_orders = 0
+    paper_orders = 0
 
-    girl_boxes = 0
     booth_boxes = 0
+    digital_boxes = 0
+    paper_boxes = 0
 
     total_sales = Decimal("0.00")
     total_paid = Decimal("0.00")
 
-    for o in orders:
-        is_booth = o.booth_id is not None
-        is_girl = o.scout_id is not None
+    # Calculate cookie totals from wide format
+    meta_cols = {'orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
+                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
+                 'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paymentStatus', 'paidAmount'}
+    cookie_cols = [col for col in orders.columns if col not in meta_cols]
+    
+    # Split into distributed (booth validated or picked up) vs pending
+    distributed_mask = orders['orderStatus'].isin(['PICKED_UP', 'BOOTH_VALIDATED'])
+    distributed_orders = orders[distributed_mask]
+    pending_orders = orders[~distributed_mask]
+    
+    cookie_totals = {}
+    cookie_distributed = {}
+    cookie_pending = {}
+    
+    for col in cookie_cols:
+        if col in orders.columns:
+            total = orders[col].fillna(0).sum()
+            distributed = distributed_orders[col].fillna(0).sum()
+            pending = pending_orders[col].fillna(0).sum()
+            
+            if total > 0:
+                cookie_totals[col] = int(total)
+                cookie_distributed[col] = int(distributed)
+                cookie_pending[col] = int(pending)
+
+    for _, o in orders.iterrows():
+        order_type = str(o.get('orderType', '')).lower()
+        is_booth = order_type == 'booth'
+        is_digital = 'digital' in order_type
+        is_paper = 'paper' in order_type
+        
+        qty = int(o.get('orderQtyBoxes', 0) or 0)
+        amount = Decimal(str(o.get('orderAmount', 0)))
 
         paid = (
-            Decimal(o.order_amount)
-            if "Digital" in o.order_type
-            else Decimal(o.paid_amount)
+            amount
+            if is_digital
+            else Decimal(str(o.get('paidAmount', 0) or 0))
         )
 
         if is_booth:
             booth_orders += 1
-            booth_boxes += o.order_qty_boxes
-        elif is_girl:
-            girl_orders += 1
-            girl_boxes += o.order_qty_boxes
+            booth_boxes += qty
+        elif is_digital:
+            digital_orders += 1
+            digital_boxes += qty
+        elif is_paper:
+            paper_orders += 1
+            paper_boxes += qty
 
-        total_sales += Decimal(o.order_amount)
+        total_sales += amount
         total_paid += paid
 
-        rows.append({
-            "Order Date": o.submit_dt.strftime("%Y-%m-%d %H:%M"),
-            "Order Source": "Booth" if is_booth else "Girl",
-            "Parent": o.parent_name if is_girl else "",
-            "Scout / Booth": (
-                o.scout_name if is_girl else "Booth Sale"
-            ),
-            "Order Type": o.order_type,
-            "Boxes": o.order_qty_boxes,
-            "Amount ($)": float(o.order_amount),
-            "Paid ($)": float(paid),
-            "Balance ($)": float(Decimal(o.order_amount) - paid),
-            "Payment Status": payment_status(
-                o.order_type,
-                Decimal(o.order_amount),
-                paid
-            ),
-            "Order Status": o.order_status
-        })
-
-    df = pd.DataFrame(rows)
-
-    # --------------------------------------------------
-    # BOOTH VS GIRL SUMMARY (TOP)
-    # --------------------------------------------------
-    st.markdown("### 🧍‍♀️ Girl Orders vs 🏪 Booth Orders")
-
-    a, b, c, d = st.columns(4)
-    a.metric("Girl Orders", girl_orders)
-    b.metric("Girl Boxes", girl_boxes)
-    c.metric("Booth Orders", booth_orders)
-    d.metric("Booth Boxes", booth_boxes)
+    # Calculate metrics
+    total_orders = booth_orders + digital_orders + paper_orders
+    total_boxes = booth_boxes + digital_boxes + paper_boxes
+    avg_boxes_per_order = total_boxes / total_orders if total_orders > 0 else 0
+    percent_paid = (total_paid / total_sales * 100) if total_sales > 0 else 0
+    balance = total_sales - total_paid
+    
+    # Count unique scouts
+    unique_scouts = orders['scoutName'].nunique() if 'scoutName' in orders.columns else 0
 
     st.divider()
 
     # --------------------------------------------------
-    # COOKIE INFOGRAPHIC
+    # 📊 ORDER VOLUME
+    # --------------------------------------------------
+    st.markdown("### 📊 Order Volume")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Total Boxes", total_boxes, f"{avg_boxes_per_order:.1f} per order")
+    with col2:
+        st.metric("Total Orders", total_orders)
+    with col3:
+        st.metric("Paper Orders", paper_orders)
+    with col4:
+        st.metric("Booth Orders", booth_orders)
+    with col5:
+        st.metric("Girls Selling", unique_scouts)
+
+    st.divider()
+
+    # --------------------------------------------------
+    # 🍪 COOKIES SOLD BY TYPE
     # --------------------------------------------------
     st.markdown("### 🍪 Cookies Sold by Type")
 
-    cookie_totals = get_cookie_totals(year)
     if cookie_totals:
+        # Pending row
+        st.markdown("#### ⏳ Pending")
         cols = st.columns(len(cookie_totals))
-        for col, c in zip(cols, cookie_totals):
+        for col, cookie_code in zip(cols, cookie_totals.keys()):
             with col:
-                st.metric(c.display_name, int(c.total_boxes))
+                pending_qty = cookie_pending.get(cookie_code, 0)
+                pct = (pending_qty / total_boxes * 100) if total_boxes > 0 else 0
+                st.metric(cookie_code, pending_qty)
+                st.caption(f"{pct:.1f}% of total")
+        
+        st.markdown("")  # spacing
+
+        # Distributed row
+        st.markdown("#### ✅ Distributed (Picked Up / Booth Validated)")
+        cols = st.columns(len(cookie_totals))
+        for col, cookie_code in zip(cols, cookie_totals.keys()):
+            with col:
+                distributed_qty = cookie_distributed.get(cookie_code, 0)
+                pct = (distributed_qty / total_boxes * 100) if total_boxes > 0 else 0
+                st.metric(cookie_code, distributed_qty)
+                st.caption(f"{pct:.1f}% of total")
+        
+        
     else:
         st.info("No cookie breakdown available.")
 
     st.divider()
 
     # --------------------------------------------------
-    # SEASON SUMMARY
+    # 💵 FINANCIAL SUMMARY
     # --------------------------------------------------
-    balance = total_sales - total_paid
-
-    st.markdown("### 💵 Season Totals")
-
-    e, f, g = st.columns(3)
-    e.metric("Total Sales", f"${total_sales:,.2f}")
-    f.metric("Total Paid", f"${total_paid:,.2f}")
-    g.metric("Outstanding Balance", f"${balance:,.2f}")
-
-    st.divider()
+    st.markdown("### 💵 Financial Summary")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("💰 Total Sales", f"${total_sales:,.2f}")
+    with col2:
+        st.metric("✅ Paid", f"${total_paid:,.2f}")
+        st.caption(f"{percent_paid:.0f}% collected")
+    with col3:
+        st.metric("⏳ Outstanding", f"${balance:,.2f}")
 
 
 # --------------------------------------------------
