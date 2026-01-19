@@ -21,7 +21,7 @@ def init_ss():
     # Initialize cookie quantity session state keys
     DEFAULT_BOOTH_QTY = {
         "TM": 36, "SAM": 24, "TAG": 24, "ADV": 12, "EXP": 6,
-        "TRE": 6, "LEM": 6, "DOS": 8, "TOF": 6,
+        "TRE": 6, "LEM": 6, "DOS": 8, "TOF": 6, "DON": 0,
     }
     for code, default in DEFAULT_BOOTH_QTY.items():
         key = f"plan_{code}"
@@ -81,10 +81,11 @@ def get_draft_booth_orders():
 
 # Booth queries
 def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
-    # Mark order verified
+    # Mark order verified - update both verification_status and status
     execute_sql("""
         UPDATE cookies_app.orders
         SET verification_status = 'VERIFIED',
+            status = 'VERIFIED',
             verified_by = :by,
             verified_at = now(),
             verification_notes = :notes,
@@ -170,12 +171,14 @@ def main():
         "LEM": 6,   # Lemon-Ups
         "DOS": 8,   # Do-si-dos
         "TOF": 6,   # Toffee-Tastic
+        "DON": 0,   # Donations
     }
 
     COOKIE_LAYOUT = [
         ["TM", "SAM", "TAG"],
         ["ADV", "EXP", "TRE"],
         ["LEM", "DOS", "TOF"],
+
     ]
 
     COOKIE_AVG_PCT = {
@@ -188,6 +191,7 @@ def main():
         "LEM": "5%",
         "DOS": "5%",
         "TOF": "3%",
+        "DON": "0%",
     }
 
     # -------------------------------------------------------------------
@@ -244,8 +248,13 @@ def main():
                         f"{code} ({COOKIE_AVG_PCT[code]})",
                         min_value=0,
                         step=1,
+                        value=ss.get(f"plan_{code}", DEFAULT_BOOTH_QTY[code]),
                         key=f"plan_{code}",
                     )
+        
+        
+        # Add DON automatically with 0 quantity (no user input needed)
+        planned["DON"] = 0
 
         scouts = fetch_all("""
             SELECT scout_id, first_name || ' ' || last_name AS name
@@ -278,6 +287,25 @@ def main():
                 st.error(f"⚠️ A booth already exists for {location} on {booth_date.strftime('%b %d')} at {start_time.strftime('%I:%M %p')}. Please use a different location, date, or time.")
             else:
                 booth_id = str(uuid4())
+                order_id = str(uuid4())
+                
+                # Get first scout's parent_id and scout_id for the order
+                parent_id = None
+                scout_id = None
+                if scout_ids:
+                    first_scout = fetch_all("""
+                        SELECT parent_id, scout_id 
+                        FROM cookies_app.scouts 
+                        WHERE scout_id = :sid
+                    """, {"sid": scout_ids[0]})
+                    if first_scout:
+                        parent_id = first_scout[0].parent_id
+                        scout_id = first_scout[0].scout_id
+                
+                # Calculate total boxes and amount
+                total_boxes = sum(planned.values())
+                # Assuming $6 per box (update if needed)
+                total_amount = total_boxes * 6
                 
                 # Create booth
                 execute_sql("""
@@ -328,6 +356,48 @@ def main():
                         "sid": sid,
                     })
 
+                # Create order with status='NEW' and planned quantities
+                execute_sql("""
+                    INSERT INTO cookies_app.orders (
+                        order_id, booth_id, parent_id, scout_id,
+                        program_year, order_type, status, verification_status,
+                        order_qty_boxes, order_amount, submit_dt
+                    )
+                    VALUES (
+                        :oid, :bid, :pid, :sid,
+                        :year, 'BOOTH', 'NEW', 'DRAFT',
+                        :qty, :amt, now()
+                    )
+                """, {
+                    "oid": order_id,
+                    "bid": booth_id,
+                    "pid": parent_id,
+                    "sid": scout_id,
+                    "year": ss.current_year,
+                    "qty": total_boxes,
+                    "amt": total_amount,
+                })
+                
+                # Create order items with planned quantities
+                for code, qty in planned.items():
+                    execute_sql("""
+                        INSERT INTO cookies_app.order_items (
+                            order_item_id, order_id, parent_id, scout_id,
+                            program_year, cookie_code, quantity
+                        )
+                        VALUES (
+                            gen_random_uuid(), :oid, :pid, :sid,
+                            :year, :code, :qty
+                        )
+                    """, {
+                        "oid": order_id,
+                        "pid": parent_id,
+                        "sid": scout_id,
+                        "year": ss.current_year,
+                        "code": code,
+                        "qty": qty,
+                    })
+
                 st.toast(f"✅ Booth created: {location} on {booth_date.strftime('%b %d')} at {start_time.strftime('%I:%M %p')}", icon="🎉")
                 st.rerun()
 
@@ -341,21 +411,22 @@ def main():
         
         if not booths:
             st.info("No booths have been created yet.")
-        
-        booth = st.selectbox(
-            "Select Booth",
-            booths,
-            format_func=lambda b: (
-                f"{b.booth_date.strftime('%b %d')} "
-                f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
-                f"{b.location}"
+        else:
+            booth = st.selectbox(
+                "Select Booth",
+                booths,
+                format_func=lambda b: (
+                    f"{b.booth_date.strftime('%b %d')} "
+                    f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
+                    f"{b.location}"
+                )
             )
-        )
 
-        cookies = fetch_all("""
+            cookies = fetch_all("""
             SELECT 
                 cy.display_name, 
                 cy.price_per_box,
+                cy.cookie_code,
                 bip.planned_quantity
             FROM cookies_app.booth_inventory_plan bip
             JOIN cookies_app.cookie_years cy 
@@ -364,33 +435,119 @@ def main():
             WHERE bip.booth_id = :bid
               AND bip.program_year = :year
             ORDER BY cy.display_order
-        """, {"bid": booth.booth_id, "year": ss.current_year})
+            """, {"bid": booth.booth_id, "year": ss.current_year})
 
-        st.table([
-            {
-                "Cookie": c.display_name,
-                "Start Qty": c.planned_quantity,
-                "End Qty": "",
-                "Sold": "",
-                "Price": f"${c.price_per_box:.2f}",
-                "Revenue": ""
-            }
-            for c in cookies
-        ])
+            # Generate printable HTML
+            total_boxes = sum(c.planned_quantity for c in cookies)
+            
+            html_content = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px;">
+                <h1 style="text-align: center; border-bottom: 3px solid #333; padding-bottom: 10px;">
+                    Girl Scout Cookie Booth Sheet
+                </h1>
+                
+                <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                    <h2 style="margin-top: 0;">Booth Information</h2>
+                    <p><strong>Location:</strong> {booth.location}</p>
+                    <p><strong>Date:</strong> {booth.booth_date.strftime('%A, %B %d, %Y')}</p>
+                    <p><strong>Time:</strong> {booth.start_time.strftime('%I:%M %p')} - {booth.end_time.strftime('%I:%M %p')}</p>
+                    <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                </div>
 
-        st.markdown("""
-        **Cash Reconciliation**
-        1. Ending Money (Cash + Credit): ______  
-        2. Starting Cash: ________________  
-        3. Revenue (1 − 2): ______________  
-        4. Expected Revenue: ____________  
-        5. Over / Under: ________________  
-        6. OPC Boxes: ___________________  
+                <h2>Cookie Inventory</h2>
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <thead>
+                        <tr style="background-color: #333; color: white;">
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Cookie</th>
+                            <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Start Qty</th>
+                            <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">End Qty</th>
+                            <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Sold</th>
+                            <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Price</th>
+                            <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            
+            for i, c in enumerate(cookies):
+                bg_color = "#f9f9f9" if i % 2 == 0 else "white"
+                html_content += f"""
+                        <tr style="background-color: {bg_color};">
+                            <td style="padding: 8px; border: 1px solid #ddd;"><strong>{c.display_name}</strong></td>
+                            <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">{c.planned_quantity}</td>
+                            <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">_____</td>
+                            <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">_____</td>
+                            <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${c.price_per_box:.2f}</td>
+                            <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">_________</td>
+                        </tr>
+                """
+            
+            html_content += """
+                        <tr style="background-color: #e0e0e0; font-weight: bold;">
+                            <td style="padding: 10px; border: 1px solid #ddd;" colspan="3">TOTALS</td>
+                            <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">_____</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;"></td>
+                            <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">$_________</td>
+                        </tr>
+                    </tbody>
+                </table>
 
-        **Outgoing Signature:** ______________________
-        """)
+                <div style="margin: 30px 0; padding: 20px; border: 2px solid #333; border-radius: 5px;">
+                    <h2 style="margin-top: 0;">Cash Reconciliation</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <p><strong>1. Ending Money (Cash + Credit):</strong> $__________</p>
+                            <p><strong>2. Starting Cash:</strong> $__________</p>
+                            <p><strong>3. Actual Revenue (1 - 2):</strong> $__________</p>
+                        </div>
+                        <div>
+                            <p><strong>4. Expected Revenue:</strong> $__________</p>
+                            <p><strong>5. Over / Under (3 - 4):</strong> $__________</p>
+                            <p><strong>6. OPC Boxes:</strong> __________</p>
+                        </div>
+                    </div>
+                </div>
 
-        st.info("Use your browser print dialog to print this page.")
+                <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 5px;">
+                    <h3>Notes / Issues:</h3>
+                    <div style="min-height: 80px; border: 1px solid #ddd; padding: 10px; background-color: white;">
+                        &nbsp;
+                    </div>
+                </div>
+
+                <div style="margin: 40px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <div style="border-top: 2px solid #333; padding-top: 10px;">
+                        <p style="margin: 5px 0;"><strong>Outgoing Signature:</strong></p>
+                        <p style="margin: 5px 0; font-size: 12px;">Name: ____________________</p>
+                        <p style="margin: 5px 0; font-size: 12px;">Date/Time: ____________________</p>
+                    </div>
+                    <div style="border-top: 2px solid #333; padding-top: 10px;">
+                        <p style="margin: 5px 0;"><strong>Return Signature:</strong></p>
+                        <p style="margin: 5px 0; font-size: 12px;">Name: ____________________</p>
+                        <p style="margin: 5px 0; font-size: 12px;">Date/Time: ____________________</p>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                @media print {{
+                    body {{ margin: 0; }}
+                    .stApp {{ padding: 0 !important; }}
+                    header, footer, .stTabs, .stSelectbox {{ display: none !important; }}
+                }}
+            </style>
+            """
+            
+            # Download button
+            st.download_button(
+                label="📥 Download Booth Sheet (HTML)",
+                data=html_content,
+                file_name=f"booth_sheet_{booth.location.replace(' ', '_')}_{booth.booth_date.strftime('%Y%m%d')}.html",
+                mime="text/html",
+                help="Download as HTML file - open in browser and print"
+            )
+            
+            st.info("💡 Click the download button above, then open the HTML file in your browser and print.")
 
     # ==================================================
     # TAB 3 — VERIFY BOOTH

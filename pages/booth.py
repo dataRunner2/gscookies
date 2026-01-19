@@ -52,7 +52,7 @@ def get_booths():
 # Uses get_cookies_for_year from order_utils
 
 
-def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, ending_cash, square_total):
+def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, ending_cash, square_total, parent_id=None, scout_id=None):
     # Check if order already exists for this booth
     existing = fetch_all("""
         SELECT order_id 
@@ -63,7 +63,8 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
     """, {"booth_id": booth_id, "year": year})
     
     if existing:
-        # Update existing order
+        # Update existing order - set status to PENDING since parent is submitting data
+        # Also update parent_id and scout_id from the scouts selected by the parent
         order_id = existing[0].order_id
         execute_sql("""
             UPDATE cookies_app.orders
@@ -72,7 +73,10 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
                 starting_cash = :starting_cash,
                 ending_cash = :ending_cash,
                 square_total = :square_total,
+                parent_id = :parent_id,
+                scout_id = :scout_id,
                 submit_dt = now(),
+                status = 'PENDING',
                 verification_status = 'DRAFT'
             WHERE order_id = :order_id
         """, {
@@ -82,14 +86,18 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
             "starting_cash": float(starting_cash),
             "ending_cash": float(ending_cash),
             "square_total": float(square_total),
+            "parent_id": str(parent_id) if parent_id else None,
+            "scout_id": str(scout_id) if scout_id else None,
         })
     else:
-        # Create new order
+        # Create new order (fallback if admin didn't create it)
         order_id = uuid4()
         execute_sql("""
             INSERT INTO cookies_app.orders (
                 order_id,
                 booth_id,
+                parent_id,
+                scout_id,
                 program_year,
                 order_type,
                 status,
@@ -105,9 +113,11 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
             VALUES (
                 :order_id,
                 :booth_id,
+                :parent_id,
+                :scout_id,
                 :year,
                 'BOOTH',
-                'NEW',
+                'PENDING',
                 'DRAFT',
                 :qty,
                 :amt,
@@ -120,6 +130,8 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
         """, {
             "order_id": str(order_id),
             "booth_id": str(booth_id),
+            "parent_id": str(parent_id) if parent_id else None,
+            "scout_id": str(scout_id) if scout_id else None,
             "year": year,
             "qty": total_boxes,
             "amt": float(total_amount),
@@ -388,6 +400,8 @@ def main():
             starting_cash=starting_cash,
             ending_cash=ending_cash,
             square_total=square_total,
+            parent_id=parent_id,
+            scout_id=scout_id,
         )
 
         save_order_items(order_id, year, items, parent_id, scout_id)
