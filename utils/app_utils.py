@@ -92,12 +92,12 @@ class setup:
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
+            # st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
             st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
             st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
-            st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
+            # st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
             st.sidebar.page_link('pages/admin_import_DOC_orders.py',label='Import DOC')
             st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
 

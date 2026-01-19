@@ -6,12 +6,13 @@ from pathlib import Path
 
 from utils.app_utils import apputils as au, setup 
 from elasticsearch import Elasticsearch  # need to also install with pip3
+from utils.db_utils import require_login, to_pacific
 
 def init_ss():
     pass
 
 def main():
-
+    require_login()
 
     PDF_PATH = Path("assets/Parent_Meeting_2026.pdf")
 

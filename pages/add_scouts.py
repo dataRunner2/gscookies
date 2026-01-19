@@ -48,7 +48,7 @@ def main():
     # --------------------------------------------------
     # Add new scout
     # --------------------------------------------------
-    with st.expander("➕ Add a New Scout", expanded=True):
+    with st.expander("➕ Add a New Scout", expanded=False):
         with st.form("add_scout_form", clear_on_submit=True):
 
             col1, col2 = st.columns(2)

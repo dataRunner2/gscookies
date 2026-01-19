@@ -304,6 +304,106 @@ def get_order_items(order_id):
     df = pd.DataFrame(rows)
 
 
+def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
+    """
+    Get all orders in WIDE format - one row per order with admin fields.
+    Ready for admin_order_management page.
+    
+    Columns: orderId, orderType, orderStatus, addEbudde, initialOrder, verifiedDigitalCookie,
+    comments, submit_dt, scoutName, boothId, paymentStatus, plus one column per cookie type.
+    """
+    params = {}
+    year_filter = ""
+    
+    if program_year:
+        year_filter = "WHERE o.program_year = :year"
+        params["year"] = program_year
+    
+    rows = fetch_all(f"""
+        WITH paid AS (
+            SELECT
+                related_order_id AS order_id,
+                COALESCE(SUM(amount), 0) AS paid_amount
+            FROM cookies_app.money_ledger
+            GROUP BY related_order_id
+        )
+        SELECT
+            o.order_id AS orderId,
+            o.program_year,
+            o.submit_dt,
+            o.order_type AS orderType,
+            o.status AS orderStatus,
+            o.order_amount AS orderAmount,
+            o.order_qty_boxes AS orderQtyBoxes,
+            o.comments,
+            o.booth_id AS boothId,
+            
+            COALESCE(o.add_ebudde, false) AS addEbudde,
+            COALESCE(o.verified_digital, false) AS verifiedDigitalCookie,
+            COALESCE(
+                o.initial_order,
+                (o.submit_dt >= make_date(o.program_year, 1, 5)
+                 AND o.submit_dt <  make_date(o.program_year, 2, 1))
+            ) AS initialOrder,
+            
+            (s.first_name || ' ' || s.last_name) AS scoutName,
+            
+            COALESCE(paid.paid_amount, 0) AS paidAmount,
+            
+            oi.cookie_code AS cookieCode,
+            oi.quantity
+            
+        FROM cookies_app.orders o
+        LEFT JOIN cookies_app.order_items oi
+          ON oi.order_id = o.order_id
+         AND oi.program_year = o.program_year
+        LEFT JOIN cookies_app.scouts s
+          ON s.scout_id = o.scout_id
+        LEFT JOIN paid
+          ON paid.order_id = o.order_id
+        {year_filter}
+        ORDER BY o.submit_dt DESC, o.order_id
+    """, params)
+    
+    if not rows:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(rows)
+    
+    # Get all unique orders first (before pivoting)
+    meta_cols = ['orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
+                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
+                 'verifiedDigitalCookie', 'initialOrder', 'scoutName']
+    meta = df[meta_cols].drop_duplicates('orderId').set_index('orderId')
+    
+    # Add paymentStatus
+    meta['paymentStatus'] = meta.index.map(payment_statuses)
+    
+    # Pivot cookies by cookie_code, summing quantities
+    # Use dropna=False to keep orders without cookies
+    cookies = df[df['cookieCode'].notna()].pivot_table(
+        index='orderId',
+        columns='cookieCode',
+        values='quantity',
+        aggfunc='sum',
+        fill_value=0
+    ).astype(int)
+    
+    # Merge metadata with cookies, keeping all metadata rows
+    if not cookies.empty:
+        result = meta.join(cookies, how='left').reset_index()
+    else:
+        # If no cookies at all, still include all orders
+        result = meta.reset_index()
+    
+    result['submit_dt'] = pd.to_datetime(result['submit_dt']).dt.date
+    
+    # Non-digital orders should never appear "verified"
+    result.loc[~result['orderType'].str.contains('Digital', case=False, na=False), 'verifiedDigitalCookie'] = False
+    
+    return result
+
+
 def get_outstanding_non_booth_orders(program_year=None):
     params = {}
     year_filter = ""
@@ -663,26 +763,28 @@ def bulk_insert_order_items(df):
                     "scout_id": str(r.scout_id),
                     "program_year": r.program_year,
                     "cookie_code": r.cookie_code,
-                    "quantity": r.quantity,
+                    "quantity": int(getattr(r, 'quantity', 0)),
                 })
     else:
         # Wide format: columns are cookie codes
-        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at'}
+        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at', 'Customer Email Address', 'Payment Status', 'Council Name', 'Troop Number', 'Refund', 'Baker'}
 
-        for r in df.itertuples():
+        for idx, row in df.iterrows():
             for col in df.columns:
                 if col in meta_cols:
                     continue
-                qty = getattr(r, col)
+                qty = pd.to_numeric(row[col], errors='coerce')
+                if pd.isna(qty):
+                    qty = 0
                 if qty > 0:
                     payload.append({
                         "order_item_id": str(uuid.uuid4()),
-                        "order_id": str(r.order_id),
-                        "parent_id": str(r.parent_id),
-                        "scout_id": str(r.scout_id),
-                        "program_year": r.program_year,
+                        "order_id": str(row['order_id']),
+                        "parent_id": str(row['parent_id']),
+                        "scout_id": str(row['scout_id']),
+                        "program_year": row['program_year'],
                         "cookie_code": col,
-                        "quantity": qty,
+                        "quantity": int(qty),
                     })
 
     execute_many_sql(sql, payload)
@@ -731,7 +833,7 @@ def bulk_insert_planned_inventory(df):
                 })
     else:
         # Wide format
-        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at'}
+        meta_cols = {'order_id', 'parent_id', 'scout_id', 'program_year', 'order_ref', 'order_type', 'status', 'order_qty_boxes', 'order_amount', 'comments', 'external_order_id', 'order_source', 'submit_dt', 'created_at', 'Customer Email Address', 'Payment Status', 'Council Name', 'Troop Number', 'Refund', 'Baker'}
 
         for r in df.itertuples():
             for col in df.columns:

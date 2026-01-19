@@ -8,7 +8,7 @@ import datetime
 from utils.db_utils import require_admin
 from utils.app_utils import setup, apputils
 from utils.order_utils import (
-    get_admin_orders_flat,
+    get_all_orders_wide,
     admin_update_orders_bulk,
     get_cookie_codes_for_year,
     get_all_scouts,
@@ -49,56 +49,6 @@ def init_ss():
 # -----------------------------
 # Helpers
 # -----------------------------
-def pivot_orders(rows: list[dict]) -> pd.DataFrame:
-    """
-    Converts (order, cookieCode) rows into one row per order with cookie columns.
-    """
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
-
-    meta_cols = [
-        "orderId",
-        "orderStatus",
-        "orderType",
-        "paymentStatus",
-        "addEbudde",
-        "initialOrder",
-        "verifiedDigitalCookie",
-        "comments",
-        "submit_dt",
-        "scoutName",
-        "boothId",
-    ]
-    meta_cols = [c for c in meta_cols if c in df.columns]
-
-    meta = (
-        df[meta_cols]
-        .drop_duplicates("orderId")
-        .set_index("orderId")
-    )
-
-    df["qty"] = pd.to_numeric(df.get("qty", 0), errors="coerce").fillna(0).astype(int)
-
-    cookies = (
-        df.pivot_table(
-            index="orderId",
-            columns="cookieCode",
-            values="qty",
-            aggfunc="sum",
-            fill_value=0,
-        )
-        .astype(int)
-    )
-
-    out = meta.join(cookies).reset_index()
-
-    if "submit_dt" in out.columns:
-        out["submitDate"] = pd.to_datetime(out["submit_dt"], errors="coerce").dt.date
-
-    return out
-
-
 def _norm(v):
     if pd.isna(v):
         return None
@@ -153,15 +103,10 @@ def main():
     require_admin()
     init_ss()
 
-    rows = get_admin_orders_flat(program_year=int(ss.current_year))
-    if not rows:
+    df_all = get_all_orders_wide(program_year=int(ss.current_year))
+    if df_all.empty:
         st.info("No orders found.")
         return
-
-    df_all = pivot_orders(rows)
-
-    scouts = get_all_scouts()
-    all_scout_names = sorted([f"{s['first_name']} {s['last_name']}" for s in scouts])
 
     # ---------------- Filters ----------------
     st.subheader("Filters")
@@ -179,7 +124,7 @@ def main():
     with c2:
         scout_filter = st.multiselect(
             "Scout",
-            options=all_scout_names,
+            options=sorted(df_all["scoutName"].dropna().unique()),
         )
 
     with c3:

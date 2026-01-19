@@ -7,7 +7,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from utils.app_utils import setup
-from utils.db_utils import get_engine
+from utils.db_utils import get_engine, require_login, to_pacific
 
 engine = get_engine()
 
@@ -19,13 +19,6 @@ def init_ss():
     if 'current_year' not in ss:
         ss.current_year = datetime.now().year
 
-# --------------------------------------------------
-# Session checks
-# --------------------------------------------------
-def require_login():
-    if not ss.get("authenticated"):
-        st.warning("Please log in to view troop orders.")
-        st.stop()
 
 
 # --------------------------------------------------
