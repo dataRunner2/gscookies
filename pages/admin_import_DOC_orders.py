@@ -185,6 +185,12 @@ def main():
     # Update Scouts Table with GSU_ID
     scout_updates = build_scout_updates(scouts, ss.gsuid_map)
     # st.write(f'Scouts table Updates: \n\n{scout_updates[:2]}')
+    
+    # Apply GSUSA ID updates to scouts table
+    if scout_updates:
+        for scout_id, gsusa_id in scout_updates:
+            update_scout_gsusa_id(scout_id, gsusa_id)
+        st.info(f"✓ Updated {len(scout_updates)} scout(s) with GSUSA IDs")
 
     #### 
     updated_df = attach_scout_id(filtered_df)
@@ -225,6 +231,9 @@ def main():
 
             if choice:
                 scout_matches[scout_name] = scout_options[choice]
+                st.success(f"✓ Selected: {choice}")
+            else:
+                st.warning(f"⚠️ No match selected - orders will be skipped")
 
         # Separate newly matched from still unmatched
         newly_matched_list = []
@@ -251,12 +260,12 @@ def main():
 
         # Display and handle remaining unmatched scouts
         if not still_unmatched.empty:
-            st.warning(f"{len(still_unmatched)} orders remain unmatched (will be imported as new scouts)")
+            st.warning(f"⏳ {len(still_unmatched)} orders remain unmatched - these will be skipped")
+            st.info("**Action needed:** Parents must create accounts and add scouts to the system before these orders can be imported.")
             unmatched_scouts = still_unmatched['scout_name'].unique()
             for scout in unmatched_scouts:
                 count = len(still_unmatched[still_unmatched['scout_name'] == scout])
-                st.info(f"  • {scout}: {count} orders")
-            matched = pd.concat([matched, still_unmatched], ignore_index=True)
+                st.info(f"  • {scout}: {count} orders (skipped)")
 
     # ----------------------------------
     # Final Prep + Deduplication
@@ -298,7 +307,7 @@ def main():
     st.metric("New Orders to Import", len(new_orders))
     # st.write(new_orders.columns.tolist())
     cols_to_import = ["parent_id","scout_id","program_year","order_ref",
-            "order_type","comments","order_qty_boxes","order_amount",
+            "order_type","submit_dt","comments","order_qty_boxes","order_amount",
             "status"] + list(cookie_nm_map.values())
     st.dataframe(
         new_orders[cols_to_import],

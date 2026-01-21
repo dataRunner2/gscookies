@@ -725,7 +725,7 @@ def bulk_insert_order_headers(df):
             :comments,
             :external_order_id,
             :order_source,
-            now(),
+            :submit_dt,
             now()
         )
     """
@@ -752,6 +752,7 @@ def bulk_insert_order_headers(df):
             "comments": r.comments,
             "external_order_id": r.external_order_id,
             "order_source": r.order_source,
+            "submit_dt": r.submit_dt,
         })
 
         # store for downstream inserts
