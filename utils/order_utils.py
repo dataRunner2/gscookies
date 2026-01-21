@@ -134,15 +134,14 @@ def fetch_scout_aliases(conn):
     return {r[0].lower(): r[1] for r in rows}
 
 def insert_scout_alias(conn, alias_name: str, scout_id: int):
-    conn.execute(
-        """
+    execute_sql("""
         INSERT INTO scout_aliases (alias_name, scout_id)
         VALUES (%s, %s)
         ON CONFLICT (alias_name) DO NOTHING
-        """,
-        (alias_name, scout_id),
+        """,{
+            "alias": alias_name, 
+            "scout":scout_id}
     )
-    conn.commit()
 
 def get_all_parents():
     return fetch_all("""
@@ -152,21 +151,19 @@ def get_all_parents():
     """)
 
 def update_scout_gsusa_id(scout_id, gsusa_id):
-    engine = get_engine()
-    with engine().begin() as conn:
-        conn.execute(
-            text("""
-                UPDATE scouts
-                SET gsusa_id = :gsusa_id
-                WHERE scout_id = :scout_id
-                  AND gsusa_id IS NULL
-            """),
-            {
+    execute_sql("""
+            UPDATE scouts
+            SET gsusa_id = :gsusa_id
+            WHERE scout_id = :scout_id
+                AND gsusa_id IS NULL
+            
+        """, {
                 "scout_id": scout_id,
                 "gsusa_id": str(gsusa_id),
-            },
+            }
         )
 
+            
 # ==================================================
 # Cookie helpers
 # ==================================================
@@ -709,6 +706,7 @@ def bulk_insert_order_headers(df):
             comments,
             external_order_id,
             order_source,
+            initial_order,
             submit_dt,
             created_at
         )
@@ -725,6 +723,7 @@ def bulk_insert_order_headers(df):
             :comments,
             :external_order_id,
             :order_source,
+            :initial_order,
             :submit_dt,
             now()
         )
@@ -752,6 +751,7 @@ def bulk_insert_order_headers(df):
             "comments": r.comments,
             "external_order_id": r.external_order_id,
             "order_source": r.order_source,
+            "initial_order": bool(r.initial_order) if hasattr(r, "initial_order") else None,
             "submit_dt": r.submit_dt,
         })
 

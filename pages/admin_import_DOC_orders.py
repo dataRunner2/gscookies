@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit import session_state as ss
 import pandas as pd
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 
 from utils.app_utils import setup
 from utils.db_utils import require_admin
@@ -243,6 +243,7 @@ def main():
             mask = still_unmatched['scout_name'] == digital_scout_name
             newly_matched_subset = still_unmatched[mask].copy()
             newly_matched_subset['scout_id'] = system_scout_id
+            newly_matched_subset['parent_id'] = ss.parent_id_lookup.get(system_scout_id)
             newly_matched_list.append(newly_matched_subset)
             
             # Remove from still_unmatched
@@ -281,6 +282,12 @@ def main():
     matched["status"] = "IMPORTED"
     matched["order_ref"] = matched["external_order_id"].astype(str)
 
+    # Mark initial orders: submitted before Feb 1 of program year
+    matched["initial_order"] = matched.apply(
+        lambda r: bool(r["submit_dt"].date() < date(int(r["program_year"]), 2, 1)),
+        axis=1,
+    )
+
     # Rename cookie display names -> cookie codes (must ASSIGN result)
     matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
 
@@ -306,8 +313,8 @@ def main():
 
     st.metric("New Orders to Import", len(new_orders))
     # st.write(new_orders.columns.tolist())
-    cols_to_import = ["parent_id","scout_id","program_year","order_ref",
-            "order_type","submit_dt","comments","order_qty_boxes","order_amount",
+        cols_to_import = ["parent_id","scout_id","program_year","order_ref",
+            "order_type","submit_dt","initial_order","comments","order_qty_boxes","order_amount",
             "status"] + list(cookie_nm_map.values())
     st.dataframe(
         new_orders[cols_to_import],
