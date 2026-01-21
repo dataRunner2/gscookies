@@ -412,6 +412,163 @@ def main():
         if not booths:
             st.info("No booths have been created yet.")
         else:
+            # Get all NEW booths (status='NEW')
+            new_booths = []
+            for b in booths:
+                order_status = fetch_all("""
+                    SELECT status 
+                    FROM cookies_app.orders 
+                    WHERE booth_id = :bid AND order_type = 'BOOTH'
+                """, {"bid": b.booth_id})
+                if order_status and order_status[0].status == 'NEW':
+                    new_booths.append(b)
+            
+            if new_booths:
+                st.markdown("---")
+                st.markdown(f"**{len(new_booths)} NEW booth(s) ready to print**")
+                
+                if st.button("📙 Create 'all new' combined booth print file"):
+                    # Generate combined HTML for all NEW booths
+                    combined_html = """
+                    <style>
+                        @media print {
+                            body { margin: 0; }
+                            .booth-sheet { page-break-after: always; }
+                            .booth-sheet:last-child { page-break-after: auto; }
+                        }
+                        .booth-sheet {
+                            font-family: Arial, sans-serif;
+                            max-width: 800px;
+                            margin: 20px auto;
+                            padding: 20px;
+                        }
+                    </style>
+                    """
+                    
+                    for booth_item in new_booths:
+                        cookies = fetch_all("""
+                        SELECT 
+                            cy.display_name, 
+                            cy.price_per_box,
+                            cy.cookie_code,
+                            bip.planned_quantity
+                        FROM cookies_app.booth_inventory_plan bip
+                        JOIN cookies_app.cookie_years cy 
+                            ON cy.cookie_code = bip.cookie_code 
+                            AND cy.program_year = bip.program_year
+                        WHERE bip.booth_id = :bid
+                          AND bip.program_year = :year
+                        ORDER BY cy.display_order
+                        """, {"bid": booth_item.booth_id, "year": ss.current_year})
+                        
+                        total_boxes = sum(c.planned_quantity for c in cookies)
+                        
+                        combined_html += f"""
+                        <div class="booth-sheet">
+                            <h1 style="text-align: center; border-bottom: 3px solid #333; padding-bottom: 10px;">
+                                Girl Scout Cookie Booth Sheet
+                            </h1>
+                            
+                            <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                                <h2 style="margin-top: 0;">Booth Information</h2>
+                                <p><strong>Location:</strong> {booth_item.location}</p>
+                                <p><strong>Date:</strong> {booth_item.booth_date.strftime('%A, %B %d, %Y')}</p>
+                                <p><strong>Time:</strong> {booth_item.start_time.strftime('%I:%M %p')} - {booth_item.end_time.strftime('%I:%M %p')}</p>
+                                <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                            </div>
+
+                            <h2>Cookie Inventory</h2>
+                            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                <thead>
+                                    <tr style="background-color: #333; color: white;">
+                                        <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Cookie</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Start Qty</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">End Qty</th>
+                                        <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Sold</th>
+                                        <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Price</th>
+                                        <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        """
+                        
+                        for i, c in enumerate(cookies):
+                            bg_color = "#f9f9f9" if i % 2 == 0 else "white"
+                            combined_html += f"""
+                                    <tr style="background-color: {bg_color};">
+                                        <td style="padding: 8px; border: 1px solid #ddd;"><strong>{c.display_name}</strong></td>
+                                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">{c.planned_quantity}</td>
+                                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">_____</td>
+                                        <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">_____</td>
+                                        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${c.price_per_box:.2f}</td>
+                                        <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">_________</td>
+                                    </tr>
+                            """
+                        
+                        combined_html += """
+                                    <tr style="background-color: #e0e0e0; font-weight: bold;">
+                                        <td style="padding: 10px; border: 1px solid #ddd;" colspan="3">TOTALS</td>
+                                        <td style="padding: 10px; text-align: center; border: 1px solid #ddd;">_____</td>
+                                        <td style="padding: 10px; border: 1px solid #ddd;"></td>
+                                        <td style="padding: 10px; text-align: right; border: 1px solid #ddd;">$_________</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="margin: 30px 0; padding: 20px; border: 2px solid #333; border-radius: 5px;">
+                                <h2 style="margin-top: 0;">Cash Reconciliation</h2>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <p><strong>1. Ending Money:</strong></p>
+                                        <p><strong>   1a. (Cash):</strong> $__________</p>
+                                        <p><strong>   1b. (Square):</strong> $__________</p>
+                                        <p><strong>1. Total Ending Money</strong> $__________</p>
+                                        <p><strong>2. Starting Cash:</strong> $__________</p>
+                                        <p><strong>3. Actual Revenue (1 - 2):</strong> $__________</p>
+                                    </div>
+                                    <div>
+                                        <p><strong>4. Expected Revenue:</strong> $__________</p>
+                                        <p><strong>5. Over / Under (3 - 4):</strong> $__________</p>
+                                        <p><strong>6. OPC Boxes:</strong> __________</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 5px;">
+                                <h3>Notes / Issues:</h3>
+                                <div style="min-height: 80px; border: 1px solid #ddd; padding: 10px; background-color: white;">
+                                    &nbsp;
+                                </div>
+                            </div>
+
+                            <div style="margin: 40px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                                <div style="border-top: 2px solid #333; padding-top: 10px;">
+                                    <p style="margin: 5px 0;"><strong>Outgoing Signature:</strong></p>
+                                    <p style="margin: 5px 0; font-size: 12px;">Name: ____________________</p>
+                                    <p style="margin: 5px 0; font-size: 12px;">Date/Time: ____________________</p>
+                                </div>
+                                <div style="border-top: 2px solid #333; padding-top: 10px;">
+                                    <p style="margin: 5px 0;"><strong>Return Signature:</strong></p>
+                                    <p style="margin: 5px 0; font-size: 12px;">Name: ____________________</p>
+                                    <p style="margin: 5px 0; font-size: 12px;">Date/Time: ____________________</p>
+                                </div>
+                            </div>
+                        </div>
+                        """
+                    
+                    st.download_button(
+                        label="🖨 Download All NEW Booth Sheets (Combined HTML)",
+                        data=combined_html,
+                        file_name=f"all_new_booth_sheets_{datetime.now().strftime('%Y%m%d')}.html",
+                        mime="text/html",
+                        help="Download all NEW booths in one HTML file - each booth will print on a separate page",
+                        key="download_all_new"
+                    )
+                    st.success(f"✅ Generated {len(new_booths)} booth sheets ready to download!")
+                
+                st.markdown("---")
+            
+            st.markdown("### Individual Booth Sheet")
             booth = st.selectbox(
                 "Select Booth",
                 booths,
@@ -496,14 +653,17 @@ def main():
                     <h2 style="margin-top: 0;">Cash Reconciliation</h2>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div>
-                            <p><strong>1. Ending Money (Cash + Credit):</strong> $__________</p>
+                            <p><strong>1. Ending Money:</strong></p>
+                            <p><strong>   1a. (Cash):</strong> $__________</p>
+                            <p><strong>   1b. (Square):</strong> $__________</p>
+                            <p><strong>1. Total Ending Money</strong> $__________</p>
                             <p><strong>2. Starting Cash:</strong> $__________</p>
                             <p><strong>3. Actual Revenue (1 - 2):</strong> $__________</p>
                         </div>
                         <div>
                             <p><strong>4. Expected Revenue:</strong> $__________</p>
                             <p><strong>5. Over / Under (3 - 4):</strong> $__________</p>
-                            <p><strong>6. OPC Boxes:</strong> __________</p>
+                            <p><strong>6. OPC Boxes (5/$6):</strong> __________</p>
                         </div>
                     </div>
                 </div>
@@ -540,7 +700,7 @@ def main():
             
             # Download button
             st.download_button(
-                label="📥 Download Booth Sheet (HTML)",
+                label="🖨 Download Booth Sheet (HTML)",
                 data=html_content,
                 file_name=f"booth_sheet_{booth.location.replace(' ', '_')}_{booth.booth_date.strftime('%Y%m%d')}.html",
                 mime="text/html",

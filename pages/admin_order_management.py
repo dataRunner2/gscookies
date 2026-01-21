@@ -5,7 +5,7 @@ import streamlit as st
 from streamlit import session_state as ss
 import datetime
 
-from utils.db_utils import require_admin
+from utils.db_utils import require_admin, to_pacific
 from utils.app_utils import setup, apputils
 from utils.order_utils import (
     get_all_orders_wide,
@@ -45,6 +45,7 @@ EDITABLE_COLUMNS = {
 def init_ss():
     if "current_year" not in ss:
         ss.current_year = datetime.datetime.now().year
+
 
 # -----------------------------
 # Helpers
@@ -102,7 +103,10 @@ def diff_updates(original: pd.DataFrame, edited: pd.DataFrame):
 def main():
     require_admin()
     init_ss()
-
+    
+    # Show last digital import date
+    apputils.get_last_digital_import()
+   
     df_all = get_all_orders_wide(program_year=int(ss.current_year))
     if df_all.empty:
         st.info("No orders found.")

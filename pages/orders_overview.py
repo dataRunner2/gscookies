@@ -6,8 +6,8 @@ from decimal import Decimal
 import pandas as pd
 from sqlalchemy import text
 
-from utils.app_utils import setup
-from utils.db_utils import get_engine, require_login, to_pacific
+from utils.app_utils import setup, apputils
+from utils.db_utils import get_engine, require_login, to_pacific, fetch_all
 from utils.order_utils import get_all_orders_wide
 
 engine = get_engine()
@@ -46,7 +46,11 @@ def get_all_orders(year):
 # --------------------------------------------------
 def main():
     require_login()
+    
+    # Show last digital import date
+    apputils.get_last_digital_import()
 
+    
     st.subheader("Troop Orders Overview")
     st.caption("Summary of all orders for the selected season.")
 

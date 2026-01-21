@@ -11,7 +11,7 @@ from utils.esutils import esu
 from PIL import Image
 import re
 from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime64_any_dtype
-from utils.db_utils import fetch_all, fetch_one, execute_sql
+from utils.db_utils import fetch_all, fetch_one, execute_sql, to_pacific
 import random
 
 
@@ -115,6 +115,22 @@ class setup:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 class apputils:
+    # -----------------------------
+# Data helpers
+# -----------------------------
+    def get_last_digital_import():
+        """Get the most recent digital order import date"""
+        from utils.db_utils import fetch_all
+        result = fetch_all("""
+            SELECT MAX(submit_dt) as last_import
+            FROM cookies_app.orders
+            WHERE order_source = 'Digital Cookie Import'
+        """)
+        if result and len(result) > 0 and result[0].last_import:
+            last_import = to_pacific(result[0].last_import)
+            st.warning(f"📦 Digital Orders last imported on {last_import.strftime('%B %d, %Y at %I:%M %p')} - orders are imported approx. every 24 hours")
+        return None
+    
     def calc_tots(advf,lmup,tre,dsd,sam,tags,tmint,smr,toff,opc):
         total_boxes = advf+lmup+tre+dsd+sam+tags+tmint+smr+toff+opc
         total_money = total_boxes*6

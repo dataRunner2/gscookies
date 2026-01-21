@@ -6,9 +6,9 @@ from decimal import Decimal
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-from utils.app_utils import setup
+from utils.app_utils import setup, apputils
 from utils.order_utils import get_order_items, get_scouts_byparent, get_orders_for_scout, get_orders_for_scout_summary
-from utils.db_utils import require_login, to_pacific
+from utils.db_utils import require_login, to_pacific, fetch_all
 
 def decimal_sum(series):
     return sum(Decimal(str(x)) for x in series.fillna(0))
@@ -19,6 +19,8 @@ def decimal_sum(series):
 # --------------------------------------------------
 def main():
     require_login()
+    apputils.get_last_digital_import()
+
     # ---- Scout ----
     rows = get_scouts_byparent(ss.parent_id)
     ss.scout_dict = {str(r["scout_id"]): r for r in rows}
