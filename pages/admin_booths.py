@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_FLOOR
 from streamlit import session_state as ss
 from datetime import time, datetime, timedelta
 from uuid import uuid4
+import time as time_module
 from utils.app_utils import setup
 from utils.db_utils import require_admin, execute_sql, fetch_all
 from utils.order_utils import delete_booth_cascade
@@ -18,12 +19,9 @@ def init_ss():
     if 'percent_override' not in ss:
         ss.percent_override = 1.0
     
-    # Initialize cookie quantity session state keys
-    DEFAULT_BOOTH_QTY = {
-        "TM": 36, "SAM": 24, "TAG": 24, "ADV": 12, "EXP": 6,
-        "TRE": 6, "LEM": 6, "DOS": 8, "TOF": 6, "DON": 0,
-    }
-    for code, default in DEFAULT_BOOTH_QTY.items():
+    # Initialize cookie quantity session state keys from database
+    default_booth_qty, _ = get_cookie_data(ss.current_year)
+    for code, default in default_booth_qty.items():
         key = f"plan_{code}"
         if key not in ss:
             ss[key] = default
@@ -33,6 +31,26 @@ def init_ss():
 # --------------------------------------------------
 # Data helpers
 # --------------------------------------------------
+
+def get_cookie_data(program_year):
+    """Fetch cookie data from cookie_years table"""
+    rows = fetch_all("""
+        SELECT cookie_code, default_booth_qty, cookie_avg_pct
+        FROM cookies_app.cookie_years
+        WHERE program_year = :year AND active = TRUE
+        ORDER BY display_order
+    """, {"year": program_year})
+    
+    default_qty = {}
+    avg_pct = {}
+    
+    for row in rows:
+        code = row.cookie_code
+        default_qty[code] = row.default_booth_qty or 0
+        pct_value = float(row.cookie_avg_pct or 0)
+        avg_pct[code] = f"{int(pct_value * 100)}%"
+    
+    return default_qty, avg_pct
 
 def update_weekend_override():
     """Update percent_override when weekend selection changes"""
@@ -158,41 +176,18 @@ def main():
     
 
     # -------------------------------------------------------------------
-    # CONSTANTS
+    # LOAD COOKIE DATA FROM DATABASE
     # -------------------------------------------------------------------
 
-    DEFAULT_BOOTH_QTY = {
-        "TM": 36,   # Thin Mints
-        "SAM": 24,  # Samoas
-        "TAG": 24,  # Tagalongs
-        "ADV": 12,  # Adventurefuls
-        "EXP": 6,   # Explorermores
-        "TRE": 6,   # Trefoils
-        "LEM": 6,   # Lemon-Ups
-        "DOS": 8,   # Do-si-dos
-        "TOF": 6,   # Toffee-Tastic
-        "DON": 0,   # Donations
-    }
+    # Fetch default quantities and percentages from cookie_years table
+    DEFAULT_BOOTH_QTY, COOKIE_AVG_PCT = get_cookie_data(ss.current_year)
 
     COOKIE_LAYOUT = [
         ["TM", "SAM", "TAG"],
         ["ADV", "EXP", "TRE"],
-        ["LEM", "DOS", "TOF"],
+        ["LEM", "DSD", "TOF"],
 
     ]
-
-    COOKIE_AVG_PCT = {
-        "TM": "27%",
-        "SAM": "23%",
-        "TAG": "13%",
-        "ADV": "7%",
-        "EXP": "7%",
-        "TRE": "6%",
-        "LEM": "5%",
-        "DOS": "5%",
-        "TOF": "3%",
-        "DON": "0%",
-    }
 
     # -------------------------------------------------------------------
     # TAB: CREATE BOOTH
@@ -202,13 +197,14 @@ def main():
         st.subheader("➕ Create Booth")
 
         col1, col2,col3, col4 = st.columns(4)
-        location = col1.text_input("Location")
-        booth_date = col2.date_input("Booth Date", format="MM/DD/YYYY")
+        location = col1.text_input("Location", key="create_location")
+        booth_date = col2.date_input("Booth Date", format="MM/DD/YYYY", key="create_booth_date")
 
         start_time = col3.time_input(
             "Start Time",
             value=time(8, 0),
             step=1800,  # 30 min
+            key="create_start_time"
         )
         end_time = (datetime.combine(datetime.today(), start_time) + timedelta(hours=2)).time()
         col4.markdown(f"\n**End Time:** {end_time.strftime('%I:%M %p')}")
@@ -267,6 +263,7 @@ def main():
             options=[s.scout_id for s in scouts],
             format_func=lambda sid: next(s.name for s in scouts if s.scout_id == sid),
             max_selections=4,
+            key="create_scout_ids"
         )
 
         if st.button("Create Booth"):
@@ -288,19 +285,22 @@ def main():
             else:
                 booth_id = str(uuid4())
                 order_id = str(uuid4())
+                 # Default to Booths parent and booth scout- not the assigned scout/parent
+                booth_parent_id = 'f056ec09-9273-4e2d-8532-3b2cf0c7b704'
+                booth_scout_id = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
                 
-                # Get first scout's parent_id and scout_id for the order
-                parent_id = None
-                scout_id = None
-                if scout_ids:
-                    first_scout = fetch_all("""
-                        SELECT parent_id, scout_id 
-                        FROM cookies_app.scouts 
-                        WHERE scout_id = :sid
-                    """, {"sid": scout_ids[0]})
-                    if first_scout:
-                        parent_id = first_scout[0].parent_id
-                        scout_id = first_scout[0].scout_id
+                # Get assigned first scout's parent_id and scout_id
+                # parent_id = None
+                # scout_id = None
+                # if scout_ids:
+                #     first_scout = fetch_all("""
+                #         SELECT parent_id, scout_id 
+                #         FROM cookies_app.scouts 
+                #         WHERE scout_id = :sid
+                #     """, {"sid": scout_ids[0]})
+                #     if first_scout:
+                #         parent_id = first_scout[0].parent_id if first_scout[0].parent_id else None
+                #         scout_id = first_scout[0].scout_id if first_scout[0].scout_id else None
                 
                 # Calculate total boxes and amount
                 total_boxes = sum(planned.values())
@@ -365,14 +365,14 @@ def main():
                     )
                     VALUES (
                         :oid, :bid, :pid, :sid,
-                        :year, 'BOOTH', 'NEW', 'DRAFT',
+                        :year, 'Booth', 'NEW', 'DRAFT',
                         :qty, :amt, now()
                     )
                 """, {
                     "oid": order_id,
                     "bid": booth_id,
-                    "pid": parent_id,
-                    "sid": scout_id,
+                    "pid": booth_parent_id,
+                    "sid": booth_scout_id,
                     "year": ss.current_year,
                     "qty": total_boxes,
                     "amt": total_amount,
@@ -391,15 +391,21 @@ def main():
                         )
                     """, {
                         "oid": order_id,
-                        "pid": parent_id,
-                        "sid": scout_id,
+                        "pid": booth_parent_id,
+                        "sid": booth_scout_id,
                         "year": ss.current_year,
                         "code": code,
                         "qty": qty,
                     })
 
                 st.toast(f"✅ Booth created: {location} on {booth_date.strftime('%b %d')} at {start_time.strftime('%I:%M %p')}", icon="🎉")
-                st.rerun()
+                time_module.sleep(5)
+                if st.button("Clear", key="clear_after_create"):
+                    # Clear form fields
+                    for key in ["create_location", "create_booth_date", "create_start_time", "create_scout_ids"]:
+                        if key in ss:
+                            del ss[key]
+                    st.rerun()
 
     # ==================================================
     # TAB 2 — PRINT BOOTH
@@ -418,7 +424,7 @@ def main():
                 order_status = fetch_all("""
                     SELECT status 
                     FROM cookies_app.orders 
-                    WHERE booth_id = :bid AND order_type = 'BOOTH'
+                    WHERE booth_id = :bid AND order_type = 'Booth'
                 """, {"bid": b.booth_id})
                 if order_status and order_status[0].status == 'NEW':
                     new_booths.append(b)
@@ -576,7 +582,8 @@ def main():
                     f"{b.booth_date.strftime('%b %d')} "
                     f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
                     f"{b.location}"
-                )
+                ),
+                key="booth_print_select"
             )
 
             cookies = fetch_all("""
@@ -747,7 +754,8 @@ def main():
                     f"{b.booth_date.strftime('%b %d')} "
                     f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
                     f"{b.location}"
-                )
+                ),
+                key='booth_verify_select'
             )
 
             # ----------------------------------
@@ -882,7 +890,9 @@ def main():
                     else:
                         verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
                         st.success(f"Booth verified by {admin_name}. Inventory updated.")
-                        st.rerun()
+                        time_module.sleep(3)
+                        if st.button("Clear", key="clear_after_verify"):
+                            st.rerun()
 
     # ==================================================
     # TAB 4 — DELETE BOOTH
@@ -916,6 +926,7 @@ def main():
                         f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
                         f"{b.location}"
                     ),
+                    index=None,
                     key="delete_booth_select"
                 )
 
@@ -935,13 +946,20 @@ def main():
                             st.error("Please confirm both checkboxes before deleting.")
                         else:
                             # Use CASCADE DELETE utility function
-                            success = delete_booth_cascade(str(booth.booth_id))
-                            
-                            if success:
-                                st.toast(f"✓ Deleted: {booth.location} on {booth.booth_date.strftime('%b %d')}", icon="🗑️")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete booth. Check logs for details.")
+                            try:
+                                success = delete_booth_cascade(str(booth.booth_id))
+                                if success:
+                                    st.success(f"✓ Deleted: {booth.location} on {booth.booth_date.strftime('%b %d')}", icon="🗑️")
+                                    time_module.sleep(3)
+                                    # if st.button("Clear", key="clear_after_delete"):
+                                    # Clear booth selector
+                                    if "delete_booth_select" in ss:
+                                        del ss["delete_booth_select"]
+                                        st.rerun()
+                                else:
+                                    st.error("Failed to delete booth. Check logs for details.")
+                            except Exception as ex:
+                                st.error(f"Failed to delete booth: {str(ex)}")
         except Exception as ex:
             st.error(f"🚨 EXCEPTION: {str(ex)}")
             import traceback

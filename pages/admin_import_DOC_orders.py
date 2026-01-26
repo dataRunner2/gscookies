@@ -120,6 +120,12 @@ def rename_cookie_columns(order_df: pd.DataFrame, program_year: int) -> pd.DataF
         if col in rename_map
     }
 
+    # Fallback: map any donation-ish columns to DON
+    for col in order_df.columns:
+        col_l = col.lower()
+        if "donation" in col_l or "donate" in col_l or col_l == "don" or col_l == "donations":
+            valid_map[col] = "DON"
+
     return order_df.rename(columns=valid_map), rename_map
 
     
@@ -225,7 +231,7 @@ def main():
 
             choice = st.selectbox(
                 "Match to Scout",
-                [""] + list(scout_options.keys()),
+                [""] + sorted(scout_options.keys()),
                 key=f"scout_match_{scout_name.replace(' ', '_')}",
             )
 
@@ -290,7 +296,8 @@ def main():
 
     # Rename cookie display names -> cookie codes (must ASSIGN result)
     matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
-
+    # st.write(cookie_nm_map)
+    # st.write(matched.columns.tolist())
     
     # Get existing orders as to not create duplicates
     existing_ids = fetch_existing_external_orders(
@@ -313,9 +320,9 @@ def main():
 
     st.metric("New Orders to Import", len(new_orders))
     # st.write(new_orders.columns.tolist())
-        cols_to_import = ["parent_id","scout_id","program_year","order_ref",
-            "order_type","submit_dt","initial_order","comments","order_qty_boxes","order_amount",
-            "status"] + list(cookie_nm_map.values())
+    cols_to_import = ["parent_id","scout_id","program_year","order_ref",
+        "order_type","submit_dt","initial_order","comments","order_qty_boxes","order_amount",
+        "status"] + list(cookie_nm_map.values())
     st.dataframe(
         new_orders[cols_to_import],
         width='stretch',

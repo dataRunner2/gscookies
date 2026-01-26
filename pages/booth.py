@@ -34,7 +34,7 @@ def get_booths():
             b.quantity_multiplier,
             COALESCE(o.verification_status, 'NEW') as status
         FROM cookies_app.booths b
-        LEFT JOIN cookies_app.orders o ON o.booth_id = b.booth_id AND o.order_type = 'BOOTH'
+        LEFT JOIN cookies_app.orders o ON o.booth_id = b.booth_id AND o.order_type = 'Booth'
         WHERE COALESCE(o.verification_status, 'NEW') != 'VERIFIED'
         ORDER BY 
             CASE COALESCE(o.verification_status, 'NEW')
@@ -53,6 +53,12 @@ def get_booths():
 
 
 def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, ending_cash, square_total, parent_id=None, scout_id=None):
+    # Default parent_id and scout_id to 999 if not provided
+    if parent_id is None:
+        parent_id = 999
+    if scout_id is None:
+        scout_id = 999
+    
     # Check if order already exists for this booth
     existing = fetch_all("""
         SELECT order_id 
@@ -86,8 +92,8 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
             "starting_cash": float(starting_cash),
             "ending_cash": float(ending_cash),
             "square_total": float(square_total),
-            "parent_id": str(parent_id) if parent_id else None,
-            "scout_id": str(scout_id) if scout_id else None,
+            "parent_id": str(parent_id),
+            "scout_id": str(scout_id),
         })
     else:
         # Create new order (fallback if admin didn't create it)
@@ -116,7 +122,7 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
                 :parent_id,
                 :scout_id,
                 :year,
-                'BOOTH',
+                'Booth',
                 'PENDING',
                 'DRAFT',
                 :qty,
@@ -130,8 +136,8 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
         """, {
             "order_id": str(order_id),
             "booth_id": str(booth_id),
-            "parent_id": str(parent_id) if parent_id else None,
-            "scout_id": str(scout_id) if scout_id else None,
+            "parent_id": str(parent_id),
+            "scout_id": str(scout_id),
             "year": year,
             "qty": total_boxes,
             "amt": float(total_amount),
@@ -144,6 +150,12 @@ def save_booth_order(booth_id, year, total_boxes, total_amount, starting_cash, e
 
 
 def save_order_items(order_id, year, items, parent_id=None, scout_id=None):
+    # Default parent_id and scout_id to 999 if not provided
+    if parent_id is None:
+        parent_id = 999
+    if scout_id is None:
+        scout_id = 999
+    
     # Delete existing order items for this order
     execute_sql("""
         DELETE FROM cookies_app.order_items
@@ -175,11 +187,30 @@ def save_order_items(order_id, year, items, parent_id=None, scout_id=None):
     for i in items:
         execute_sql(sql, {
             "order_id": str(order_id),
-            "parent_id": str(parent_id) if parent_id else None,
-            "scout_id": str(scout_id) if scout_id else None,
+            "parent_id": str(parent_id),
+            "scout_id": str(scout_id),
             "year": year,
             "code": i["cookie_code"],
             "qty": i["sold"],
+        })
+
+
+def save_booth_scouts(booth_id, scout_ids):
+    """Save the scouts working at a booth to the booth_scouts table."""
+    # Delete existing booth_scouts entries
+    execute_sql("""
+        DELETE FROM cookies_app.booth_scouts
+        WHERE booth_id = :booth_id
+    """, {"booth_id": booth_id})
+    
+    # Insert new booth_scouts entries
+    for scout_id in scout_ids:
+        execute_sql("""
+            INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
+            VALUES (:booth_id, :scout_id)
+        """, {
+            "booth_id": booth_id,
+            "scout_id": scout_id,
         })
 
 
@@ -226,7 +257,7 @@ def main():
         SELECT order_id, starting_cash, ending_cash, square_total
         FROM cookies_app.orders
         WHERE booth_id = :bid
-          AND order_type = 'BOOTH'
+          AND order_type = 'Booth'
           AND program_year = :year
     """, {"bid": booth.booth_id, "year": year})
     
@@ -405,6 +436,9 @@ def main():
         )
 
         save_order_items(order_id, year, items, parent_id, scout_id)
+        
+        # Save the scouts working this booth
+        save_booth_scouts(booth.booth_id, scout_ids)
 
         st.success("Booth entry saved (DRAFT). Admin verification required.")
         #st.rerun()

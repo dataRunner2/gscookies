@@ -333,6 +333,7 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
             o.order_qty_boxes AS "orderQtyBoxes",
             o.comments,
             o.booth_id AS "boothId",
+            o.scout_id AS "scoutId",
             
             COALESCE(o.add_ebudde, false) AS "addEbudde",
             COALESCE(o.verified_digital, false) AS "verifiedDigitalCookie",
@@ -374,7 +375,7 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
     
     # Get all unique orders first (before pivoting)
     meta_cols = ['orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
-                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
+                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'scoutId', 'addEbudde', 
                  'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paidAmount']
     
     # Only use columns that exist in the dataframe
@@ -418,6 +419,15 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
         # If no cookies at all, still include all orders
         result = meta.reset_index()
     
+    # Fill missing cookie columns with 0
+    all_cookie_codes = get_cookie_codes_for_year(program_year) if program_year else []
+    for code in all_cookie_codes:
+        if code not in result.columns:
+            result[code] = 0
+        else:
+            # Fill NaN values with 0
+            result[code] = result[code].fillna(0).astype(int)
+    
     # Convert submit_dt to date safely
     if 'submit_dt' in result.columns:
         result['submit_dt'] = pd.to_datetime(result['submit_dt'], errors='coerce').dt.date
@@ -448,7 +458,7 @@ def get_outstanding_non_booth_orders(program_year=None):
             p.parent_phone
         FROM cookies_app.orders o
         JOIN cookies_app.parents p ON p.parent_id = o.parent_id
-        WHERE o.order_type <> 'BOOTH'
+        WHERE o.order_type <> 'Booth'
           AND o.status <> 'PICKED_UP'
           {year_filter}
         ORDER BY p.parent_lastname, p.parent_firstname, o.submit_dt
@@ -799,8 +809,14 @@ def bulk_insert_order_items(df):
         scout_id = row.get('scout_id')
         program_year = row.get('program_year')
         
-        # Skip if missing required fields or if scout/parent not matched
-        if pd.isna(order_id) or pd.isna(parent_id) or pd.isna(scout_id):
+        # Default parent_id and scout_id to 999 if missing
+        if pd.isna(parent_id):
+            parent_id = 999
+        if pd.isna(scout_id):
+            scout_id = 999
+        
+        # Skip if missing required fields
+        if pd.isna(order_id):
             continue
         
         # Iterate through each cookie code
@@ -1059,7 +1075,7 @@ def mark_orders_printed(order_ids: Iterable[str]):
         SET status = 'PRINTED'
         WHERE order_id = ANY(:oids)
         AND status = 'NEW'
-        AND order_type <> 'BOOTH'
+        AND order_type <> 'Booth'
     """, {"oids": order_ids})
 
 
@@ -1147,7 +1163,7 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None):
     Rows for admin print: includes order-level header fields + item-level cookie counts.
     Output: one row per (order_id, cookie_code)
     """
-    where = ["o.order_type <> 'BOOTH'"]
+    where = ["o.order_type <> 'Booth'"]
     params: dict[str, Any] = {}
 
     if statuses:
@@ -1376,11 +1392,14 @@ def delete_booth_cascade(booth_id: str) -> bool:
     """
     Delete a booth and all related data in the correct order.
     
-    With CASCADE DELETE constraints enabled, deleting the booth will
-    automatically delete:
-    - booth_scouts entries
-    - booth_inventory_plan entries
-    - orders with this booth_id (and their cascading deletes)
+    Manually deletes in order:
+    1. order_items related to booth orders
+    2. inventory_ledger related to booth orders
+    3. money_ledger related to booth orders
+    4. orders with this booth_id
+    5. booth_scouts entries
+    6. booth_inventory_plan entries
+    7. booth itself
     
     Args:
         booth_id: UUID of the booth to delete
@@ -1389,12 +1408,36 @@ def delete_booth_cascade(booth_id: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # With CASCADE DELETE enabled, this single delete handles everything
+        # Get all orders for this booth
+        orders = fetch_all("""
+            SELECT order_id FROM cookies_app.orders WHERE booth_id = :bid
+        """, {"bid": booth_id})
+        
+        # Delete order-related data for each order
+        for order in orders:
+            order_id = str(order.order_id)
+            # Delete order items
+            execute_sql("DELETE FROM cookies_app.order_items WHERE order_id = :oid", {"oid": order_id})
+            # Delete inventory ledger entries (uses related_order_id column)
+            execute_sql("DELETE FROM cookies_app.inventory_ledger WHERE related_order_id = :oid", {"oid": order_id})
+            # Delete money ledger entries (uses related_order_id column)
+            execute_sql("DELETE FROM cookies_app.money_ledger WHERE related_order_id = :oid", {"oid": order_id})
+        
+        # Delete the orders themselves
+        execute_sql("DELETE FROM cookies_app.orders WHERE booth_id = :bid", {"bid": booth_id})
+        
+        # Delete booth-specific data
+        execute_sql("DELETE FROM cookies_app.booth_scouts WHERE booth_id = :bid", {"bid": booth_id})
+        execute_sql("DELETE FROM cookies_app.booth_inventory_plan WHERE booth_id = :bid", {"bid": booth_id})
+        
+        # Finally delete the booth itself
         execute_sql("DELETE FROM cookies_app.booths WHERE booth_id = :bid", {"bid": booth_id})
+        
         return True
     except Exception as e:
-        print(f"Error deleting booth {booth_id}: {e}")
-        return False
+        error_msg = f"Error deleting booth {booth_id}: {str(e)}"
+        print(error_msg)
+        raise Exception(error_msg)
 
 
 def delete_booth_cascade_manual(booth_id: str) -> bool:

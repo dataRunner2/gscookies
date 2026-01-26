@@ -34,8 +34,8 @@ def main():
 
     scout = st.selectbox(
         "Scout",
-        ss.scouts_dict,
-        format_func=lambda s: f"{s.first_name} {s.last_name}"
+        sorted(ss.scout_dict.values(), key=lambda s: f"{s['first_name']} {s['last_name']}"),
+        format_func=lambda s: f"{s['first_name']} {s['last_name']}"
     )
     # st.write(scout.scout_id)
     # ---- Year ----

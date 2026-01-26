@@ -153,11 +153,16 @@ def main():
     # Get all cookie columns BEFORE filtering (to include DON and other codes)
     meta_cols = {'orderId', 'program_year', 'scoutName', 'orderType', 'orderStatus', 'paymentStatus', 
                  'addEbudde', 'initialOrder', 'comments', 'orderAmount', 'orderQtyBoxes',
-                 'submit_dt', 'boothId', 'verifiedDigitalCookie','DON'}
+                 'submit_dt', 'boothId', 'verifiedDigitalCookie'}
     actual_cookie_cols = [c for c in df.columns if c not in meta_cols]
     cookie_codes = get_cookie_codes_for_year(int(ss.current_year)) or []
     # Include configured cookies (even if not in current data) + actual data columns
     cookie_cols = list(dict.fromkeys(cookie_codes + actual_cookie_cols))
+
+    # Ensure all configured cookie columns exist in the dataframe (fill missing with 0)
+    for code in cookie_codes:
+        if code not in df.columns:
+            df[code] = 0
     
     # Build default columns - include all configured cookies in the order they're configured
     default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + cookie_codes

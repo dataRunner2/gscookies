@@ -83,7 +83,7 @@ def main():
 
     # Calculate cookie totals from wide format
     meta_cols = {'orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
-                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'addEbudde', 
+                 'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'scoutId', 'addEbudde', 
                  'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paymentStatus', 'paidAmount'}
     
     # Get all cookie columns (includes configured cookies + any others like DON)
@@ -91,14 +91,18 @@ def main():
     # Sort alphabetically to ensure consistent display (DON will be with other codes)
     cookie_cols = sorted(cookie_cols)
     
+    # Define the booth scout ID
+    BOOTH_SCOUT_ID = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
+    
     # Split into distributed (booth validated or picked up) vs pending
     distributed_mask = orders['orderStatus'].isin(['PICKED_UP', 'BOOTH_VALIDATED'])
     distributed_orders = orders[distributed_mask]
     pending_orders = orders[~distributed_mask]
     
     # Further split pending into booth and scout orders
-    booth_pending_mask = (orders['orderType'] == 'BOOTH') & (~distributed_mask)
-    scout_pending_mask = (orders['orderType'] != 'BOOTH') & (~distributed_mask)
+    # Booth orders are those with orderType=='BOOTH' OR scoutId==BOOTH_SCOUT_ID
+    booth_pending_mask = ((orders['orderType'] == 'Booth') | (orders['scoutId'] == BOOTH_SCOUT_ID)) & (~distributed_mask)
+    scout_pending_mask = ((orders['orderType'] != 'Booth') & (orders['scoutId'] != BOOTH_SCOUT_ID)) & (~distributed_mask)
     booth_pending_orders = orders[booth_pending_mask]
     scout_pending_orders = orders[scout_pending_mask]
     
@@ -122,7 +126,8 @@ def main():
 
     for _, o in orders.iterrows():
         order_type = str(o.get('orderType', '')).lower()
-        is_booth = order_type == 'booth'
+        scout_id = str(o.get('scoutId', ''))
+        is_booth = order_type == 'booth' or scout_id == BOOTH_SCOUT_ID
         is_digital = 'digital' in order_type
         is_paper = 'paper' in order_type
         
