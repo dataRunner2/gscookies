@@ -127,7 +127,7 @@ def main():
     for _, o in orders.iterrows():
         order_type = str(o.get('orderType', '')).lower()
         scout_id = str(o.get('scoutId', ''))
-        is_booth = order_type == 'booth' or scout_id == BOOTH_SCOUT_ID
+        is_booth = order_type == 'Booth' or scout_id == BOOTH_SCOUT_ID
         is_digital = 'digital' in order_type
         is_paper = 'paper' in order_type
         
