@@ -14,6 +14,7 @@ from utils.db_utils import (
     get_engine, show_engine_conn
 )
 from utils.order_utils import get_scouts_byparent
+import random
 
 
 def init_ss():
@@ -90,6 +91,34 @@ def create_parent(username, email, password, first, last, phone):
             "phone": phone.strip(),
         }).scalar()
 
+def get_compliment():
+    compliments = [
+        "You’re doing an amazing job.",
+        "What you do makes a big difference.",
+        "You handle challenges with so much grace.",
+        "You inspire everyone around you.",
+        "You always find a way to make things better.",
+        "You bring out the best in people.",
+        "Your hard work doesn’t go unnoticed.",
+        "You’re stronger than you realize.",
+        "You make others feel valued and appreciated.",
+        "You lead by example, and it shows.",
+        "Your kindness is contagious.",
+        "You have a great sense of humor.",
+        "You’re thoughtful and considerate in everything you do.",
+        "Your positivity is truly inspiring.",
+        "You’re a great problem-solver.",
+        "You make people feel welcome and included.",
+        "You’re so creative and full of ideas.",
+        "Adulting can be hard.... cookies help.",
+        "Thank you for being a good human.",
+        "You bring joy to those around you.",
+        "You handle tough situations like a pro.",
+        "You have a natural ability to connect with others.",
+    ]
+
+    comp = random.choice(compliments)
+    st.success(comp)
 
 def main():
     # --------------------------------------------------
@@ -207,6 +236,7 @@ def main():
     # AFTER LOGIN
     # --------------------------------------------------
     elif ss.authenticated:
+        get_compliment()
         # st.write(f'you have access: {ss.authenticated}|  parentid:{ss.parent_id}')
         try:
             ss.scouts_dict = get_scouts_byparent(ss.parent_id)

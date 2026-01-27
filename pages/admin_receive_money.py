@@ -51,6 +51,7 @@ def get_orders_for_parent(parent_id, year):
             o.order_qty_boxes,
             o.order_amount,
             o.status,
+            o.order_type,
             o.created_at
         FROM cookies_app.orders o
         JOIN cookies_app.scouts s
@@ -167,25 +168,70 @@ def main():
     
 
     # ---- Parent ----
-    parents = get_parents(year)
-    if not parents:
+    all_parents = get_parents(year)
+    if not all_parents:
         st.info("No orders found for this year.")
         return
 
+    # Filter to only parents with outstanding balances
+    parents_with_balance = []
+    for p in all_parents:
+        orders = get_orders_for_parent(p.parent_id, year)
+        total_due = Decimal("0.00")
+        total_received = Decimal("0.00")
+        for o in orders:
+            total_due += Decimal(o.order_amount)
+            total_received += get_money_received(o.order_id)
+        if total_due > total_received:
+            parents_with_balance.append(p)
+    
+    if not parents_with_balance:
+        st.success("No parents have outstanding balances.")
+        return
+
     parent = st.selectbox(
-        "Parent",
-        parents,
+        "Parent (with outstanding balance)",
+        parents_with_balance,
         format_func=lambda p: p.parent_name
     )
 
     # ---- Orders (multiselect) ----
-    orders = get_orders_for_parent(parent.parent_id, year)
-    if not orders:
+    all_orders = get_orders_for_parent(parent.parent_id, year)
+    if not all_orders:
         st.info("No orders for this parent.")
         return
 
+    # Calculate total owed for PAPER orders only
+    total_all_orders = Decimal("0.00")
+    total_all_received = Decimal("0.00")
+    for o in all_orders:
+        # Only count paper orders in the summary
+        if o.order_type and 'paper' in o.order_type.lower():
+            total_all_orders += Decimal(o.order_amount)
+            total_all_received += get_money_received(o.order_id)
+    
+    total_owed = total_all_orders - total_all_received
+    
+    # Display summary for paper orders
+    st.markdown("### Parent Summary (Paper Orders)")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Orders", f"${total_all_orders:.2f}")
+    with col2:
+        st.metric("Total Paid", f"${total_all_received:.2f}")
+    with col3:
+        st.metric("**Total Owed**", f"${total_owed:.2f}", delta=None if total_owed == 0 else f"-${total_owed:.2f}")
+    
+    st.divider()
+
+    # Filter to paper orders only
+    orders = [o for o in all_orders if o.order_type and 'paper' in o.order_type.lower()]
+    if not orders:
+        st.info("No paper orders found for this parent.")
+        return
+
     order_choices = st.multiselect(
-        "Orders",
+        "Paper Orders",
         orders,
         format_func=lambda o: (
             f"{o.order_ref} — {o.scout_name} "
@@ -200,11 +246,26 @@ def main():
     # ---- Totals ----
     total_due = Decimal("0.00")
     total_received = Decimal("0.00")
+    
+    # Track totals by scout
+    scout_totals = {}
 
     for o in order_choices:
         rec = get_money_received(o.order_id)
         total_due += Decimal(o.order_amount)
         total_received += rec
+        
+        # Track by scout
+        scout_name = o.scout_name
+        if scout_name not in scout_totals:
+            scout_totals[scout_name] = {
+                'due': Decimal("0.00"),
+                'received': Decimal("0.00"),
+                'orders': []
+            }
+        scout_totals[scout_name]['due'] += Decimal(o.order_amount)
+        scout_totals[scout_name]['received'] += rec
+        scout_totals[scout_name]['orders'].append(o)
 
     balance = total_due - total_received
 
@@ -213,6 +274,20 @@ def main():
     st.write(f"**Total Amount Due:** ${total_due:.2f}")
     st.write(f"**Total Received:** ${total_received:.2f}")
     st.write(f"**Balance Remaining:** ${balance:.2f}")
+
+    # Show breakdown by scout
+    st.markdown("#### Breakdown by Scout")
+    for scout_name, totals in scout_totals.items():
+        scout_balance = totals['due'] - totals['received']
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.write(f"**{scout_name}**")
+        with col2:
+            st.write(f"Due: ${totals['due']:.2f}")
+        with col3:
+            st.write(f"Paid: ${totals['received']:.2f}")
+        with col4:
+            st.write(f"Balance: ${scout_balance:.2f}")
 
     with st.expander("Order breakdown"):
         for o in order_choices:
@@ -242,7 +317,7 @@ def main():
 
         method = st.selectbox(
             "Payment Method",
-            ["Cash", "Check", "Venmo", "Zelle", "Other"]
+            ["Cash", "Check", "Digital Cookie"]
         )
 
         notes = st.text_area("Notes (optional)")
@@ -290,7 +365,7 @@ def main():
 # --------------------------------------------------
 if __name__ == "__main__":
     setup.config_site(
-        page_title="Receive Money",
+        page_title="Receive Money for Paper Orders",
         initial_sidebar_state="expanded"
     )
     init_flags()

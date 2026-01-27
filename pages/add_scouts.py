@@ -106,7 +106,7 @@ def main():
         TSHIRT_SIZES = ["YS", "YM", "YL", "AS", "AM", "AL", "AXL", "A2XL", "A3XL"]
 
         if scout_goal < 500:
-            award_entries.append("awards below 500 are cumulative")
+            award_entries.append("Awards below 500 are cumulative")
 
         if scout_goal >= 315:
             tshirt = st.selectbox(

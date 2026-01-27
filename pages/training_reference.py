@@ -144,7 +144,7 @@ def main():
         st.subheader("📞 Resources & Contacts")
 
         
-        st.subheader('Acronyms & Definations')
+        st.subheader('Acronyms & Definitions')
         st.markdown("""
             - Digital Cookie (DC): Digital cookie is the scouts personalized point of sale website. They can share their cookie story, set their cookie goals and create a personalized QR code to take credit card orders. 
             - Troop Cookie Tracker: This website - which is used for families to submit their delivery orders to our troop cupboard which is how we know you need cookies. 
@@ -152,7 +152,7 @@ def main():
             
             Cookie Acronyms
             - Adv: Adventurefuls
-            - DD: Do-Si-Dos
+            - DSD: Do-Si-Dos
             - TM: Thin Mints
             - LU: Lemon Ups
             - TF: Trefoils
@@ -160,7 +160,7 @@ def main():
             - Tags: Tagalongs
             - EXP: Exploremores
             - TT:Toffee-tastic
-            - OpC: Operation Cookie Donation
+            - DON: Sweet Cookie Donation
         """)
     with tabs[6]:
         st.subheader("Marketing")
