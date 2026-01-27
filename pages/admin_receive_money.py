@@ -77,6 +77,47 @@ def get_money_received(order_id):
         return Decimal(conn.execute(sql, {"order_id": order_id}).scalar())
 
 
+def get_money_received_bulk(order_ids):
+    """Get money received for multiple orders in one query"""
+    if not order_ids:
+        return {}
+    
+    sql = text("""
+        SELECT related_order_id, COALESCE(SUM(amount), 0) as total
+        FROM cookies_app.money_ledger
+        WHERE related_order_id = ANY(:order_ids)
+        GROUP BY related_order_id
+    """)
+    with engine.connect() as conn:
+        results = conn.execute(sql, {"order_ids": order_ids}).fetchall()
+        return {row.related_order_id: Decimal(row.total) for row in results}
+
+
+def get_parents_with_balances(year):
+    """Get parents who have outstanding paper order balances in a single query"""
+    sql = text("""
+        WITH order_totals AS (
+            SELECT 
+                o.parent_id,
+                p.parent_firstname || ' ' || p.parent_lastname AS parent_name,
+                SUM(o.order_amount) as total_due,
+                COALESCE(SUM(m.amount), 0) as total_received
+            FROM cookies_app.orders o
+            JOIN cookies_app.parents p ON p.parent_id = o.parent_id
+            LEFT JOIN cookies_app.money_ledger m ON m.related_order_id = o.order_id
+            WHERE o.program_year = :year
+              AND o.order_type ILIKE '%paper%'
+            GROUP BY o.parent_id, p.parent_firstname, p.parent_lastname
+        )
+        SELECT parent_id, parent_name
+        FROM order_totals
+        WHERE total_due > total_received
+        ORDER BY parent_name
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"year": year}).fetchall()
+
+
 def insert_money_received(
     parent_id,
     scout_id,
@@ -168,25 +209,10 @@ def main():
     
 
     # ---- Parent ----
-    all_parents = get_parents(year)
-    if not all_parents:
-        st.info("No orders found for this year.")
-        return
-
-    # Filter to only parents with outstanding balances
-    parents_with_balance = []
-    for p in all_parents:
-        orders = get_orders_for_parent(p.parent_id, year)
-        total_due = Decimal("0.00")
-        total_received = Decimal("0.00")
-        for o in orders:
-            total_due += Decimal(o.order_amount)
-            total_received += get_money_received(o.order_id)
-        if total_due > total_received:
-            parents_with_balance.append(p)
+    parents_with_balance = get_parents_with_balances(year)
     
     if not parents_with_balance:
-        st.success("No parents have outstanding balances.")
+        st.success("No parents have outstanding balances for paper orders.")
         return
 
     parent = st.selectbox(
@@ -201,6 +227,10 @@ def main():
         st.info("No orders for this parent.")
         return
 
+    # Get all money received data in one query
+    order_ids = [o.order_id for o in all_orders]
+    money_received_cache = get_money_received_bulk(order_ids)
+
     # Calculate total owed for PAPER orders only
     total_all_orders = Decimal("0.00")
     total_all_received = Decimal("0.00")
@@ -208,7 +238,7 @@ def main():
         # Only count paper orders in the summary
         if o.order_type and 'paper' in o.order_type.lower():
             total_all_orders += Decimal(o.order_amount)
-            total_all_received += get_money_received(o.order_id)
+            total_all_received += money_received_cache.get(o.order_id, Decimal("0.00"))
     
     total_owed = total_all_orders - total_all_received
     
@@ -251,7 +281,7 @@ def main():
     scout_totals = {}
 
     for o in order_choices:
-        rec = get_money_received(o.order_id)
+        rec = money_received_cache.get(o.order_id, Decimal("0.00"))
         total_due += Decimal(o.order_amount)
         total_received += rec
         
@@ -291,7 +321,7 @@ def main():
 
     with st.expander("Order breakdown"):
         for o in order_choices:
-            rec = get_money_received(o.order_id)
+            rec = money_received_cache.get(o.order_id, Decimal("0.00"))
             st.write(
                 f"{o.order_ref} ({o.scout_name}) — "
                 f"Due: ${o.order_amount:.2f}, "
