@@ -97,7 +97,7 @@ class setup:
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
             st.sidebar.page_link('pages/admin_receive_money.py',label='Receive Money')
-            # st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
+            st.sidebar.page_link('pages/admin_add_inventory.py',label='Add Inventory')
             st.sidebar.page_link('pages/admin_import_DOC_orders.py',label='Import DOC')
             st.sidebar.page_link('pages/admin_booths.py',label='Booth Admin')
             st.sidebar.page_link('pages/admin_users.py',label='Manage Users')

@@ -88,8 +88,9 @@ def main():
     
     # Get all cookie columns (includes configured cookies + any others like DON)
     cookie_cols = [col for col in orders.columns if col not in meta_cols]
-    # Sort alphabetically to ensure consistent display (DON will be with other codes)
-    cookie_cols = sorted(cookie_cols)
+    # Order according to cookie_years display_order: ADV, LEM, TRE, DSD, SAM, TAG, TM, EXP, TOF, DON
+    cookie_order = ['ADV', 'LEM', 'TRE', 'DSD', 'SAM', 'TAG', 'TM', 'EXP', 'TOF', 'DON']
+    cookie_cols = [c for c in cookie_order if c in cookie_cols] + [c for c in cookie_cols if c not in cookie_order]
     
     # Define the booth scout ID
     BOOTH_SCOUT_ID = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
