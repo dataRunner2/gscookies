@@ -51,6 +51,7 @@ def init_ss():
 # Helpers
 # -----------------------------
 def _norm(v):
+    """Normalize values for comparison, handling pandas/numpy types"""
     if pd.isna(v):
         return None
     if hasattr(v, "item"):
@@ -58,15 +59,23 @@ def _norm(v):
             return v.item()
         except Exception:
             pass
+    # Convert to int if it's a whole number
+    if isinstance(v, (int, float)):
+        if float(v).is_integer():
+            return int(v)
+        return float(v)
     return v
 
 
-def diff_updates(original: pd.DataFrame, edited: pd.DataFrame):
+def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list[str]):
     updates: list[dict] = []
     diffs: list[dict] = []
 
     orig = original.set_index("orderId")
     edit = edited.set_index("orderId")
+    
+    # Include both regular editable columns and cookie columns
+    all_editable = EDITABLE_COLUMNS | set(cookie_cols)
 
     for oid in orig.index:
         if oid not in edit.index:
@@ -74,23 +83,38 @@ def diff_updates(original: pd.DataFrame, edited: pd.DataFrame):
 
         delta = {"orderId": oid}
 
-        for col in EDITABLE_COLUMNS:
+        for col in all_editable:
             if col not in orig.columns or col not in edit.columns:
                 continue
 
             old = _norm(orig.at[oid, col])
             new = _norm(edit.at[oid, col])
-
-            if old == new:
-                continue
-
-            delta[col] = new
-            diffs.append({
-                "orderId": oid,
-                "column": col,
-                "old": old,
-                "new": new,
-            })
+            
+            # Handle numeric comparisons more carefully
+            if col in cookie_cols:
+                # For cookie columns, compare as integers
+                old_val = int(old) if old is not None and not pd.isna(old) else 0
+                new_val = int(new) if new is not None and not pd.isna(new) else 0
+                if old_val == new_val:
+                    continue
+                delta[col] = new_val
+                diffs.append({
+                    "orderId": oid,
+                    "column": col,
+                    "old": old_val,
+                    "new": new_val,
+                })
+            else:
+                # For other columns, use regular comparison
+                if old == new:
+                    continue
+                delta[col] = new
+                diffs.append({
+                    "orderId": oid,
+                    "column": col,
+                    "old": old,
+                    "new": new,
+                })
 
         if len(delta) > 1:
             updates.append(delta)
@@ -110,6 +134,17 @@ def main():
     df_all = get_all_orders_wide(program_year=int(ss.current_year))
     if df_all.empty:
         st.info("No orders found.")
+        return
+    
+    # Filter out booth orders (orderType == 'Booth' or scout_id == booth scout)
+    BOOTH_SCOUT_ID = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
+    df_all = df_all[
+        (df_all["orderType"] != "Booth") & 
+        (df_all.get("scoutId", "") != BOOTH_SCOUT_ID)
+    ]
+    
+    if df_all.empty:
+        st.info("No non-booth orders found.")
         return
 
     # Clean up blank orderType values (fill with empty string so selectbox works)
@@ -183,7 +218,9 @@ def main():
     # ---------------- Editor ----------------
     st.subheader("Orders")
 
-    disabled_cols = [c for c in df_view.columns if c not in EDITABLE_COLUMNS]
+    # Cookie columns are also editable
+    editable_cols = EDITABLE_COLUMNS | set(cookie_cols)
+    disabled_cols = [c for c in df_view.columns if c not in editable_cols]
 
     edited = st.data_editor(
         df_view,
@@ -215,11 +252,11 @@ def main():
     st.divider()
 
     if st.button("Save Changes", type="primary"):
-        updates, diffs = diff_updates(df_view, edited)
+        updates, diffs = diff_updates(df_view, edited, cookie_cols)
 
         if updates:
             try:
-                admin_update_orders_bulk(updates)
+                admin_update_orders_bulk(updates, cookie_cols)
             except Exception as e:
                 st.error(f"Update failed: {e}")
 

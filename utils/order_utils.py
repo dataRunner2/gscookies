@@ -1309,12 +1309,13 @@ def get_admin_orders_flat(program_year: int):
 # Bulk admin updates (used by admin management grid)
 # ==================================================
 
-def admin_update_orders_bulk(updates: list[dict[str, Any]]):
+def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[str] = None):
     """
-    Apply bulk updates to orders.
+    Apply bulk updates to orders and their cookie quantities.
     Each item in 'updates' should look like:
-      {"orderId": "...", "initialOrder": True, "addEbudde": False, "verifiedDigitalCookie": True, "orderStatus": "PRINTED", ...}
-    Only whitelisted fields are applied.
+      {"orderId": "...", "initialOrder": True, "addEbudde": False, "verifiedDigitalCookie": True, "orderStatus": "PRINTED", "TM": 10, "SAM": 5, ...}
+    Only whitelisted fields are applied for orders table.
+    Cookie columns update the order_items table.
     """
     allowed = {
         "initialOrder": "initial_order",
@@ -1324,12 +1325,15 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]]):
         "comments": "comments",
         "orderType": "order_type",
     }
+    
+    cookie_cols = cookie_cols or []
 
     for u in updates:
         oid = u.get("orderId")
         if not oid:
             continue
 
+        # Update order table fields
         sets = []
         params: dict[str, Any] = {"oid": oid}
 
@@ -1338,15 +1342,69 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]]):
                 sets.append(f"{col} = :{k}")
                 params[k] = u[k]
 
-        if not sets:
-            continue
-
-        sql = f"""
-            UPDATE cookies_app.orders
-            SET {", ".join(sets)}
-            WHERE order_id = :oid
-        """
-        execute_sql(sql, params)
+        if sets:
+            sql = f"""
+                UPDATE cookies_app.orders
+                SET {", ".join(sets)}
+                WHERE order_id = :oid
+            """
+            execute_sql(sql, params)
+        
+        # Update cookie quantities in order_items
+        for cookie_code in cookie_cols:
+            if cookie_code in u:
+                new_qty = u[cookie_code]
+                
+                # Get program_year for this order
+                year_result = fetch_one("""
+                    SELECT program_year FROM cookies_app.orders WHERE order_id = :oid
+                """, {"oid": oid})
+                
+                if not year_result:
+                    continue
+                    
+                program_year = year_result.program_year
+                
+                # Check if order_item exists
+                existing = fetch_one("""
+                    SELECT quantity FROM cookies_app.order_items
+                    WHERE order_id = :oid AND cookie_code = :code AND program_year = :year
+                """, {"oid": oid, "code": cookie_code, "year": program_year})
+                
+                if new_qty == 0 or new_qty is None:
+                    # Delete if quantity is 0
+                    if existing:
+                        execute_sql("""
+                            DELETE FROM cookies_app.order_items
+                            WHERE order_id = :oid AND cookie_code = :code AND program_year = :year
+                        """, {"oid": oid, "code": cookie_code, "year": program_year})
+                else:
+                    # Update or insert
+                    if existing:
+                        execute_sql("""
+                            UPDATE cookies_app.order_items
+                            SET quantity = :qty
+                            WHERE order_id = :oid AND cookie_code = :code AND program_year = :year
+                        """, {"oid": oid, "code": cookie_code, "qty": new_qty, "year": program_year})
+                    else:
+                        # Get parent_id and scout_id from order
+                        order_info = fetch_one("""
+                            SELECT parent_id, scout_id FROM cookies_app.orders WHERE order_id = :oid
+                        """, {"oid": oid})
+                        
+                        if order_info:
+                            execute_sql("""
+                                INSERT INTO cookies_app.order_items 
+                                (order_id, program_year, cookie_code, quantity, parent_id, scout_id)
+                                VALUES (:oid, :year, :code, :qty, :pid, :sid)
+                            """, {
+                                "oid": oid, 
+                                "year": program_year, 
+                                "code": cookie_code, 
+                                "qty": new_qty,
+                                "pid": order_info.parent_id,
+                                "sid": order_info.scout_id
+                            })
 
 def fetch_existing_external_orders(order_source: str) -> set:
     rows = fetch_all("""

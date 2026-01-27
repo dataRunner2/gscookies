@@ -1020,14 +1020,85 @@ def main():
                     """, {"bid": booth.booth_id})
                     
                     if inventory:
-                        st.markdown("**Planned Inventory:**")
+                        st.markdown("**Edit Planned Inventory:**")
+                        
+                        # Create editable inventory form
+                        updated_inventory = {}
                         inv_cols = st.columns(3)
+                        
                         for idx, item in enumerate(inventory):
                             col = inv_cols[idx % 3]
-                            col.write(f"**{item.cookie_code}:** {item.planned_quantity} boxes")
+                            new_qty = col.number_input(
+                                f"{item.cookie_code}",
+                                min_value=0,
+                                value=int(item.planned_quantity),
+                                step=1,
+                                key=f"booth_{booth.booth_id}_{item.cookie_code}"
+                            )
+                            updated_inventory[item.cookie_code] = new_qty
                         
-                        total_boxes = sum(item.planned_quantity for item in inventory)
+                        total_boxes = sum(updated_inventory.values())
                         st.write(f"**Total Boxes:** {total_boxes}")
+                        
+                        # Save button
+                        if st.button("💾 Save Inventory Changes", key=f"save_{booth.booth_id}"):
+                            # Update each cookie quantity
+                            for cookie_code, new_qty in updated_inventory.items():
+                                execute_sql("""
+                                    UPDATE cookies_app.booth_inventory_plan
+                                    SET planned_quantity = :qty
+                                    WHERE booth_id = :bid
+                                      AND cookie_code = :code
+                                      AND program_year = :year
+                                """, {
+                                    "qty": new_qty,
+                                    "bid": booth.booth_id,
+                                    "code": cookie_code,
+                                    "year": ss.current_year
+                                })
+                            
+                            # Also update order_items for this booth
+                            order = fetch_all("""
+                                SELECT order_id FROM cookies_app.orders
+                                WHERE booth_id = :bid AND order_type = 'Booth'
+                            """, {"bid": booth.booth_id})
+                            
+                            if order:
+                                order_id = order[0].order_id
+                                for cookie_code, new_qty in updated_inventory.items():
+                                    # Check if order_item exists
+                                    existing = fetch_all("""
+                                        SELECT 1 FROM cookies_app.order_items
+                                        WHERE order_id = :oid AND cookie_code = :code
+                                    """, {"oid": order_id, "code": cookie_code})
+                                    
+                                    if existing:
+                                        # Update existing
+                                        execute_sql("""
+                                            UPDATE cookies_app.order_items
+                                            SET quantity = :qty
+                                            WHERE order_id = :oid AND cookie_code = :code
+                                        """, {"qty": new_qty, "oid": order_id, "code": cookie_code})
+                                    else:
+                                        # Insert new
+                                        execute_sql("""
+                                            INSERT INTO cookies_app.order_items 
+                                            (order_item_id, order_id, parent_id, scout_id, program_year, cookie_code, quantity)
+                                            SELECT gen_random_uuid(), :oid, parent_id, scout_id, program_year, :code, :qty
+                                            FROM cookies_app.orders WHERE order_id = :oid
+                                        """, {"oid": order_id, "code": cookie_code, "qty": new_qty})
+                                
+                                # Update total boxes and amount on order
+                                total_amount = total_boxes * 6
+                                execute_sql("""
+                                    UPDATE cookies_app.orders
+                                    SET order_qty_boxes = :boxes,
+                                        order_amount = :amount
+                                    WHERE order_id = :oid
+                                """, {"boxes": total_boxes, "amount": total_amount, "oid": order_id})
+                            
+                            st.success(f"✅ Inventory updated for {booth.location}")
+                            st.rerun()
                     
                     # Get assigned scouts
                     scouts = fetch_all("""
