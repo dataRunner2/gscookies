@@ -20,7 +20,7 @@ p = Path.cwd()
 class setup:
     def check_admin():
         st.warning('YOU ARE AN ADMIN')
-        if ss.username in ['jklemisch','shawna']: #st.secrets['general']['super_admin']:
+        if ss.username in ['jklemisch','shawna','jb']: #st.secrets['general']['super_admin']:
             ss.super_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')
@@ -92,7 +92,7 @@ class setup:
         if ss.is_admin:   
             # if ss.is_admin: ss.is_admin_pers = ss.is_admin #alighn the admin persistent 
             st.sidebar.write('----- ADMIN ------')
-            # st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
+            st.sidebar.page_link('pages/admin_ebudde_summary.py',label='Ebudde Summary')
             st.sidebar.page_link('pages/admin_girl_order_summary.py',label='Girl Summary')
             st.sidebar.page_link('pages/admin_order_management.py',label='Order Management')
             st.sidebar.page_link('pages/admin_print_new_orders.py',label='Print Orders')
