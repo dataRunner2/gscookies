@@ -159,7 +159,7 @@ def main():
     
 
     filtered_df = uploaded_df[
-        (uploaded_df["order_type"] == "In-Person Delivery")
+        (uploaded_df["order_type"].isin(["In-Person Delivery", "In-Person Delivery with Donation"]))
         & (uploaded_df["order_status"] == "PROCESSING")
     ].copy()
 
@@ -283,7 +283,7 @@ def main():
     matched["order_source"] = "Digital Cookie Import"
     matched["submit_dt"] = pd.to_datetime(matched["submit_dt"])
     matched["created_at"] = datetime.utcnow()
-    matched['order_type'] = matched['order_type'].replace('In-Person Delivery','Digital')
+    matched['order_type'] = matched['order_type'].replace({'In-Person Delivery': 'Digital', 'In-Person Delivery with Donation': 'Digital'})
     matched['comments'] = [f"Customer Info: {cust_first} {cust_last} ${total}" for cust_first,cust_last,total in zip(matched['customer_first_name'],matched['customer_last_name'],matched['order_total'])]
     matched["status"] = "IMPORTED"
     matched["order_ref"] = matched["external_order_id"].astype(str)
