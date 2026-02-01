@@ -14,13 +14,12 @@ from pandas.api.types import is_categorical_dtype, is_numeric_dtype, is_datetime
 from utils.db_utils import fetch_all, fetch_one, execute_sql, to_pacific
 import random
 
-
 p = Path.cwd()
 
 class setup:
     def check_admin():
         st.warning('YOU ARE AN ADMIN')
-        if ss.username in ['jklemisch','shawna','jb']: #st.secrets['general']['super_admin']:
+        if ss.username in ['jklemisch','shawna','Jessica B','Chhavi']: #st.secrets['general']['super_admin']:
             ss.super_admin = True
         else:
             # st.write('You are not listed as an admin, please contact Jennifer')

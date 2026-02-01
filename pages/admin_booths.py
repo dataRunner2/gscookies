@@ -203,7 +203,7 @@ def main():
         start_time = col3.time_input(
             "Start Time",
             value=time(8, 0),
-            step=1800,  # 30 min
+            step=3600,  # 30 min
             key="create_start_time"
         )
         end_time = (datetime.combine(datetime.today(), start_time) + timedelta(hours=2)).time()
@@ -997,13 +997,54 @@ def main():
                     with col1:
                         st.write(f"**Booth ID:** `{booth.booth_id}`")
                         st.write(f"**Location:** {booth.location}")
-                        st.write(f"**Date:** {booth.booth_date.strftime('%A, %B %d, %Y')}")
-                        st.write(f"**Time:** {booth.start_time.strftime('%I:%M %p')} - {booth.end_time.strftime('%I:%M %p')}")
+                        
+                        # Editable date
+                        new_date = st.date_input(
+                            "Date",
+                            value=booth.booth_date,
+                            key=f"date_{booth.booth_id}"
+                        )
+                        
+                        # Editable start time (hourly increments only)
+                        new_start_time = st.time_input(
+                            "Start Time",
+                            value=booth.start_time,
+                            step=3600,  # 1 hour in seconds
+                            key=f"start_{booth.booth_id}"
+                        )
+                        
+                        # Calculate end time as 2 hours after start time
+                        start_dt = datetime.combine(datetime.today(), new_start_time)
+                        end_dt = start_dt + timedelta(hours=2)
+                        new_end_time = end_dt.time()
+                        
+                        st.write(f"**End Time:** {new_end_time.strftime('%I:%M %p')}")
                     
                     with col2:
                         st.write(f"**Weekend #:** {booth.weekend_number}")
                         st.write(f"**Multiplier:** {float(booth.quantity_multiplier):.0%}")
                         st.write(f"**Created:** {booth.created_at.strftime('%b %d, %Y %I:%M %p')}")
+                    
+                    # Check if date or time changed
+                    date_changed = new_date != booth.booth_date
+                    time_changed = new_start_time != booth.start_time
+                    
+                    if date_changed or time_changed:
+                        if st.button("💾 Save Date/Time Changes", key=f"save_datetime_{booth.booth_id}"):
+                            execute_sql("""
+                                UPDATE cookies_app.booths
+                                SET booth_date = :date,
+                                    start_time = :start,
+                                    end_time = :end
+                                WHERE booth_id = :bid
+                            """, {
+                                "date": new_date,
+                                "start": new_start_time,
+                                "end": new_end_time,
+                                "bid": booth.booth_id
+                            })
+                            st.success(f"✅ Date/Time updated for {booth.location}")
+                            st.rerun()
                     
                     # Get planned inventory
                     inventory = fetch_all("""
