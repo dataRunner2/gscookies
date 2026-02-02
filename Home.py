@@ -35,10 +35,15 @@ def hash_password(password: str) -> str:
 
 
 def check_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(
-        plain.encode("utf-8"),
-        hashed.encode("utf-8")
-    )
+    if not plain or not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(
+            plain.encode("utf-8"),
+            hashed.encode("utf-8")
+        )
+    except (ValueError, AttributeError):
+        return False
 
 
 def get_parent(username: str):
