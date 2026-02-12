@@ -221,6 +221,9 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
             # Title suffix for multi-page receipts
             page_suffix = f" (page {chunk_idx + 1} of {num_chunks})" if num_chunks > 1 else ""
             
+            # Track the starting y position to detect blank pages
+            start_y = y
+            
             # ----- PARENT RECEIPT -----
             y = render_receipt(
                 y, scout, parent, phone, 
@@ -231,7 +234,9 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
             
             if y is None:
                 # Need new page for parent receipt
-                c.showPage()
+                # Only call showPage if we've rendered something (y position changed from start)
+                if start_y < TOP:
+                    c.showPage()
                 y = TOP
                 # Force render on new page
                 y = render_receipt(
