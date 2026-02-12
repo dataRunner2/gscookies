@@ -285,6 +285,7 @@ def main():
     st.title("Admin Print Orders")
 
     statuses = st.multiselect("Statuses", STATUS_OPTIONS, default=["NEW", "IMPORTED"])
+    initial_only = False
     initial_only = st.checkbox("Initial Orders Only", value=False)
 
 

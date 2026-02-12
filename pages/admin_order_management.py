@@ -266,7 +266,7 @@ def main():
 
     edited = st.data_editor(
         df_view,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         disabled=disabled_cols,

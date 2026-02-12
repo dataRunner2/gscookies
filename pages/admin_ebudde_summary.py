@@ -149,7 +149,7 @@ def main():
         },
         hide_index=True,
         height=900,
-        use_container_width=True,
+        width="stretch",
         key="ebudde_editor"
     )
     

@@ -128,7 +128,7 @@ def main():
                 st.dataframe(
                     cookie_table,
                     hide_index=True,
-                    use_container_width=True
+                    width='stretch',
                 )
 
                 if comments and str(comments).strip():
