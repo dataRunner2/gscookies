@@ -21,6 +21,7 @@ STATUS_OPTIONS = ["NEW", "PRINTED", "PICKED_UP", "CANCELLED"]
 
 DEFAULT_COLUMNS = [
     "orderId",
+    "submitDate",
     "scoutName",
     "orderType",
     "orderStatus",
@@ -178,6 +179,10 @@ def main():
         st.info("No orders found.")
         return
     
+    # Add formatted date column
+    if "submit_dt" in df_all.columns:
+        df_all["submitDate"] = pd.to_datetime(df_all["submit_dt"]).dt.date
+    
     # Filter out booth orders (orderType == 'Booth' or scout_id == booth scout)
     BOOTH_SCOUT_ID = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
     df_all = df_all[
@@ -230,7 +235,7 @@ def main():
     # Get all cookie columns BEFORE filtering (to include DON and other codes)
     meta_cols = {'orderId', 'program_year', 'scoutName', 'orderType', 'orderStatus', 'paymentStatus', 
                  'addEbudde', 'initialOrder', 'comments', 'orderAmount', 'orderQtyBoxes',
-                 'submit_dt', 'boothId', 'verifiedDigitalCookie'}
+                 'submit_dt', 'submitDate', 'boothId', 'verifiedDigitalCookie', 'orderPickedup', 'scoutId', 'totalQty'}
     actual_cookie_cols = [c for c in df.columns if c not in meta_cols]
     cookie_codes = get_cookie_codes_for_year(int(ss.current_year)) or []
     # Include configured cookies (even if not in current data) + actual data columns
@@ -241,8 +246,11 @@ def main():
         if code not in df.columns:
             df[code] = 0
     
-    # Build default columns - include all configured cookies in the order they're configured
-    default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + cookie_codes
+    # Calculate total quantity across all cookie columns
+    df['totalQty'] = df[cookie_cols].fillna(0).sum(axis=1).astype(int)
+    
+    # Build default columns - include totalQty before cookies, then all configured cookies in the order they're configured
+    default_cols = [c for c in DEFAULT_COLUMNS if c in df.columns] + ['totalQty'] + cookie_codes
 
     df = apputils.filter_dataframe(df)
 
@@ -271,29 +279,53 @@ def main():
         num_rows="fixed",
         disabled=disabled_cols,
         column_config={
+            "orderId": st.column_config.TextColumn(
+                "Order ID",
+                width="small",
+            ),
             "orderStatus": st.column_config.SelectboxColumn(
                 "Status",
                 options=STATUS_OPTIONS,
+                width="small",
             ),
             "paymentStatus": st.column_config.TextColumn(
                 "Payment",
                 disabled=True,
             ),
-            "verifiedDigitalCookie": st.column_config.CheckboxColumn("Verified DC"),
-            "addEbudde": st.column_config.CheckboxColumn("eBudde"),
-            "initialOrder": st.column_config.CheckboxColumn("Initial Order"),
-            "orderPickedup": st.column_config.CheckboxColumn("Picked Up"),
+            "totalQty": st.column_config.NumberColumn(
+                "Total",
+                disabled=True,
+                width="small",
+            ),
+            "verifiedDigitalCookie": st.column_config.CheckboxColumn(
+                "Verified DC",
+                 width="small",
+                 ),
+            "initialOrder": st.column_config.CheckboxColumn(
+                "Initial Order",
+                width="small",
+                ),
+            "addEbudde": st.column_config.CheckboxColumn(
+                "eBudde",
+                width="small",
+                ),
+            
+            "orderPickedup": st.column_config.CheckboxColumn(
+                "Picked Up",
+                width="small",
+                ),
             "comments": st.column_config.TextColumn("Comments"),
             "orderType": st.column_config.SelectboxColumn(
                 "Order Type",
                 options=["", "Paper", "Digital", "Booth"],
+                width="small",
             ),
         },
     )
 
     # ---------------- Save ----------------
     st.divider()
-    st.write(edited)
+    # st.write(edited)
 
     if st.button("Save Changes", type="primary"):
         updates, diffs = diff_updates(df_view, edited, cookie_cols)
