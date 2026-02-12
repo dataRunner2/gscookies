@@ -21,6 +21,8 @@ def main():
     c1,c2,c3,c4 = st.columns([30, 30, 10, 30])
     with c2:
         combine_orders = st.checkbox("Combine Paper & Digital", value=False, help="Show one line per scout combining all order types")
+    with c3:
+        ebudde_filter = st.selectbox("eBudde Status:", options=["All", "True", "False"], index=0)
     
     # Build GROUP BY clause based on checkbox
     if combine_orders:
@@ -102,6 +104,13 @@ def main():
     
     if orderType_filter:
         all_orders_dat = all_orders_dat[all_orders_dat["orderType"].isin(orderType_filter)]
+    
+    # Apply ebudde filter
+    if ebudde_filter == "True":
+        all_orders_dat = all_orders_dat[all_orders_dat["ebudde"] == True]
+    elif ebudde_filter == "False":
+        all_orders_dat = all_orders_dat[all_orders_dat["ebudde"] == False]
+    # If "All", don't filter
     
     # Merge order and money data
     order_money_df = pd.merge(left=all_orders_dat, right=all_money_agg, how='left', on=['scoutId', 'orderType', 'ebudde'])
