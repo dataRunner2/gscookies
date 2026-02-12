@@ -337,6 +337,7 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
             
             COALESCE(o.add_ebudde, false) AS "addEbudde",
             COALESCE(o.verified_digital, false) AS "verifiedDigitalCookie",
+            COALESCE(o.order_pickedup, false) AS "orderPickedup",
             COALESCE(
                 o.initial_order,
                 (o.submit_dt >= make_date(o.program_year, 1, 5)
@@ -376,7 +377,7 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
     # Get all unique orders first (before pivoting)
     meta_cols = ['orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
                  'orderAmount', 'orderQtyBoxes', 'comments', 'boothId', 'scoutId', 'addEbudde', 
-                 'verifiedDigitalCookie', 'initialOrder', 'scoutName', 'paidAmount']
+                 'verifiedDigitalCookie', 'orderPickedup', 'initialOrder', 'scoutName', 'paidAmount']
     
     # Only use columns that exist in the dataframe
     available_meta_cols = [col for col in meta_cols if col in df.columns]
@@ -1158,7 +1159,7 @@ def get_print_orders_flat(program_year: Optional[int] = None, scout_id: Optional
     """, params)
 
 
-def get_admin_print_orders(statuses: Optional[list[str]] = None):
+def get_admin_print_orders(statuses: Optional[list[str]] = None, initial_only:bool=False):
     """
     Rows for admin print: includes order-level header fields + item-level cookie counts.
     Output: one row per (order_id, cookie_code)
@@ -1169,6 +1170,8 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None):
     if statuses:
         where.append("o.status = ANY(:statuses)")
         params["statuses"] = statuses
+    if initial_only:
+        where.append("COALESCE(o.initial_order, false) = true")
 
     where_sql = " AND ".join(where)
 
@@ -1180,6 +1183,7 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None):
             o.order_amount,
             o.order_qty_boxes,
             o.comments,
+            o.initial_order,
             o.submit_dt::date AS submit_date,
 
             s.scout_id,
@@ -1324,6 +1328,7 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[st
         "orderStatus": "status",
         "comments": "comments",
         "orderType": "order_type",
+        "orderPickedup": "order_pickedup",
     }
     
     cookie_cols = cookie_cols or []

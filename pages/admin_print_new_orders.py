@@ -204,9 +204,11 @@ def main():
 
     st.title("Admin Print Orders")
 
-    statuses = st.multiselect("Statuses", STATUS_OPTIONS, default=["NEW"])
+    statuses = st.multiselect("Statuses", STATUS_OPTIONS, default=["NEW", "IMPORTED"])
+    initial_only = st.checkbox("Initial Orders Only", value=False)
 
-    rows = get_admin_print_orders(statuses=statuses)
+
+    rows = get_admin_print_orders(statuses=statuses, initial_only=initial_only)
     if not rows:
         st.success("No orders found.")
         return
