@@ -17,12 +17,25 @@ def main():
     
     current_year = datetime.now().year
 
+    # Add controls
+    c1,c2,c3,c4 = st.columns([30, 30, 10, 30])
+    with c2:
+        combine_orders = st.checkbox("Combine Paper & Digital", value=False, help="Show one line per scout combining all order types")
+    
+    # Build GROUP BY clause based on checkbox
+    if combine_orders:
+        group_by_clause = "GROUP BY o.scout_id, s.first_name, s.last_name, COALESCE(o.add_ebudde, false)"
+        order_by_clause = "ORDER BY s.first_name, s.last_name, COALESCE(o.add_ebudde, false)"
+    else:
+        group_by_clause = "GROUP BY o.scout_id, s.first_name, s.last_name, o.order_type, COALESCE(o.add_ebudde, false)"
+        order_by_clause = "ORDER BY s.first_name, s.last_name, o.order_type, COALESCE(o.add_ebudde, false)"
+
     # Get order data with cookie quantities aggregated by scout, order type, and ebudde status
-    order_data = fetch_all("""
+    order_query = f"""
         SELECT 
             o.scout_id as "scoutId",
             s.first_name || ' ' || s.last_name as "scoutName",
-            o.order_type as "orderType",
+            {'\'Combined\' as "orderType"' if combine_orders else 'o.order_type as "orderType"'},
             COALESCE(o.add_ebudde, false) as "ebudde",
             SUM(CASE WHEN oi.cookie_code = 'ADV' THEN oi.quantity ELSE 0 END) as "ADV",
             SUM(CASE WHEN oi.cookie_code = 'LEM' THEN oi.quantity ELSE 0 END) as "LEM",
@@ -41,10 +54,11 @@ def main():
         LEFT JOIN cookies_app.scouts s ON o.scout_id = s.scout_id
         WHERE o.program_year = :year
           AND o.order_type IN ('Paper', 'Digital')
-        GROUP BY o.scout_id, s.first_name, s.last_name, o.order_type, COALESCE(o.add_ebudde, false)
-        ORDER BY s.first_name, s.last_name, o.order_type, COALESCE(o.add_ebudde, false)
-    """, {"year": current_year})
+        {group_by_clause}
+        {order_by_clause}
+    """
     
+    order_data = fetch_all(order_query, {"year": current_year})
     all_orders_dat = pd.DataFrame(order_data)
     
     if all_orders_dat.empty:
@@ -52,24 +66,38 @@ def main():
         st.stop()
 
     # Get money received data aggregated by scout and ebudde status (Paper orders only)
-    money_data = fetch_all("""
-        SELECT 
-            o.scout_id as "scoutId",
-            o.order_type as "orderType",
-            COALESCE(o.add_ebudde, false) as "ebudde",
-            COALESCE(SUM(ml.amount), 0) as "AmtReceived"
-        FROM cookies_app.orders o
-        LEFT JOIN cookies_app.money_ledger ml ON o.order_id = ml.related_order_id
-        WHERE o.program_year = :year
-          AND o.order_type = 'Paper'
-        GROUP BY o.scout_id, o.order_type, COALESCE(o.add_ebudde, false)
-    """, {"year": current_year})
+    if combine_orders:
+        money_query = """
+            SELECT 
+                o.scout_id as "scoutId",
+                'Combined' as "orderType",
+                COALESCE(o.add_ebudde, false) as "ebudde",
+                COALESCE(SUM(ml.amount), 0) as "AmtReceived"
+            FROM cookies_app.orders o
+            LEFT JOIN cookies_app.money_ledger ml ON o.order_id = ml.related_order_id
+            WHERE o.program_year = :year
+              AND o.order_type = 'Paper'
+            GROUP BY o.scout_id, COALESCE(o.add_ebudde, false)
+        """
+    else:
+        money_query = """
+            SELECT 
+                o.scout_id as "scoutId",
+                o.order_type as "orderType",
+                COALESCE(o.add_ebudde, false) as "ebudde",
+                COALESCE(SUM(ml.amount), 0) as "AmtReceived"
+            FROM cookies_app.orders o
+            LEFT JOIN cookies_app.money_ledger ml ON o.order_id = ml.related_order_id
+            WHERE o.program_year = :year
+              AND o.order_type = 'Paper'
+            GROUP BY o.scout_id, o.order_type, COALESCE(o.add_ebudde, false)
+        """
     
+    money_data = fetch_all(money_query, {"year": current_year})
     all_money_agg = pd.DataFrame(money_data)
 
     # Add filter
-    row1 = st.columns(4)
-    with row1[0]:
+    with c1:
         orderType_filter = st.multiselect("Filter by orderType:", options=all_orders_dat["orderType"].unique())
     
     if orderType_filter:
@@ -129,27 +157,46 @@ def main():
     if st.button("💾 Save eBudde Changes"):
         changes_made = False
         for idx in range(len(edited_df)):
-            if edited_df.loc[idx, 'ebudde'] != display_df.loc[idx, 'ebudde']:
+            # Convert to bool for comparison to handle numpy bool types
+            old_val = bool(display_df.loc[idx, 'ebudde']) if pd.notna(display_df.loc[idx, 'ebudde']) else False
+            new_val = bool(edited_df.loc[idx, 'ebudde']) if pd.notna(edited_df.loc[idx, 'ebudde']) else False
+            
+            if new_val != old_val:
                 scout_id = order_money_df.loc[idx, 'scoutId']
                 order_type = order_money_df.loc[idx, 'orderType']
-                old_ebudde = bool(display_df.loc[idx, 'ebudde'])  # Convert numpy bool to Python bool
-                new_ebudde = bool(edited_df.loc[idx, 'ebudde'])  # Convert numpy bool to Python bool
+                old_ebudde = old_val
+                new_ebudde = new_val
                 
                 # Update ALL orders for this scout_id + order_type + old_ebudde combination
-                execute_sql("""
-                    UPDATE cookies_app.orders
-                    SET add_ebudde = :new_ebudde
-                    WHERE scout_id = :sid
-                      AND order_type = :otype
-                      AND COALESCE(add_ebudde, false) = :old_ebudde
-                      AND program_year = :year
-                """, {
-                    "new_ebudde": new_ebudde,
-                    "sid": scout_id,
-                    "otype": order_type,
-                    "old_ebudde": old_ebudde,
-                    "year": current_year
-                })
+                # When combined, update all order types; otherwise, update specific order type
+                if combine_orders:
+                    execute_sql("""
+                        UPDATE cookies_app.orders
+                        SET add_ebudde = :new_ebudde
+                        WHERE scout_id = :sid
+                          AND COALESCE(add_ebudde, false) = :old_ebudde
+                          AND program_year = :year
+                    """, {
+                        "new_ebudde": new_ebudde,
+                        "sid": scout_id,
+                        "old_ebudde": old_ebudde,
+                        "year": current_year
+                    })
+                else:
+                    execute_sql("""
+                        UPDATE cookies_app.orders
+                        SET add_ebudde = :new_ebudde
+                        WHERE scout_id = :sid
+                          AND order_type = :otype
+                          AND COALESCE(add_ebudde, false) = :old_ebudde
+                          AND program_year = :year
+                    """, {
+                        "new_ebudde": new_ebudde,
+                        "sid": scout_id,
+                        "otype": order_type,
+                        "old_ebudde": old_ebudde,
+                        "year": current_year
+                    })
                 changes_made = True
         
         if changes_made:

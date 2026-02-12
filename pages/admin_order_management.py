@@ -27,6 +27,7 @@ DEFAULT_COLUMNS = [
     "paymentStatus",          # computed / read-only
     "addEbudde",
     "initialOrder",
+    "orderPickedup",
 ]
 
 # MUST match admin_update_orders_bulk()
@@ -37,6 +38,7 @@ EDITABLE_COLUMNS = {
     "initialOrder",
     "verifiedDigitalCookie",
     "orderType",
+    "orderPickedup",
 }
 
 # --------------------------------------------------
@@ -52,27 +54,48 @@ def init_ss():
 # -----------------------------
 def _norm(v):
     """Normalize values for comparison, handling pandas/numpy types"""
+    # Handle NaN/None first
+    if v is None:
+        return None
     if pd.isna(v):
         return None
+    
+    # Handle numpy types by calling .item() if available
     if hasattr(v, "item"):
         try:
-            return v.item()
+            v = v.item()
         except Exception:
             pass
+    
+    # Convert numpy bool to Python bool (check type string to catch numpy.bool_)
+    type_str = str(type(v))
+    if isinstance(v, bool) or "numpy.bool" in type_str:
+        return bool(v)
+    
     # Convert to int if it's a whole number
     if isinstance(v, (int, float)):
         if float(v).is_integer():
             return int(v)
         return float(v)
+    
+    # Return string types as-is
+    if isinstance(v, str):
+        return v
+    
     return v
 
 
 def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list[str]):
+    """
+    Compare original and edited dataframes to find changes.
+    Returns list of updates and a dataframe of diffs.
+    """
     updates: list[dict] = []
     diffs: list[dict] = []
 
-    orig = original.set_index("orderId")
-    edit = edited.set_index("orderId")
+    # Reset index to ensure we're comparing the same rows
+    orig = original.reset_index(drop=True).set_index("orderId")
+    edit = edited.reset_index(drop=True).set_index("orderId")
     
     # Include both regular editable columns and cookie columns
     all_editable = EDITABLE_COLUMNS | set(cookie_cols)
@@ -84,38 +107,57 @@ def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list
         delta = {"orderId": oid}
 
         for col in all_editable:
+            # Skip if column doesn't exist in both dataframes
             if col not in orig.columns or col not in edit.columns:
                 continue
 
-            old = _norm(orig.at[oid, col])
-            new = _norm(edit.at[oid, col])
+            # Get and normalize values
+            old_raw = orig.at[oid, col]
+            new_raw = edit.at[oid, col]
             
-            # Handle numeric comparisons more carefully
+            old = _norm(old_raw)
+            new = _norm(new_raw)
+            
+            # Compare based on column type
             if col in cookie_cols:
-                # For cookie columns, compare as integers
-                old_val = int(old) if old is not None and not pd.isna(old) else 0
-                new_val = int(new) if new is not None and not pd.isna(new) else 0
-                if old_val == new_val:
-                    continue
-                delta[col] = new_val
-                diffs.append({
-                    "orderId": oid,
-                    "column": col,
-                    "old": old_val,
-                    "new": new_val,
-                })
+                # For cookie columns, compare as integers (treat None as 0)
+                old_val = int(old) if old is not None else 0
+                new_val = int(new) if new is not None else 0
+                
+                if old_val != new_val:
+                    delta[col] = new_val
+                    diffs.append({
+                        "orderId": oid,
+                        "column": col,
+                        "old": old_val,
+                        "new": new_val,
+                    })
             else:
-                # For other columns, use regular comparison
-                if old == new:
-                    continue
-                delta[col] = new
-                diffs.append({
-                    "orderId": oid,
-                    "column": col,
-                    "old": old,
-                    "new": new,
-                })
+                # For non-cookie columns (status, comments, booleans, etc.)
+                # Treat None and False as equivalent for boolean fields only
+                if isinstance(old, bool) or isinstance(new, bool):
+                    old_bool = old if old is not None else False
+                    new_bool = new if new is not None else False
+                    if old_bool != new_bool:
+                        delta[col] = new
+                        diffs.append({
+                            "orderId": oid,
+                            "column": col,
+                            "old": old,
+                            "new": new,
+                        })
+                else:
+                    # For strings and other types, direct comparison
+                    if old != new:
+                        delta[col] = new
+                        diffs.append({
+                            "orderId": oid,
+                            "column": col,
+                            "old": old,
+                            "new": new,
+                        })
 
+        # Only add to updates if there are actual changes (more than just orderId)
         if len(delta) > 1:
             updates.append(delta)
 
@@ -240,6 +282,7 @@ def main():
             "verifiedDigitalCookie": st.column_config.CheckboxColumn("Verified DC"),
             "addEbudde": st.column_config.CheckboxColumn("eBudde"),
             "initialOrder": st.column_config.CheckboxColumn("Initial Order"),
+            "orderPickedup": st.column_config.CheckboxColumn("Picked Up"),
             "comments": st.column_config.TextColumn("Comments"),
             "orderType": st.column_config.SelectboxColumn(
                 "Order Type",
@@ -250,10 +293,11 @@ def main():
 
     # ---------------- Save ----------------
     st.divider()
+    st.write(edited)
 
     if st.button("Save Changes", type="primary"):
         updates, diffs = diff_updates(df_view, edited, cookie_cols)
-
+        st.write(diffs)
         if updates:
             try:
                 admin_update_orders_bulk(updates, cookie_cols)
