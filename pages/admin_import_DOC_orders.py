@@ -323,8 +323,14 @@ def main():
     cols_to_import = ["parent_id","scout_id","program_year","order_ref",
         "order_type","submit_dt","initial_order","comments","order_qty_boxes","order_amount",
         "status"] + list(cookie_nm_map.values())
+
+    preview_df = new_orders[cols_to_import].copy()
+    for id_col in ("parent_id", "scout_id"):
+        if id_col in preview_df.columns:
+            preview_df[id_col] = preview_df[id_col].astype(str)
+
     st.dataframe(
-        new_orders[cols_to_import],
+        preview_df,
         width='stretch',
     )
 

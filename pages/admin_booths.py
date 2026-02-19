@@ -4,6 +4,7 @@ from streamlit import session_state as ss
 from datetime import time, datetime, timedelta
 from uuid import uuid4
 import time as time_module
+import math
 from utils.app_utils import setup
 from utils.db_utils import require_admin, execute_sql, fetch_all
 from utils.order_utils import delete_booth_cascade
@@ -773,6 +774,7 @@ def main():
                 AND cy.program_year = bip.program_year
                 WHERE bip.booth_id = :bid
                 AND bip.program_year = :year
+                AND bip.cookie_code != 'DON'
                 ORDER BY cy.display_order
             """, {
                 "bid": booth.booth_id,
@@ -847,27 +849,46 @@ def main():
                 st.markdown("---")
                 st.markdown("### 💵 Money Reconciliation")
 
-                starting_cash = Decimal(booth.starting_cash or 0)
-                ending_cash = Decimal(booth.ending_cash or 0)
-                square_total = Decimal(booth.square_total or 0)
+                c1, c2, c3 = st.columns(3)
 
+                starting_cash = Decimal(c1.number_input(
+                    "Starting Cash", 
+                    value=float(booth.starting_cash or 0), 
+                    step=1.0,
+                    key=f"verify_starting_{booth.booth_id}"
+                ))
+                ending_cash = Decimal(c2.number_input(
+                    "Ending Cash", 
+                    value=float(booth.ending_cash or 0), 
+                    step=1.0,
+                    key=f"verify_ending_{booth.booth_id}"
+                ))
+                square_total = Decimal(c3.number_input(
+                    "Square / Credit", 
+                    value=float(booth.square_total or 0), 
+                    step=1.0,
+                    key=f"verify_square_{booth.booth_id}"
+                ))
+
+                # Always calculate and display the money reconciliation
                 ending_money = ending_cash + square_total
                 actual_revenue = ending_money - starting_cash
                 diff = actual_revenue - expected_revenue
 
-                st.write(f"Starting Cash: ${starting_cash:.2f}")
-                st.write(f"Ending Cash: ${ending_cash:.2f}")
-                st.write(f"Square / Credit: ${square_total:.2f}")
-                st.write(f"Ending Money: ${ending_money:.2f}")
-                st.write(f"Actual Revenue: ${actual_revenue:.2f}")
-                st.write(f"Over / Under: ${diff:.2f}")
+                st.markdown("---")
+                st.markdown("### 🧮 Calculations")
 
+                st.write(f"**(1) Ending Money:** ${ending_money:.2f}")
+                st.write(f"**(2) Starting Cash:** ${starting_cash:.2f}")
+                st.write(f"**(3) Revenue:** ${actual_revenue:.2f}")
+                st.write(f"**(4) Expected Revenue:** ${expected_revenue:.2f}")
+                st.write(f"**(5) Sweet Acts of Kindness Boxes:** {math.floor(diff/6):.0f} boxes")
+
+                # Calculate OPC boxes for verification
                 opc_boxes = int(
                     (diff / Decimal("6")).to_integral_value(rounding=ROUND_FLOOR)
                     if diff > 0 else 0
                 )
-
-                st.write(f"**OPC Boxes:** {opc_boxes}")
 
                 # ----------------------------------
                 # Verification Controls
@@ -1057,6 +1078,7 @@ def main():
                         ON cy.cookie_code = bip.cookie_code
                         AND cy.program_year = bip.program_year
                         WHERE bip.booth_id = :bid
+                        AND bip.cookie_code != 'DON'
                         ORDER BY cy.display_order
                     """, {"bid": booth.booth_id})
                     

@@ -42,6 +42,13 @@ EDITABLE_COLUMNS = {
     "orderPickedup",
 }
 
+BOOLEAN_COLUMNS = {
+    "addEbudde",
+    "initialOrder",
+    "verifiedDigitalCookie",
+    "orderPickedup",
+}
+
 # --------------------------------------------------
 # Session init
 # --------------------------------------------------
@@ -86,6 +93,14 @@ def _norm(v):
     return v
 
 
+def _to_bool(v) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, str):
+        return v.strip().lower() in {"1", "true", "t", "yes", "y"}
+    return bool(v)
+
+
 def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list[str]):
     """
     Compare original and edited dataframes to find changes.
@@ -95,8 +110,14 @@ def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list
     diffs: list[dict] = []
 
     # Reset index to ensure we're comparing the same rows
-    orig = original.reset_index(drop=True).set_index("orderId")
-    edit = edited.reset_index(drop=True).set_index("orderId")
+    orig = original.reset_index(drop=True).copy()
+    edit = edited.reset_index(drop=True).copy()
+
+    orig["orderId"] = orig["orderId"].astype(str)
+    edit["orderId"] = edit["orderId"].astype(str)
+
+    orig = orig.set_index("orderId")
+    edit = edit.set_index("orderId")
     
     # Include both regular editable columns and cookie columns
     all_editable = EDITABLE_COLUMNS | set(cookie_cols)
@@ -136,16 +157,16 @@ def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list
             else:
                 # For non-cookie columns (status, comments, booleans, etc.)
                 # Treat None and False as equivalent for boolean fields only
-                if isinstance(old, bool) or isinstance(new, bool):
-                    old_bool = old if old is not None else False
-                    new_bool = new if new is not None else False
+                if col in BOOLEAN_COLUMNS:
+                    old_bool = _to_bool(old)
+                    new_bool = _to_bool(new)
                     if old_bool != new_bool:
-                        delta[col] = new
+                        delta[col] = new_bool
                         diffs.append({
                             "orderId": oid,
                             "column": col,
-                            "old": old,
-                            "new": new,
+                            "old": old_bool,
+                            "new": new_bool,
                         })
                 else:
                     # For strings and other types, direct comparison

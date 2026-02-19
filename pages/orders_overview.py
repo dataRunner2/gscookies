@@ -80,6 +80,9 @@ def main():
 
     total_sales = Decimal("0.00")
     total_paid = Decimal("0.00")
+    
+    paper_sales = Decimal("0.00")
+    paper_paid = Decimal("0.00")
 
     # Calculate cookie totals from wide format
     meta_cols = {'orderId', 'program_year', 'submit_dt', 'orderType', 'orderStatus', 
@@ -150,6 +153,8 @@ def main():
         elif is_paper:
             paper_orders += 1
             paper_boxes += qty
+            paper_sales += amount
+            paper_paid += paid
 
         total_sales += amount
         total_paid += paid
@@ -160,6 +165,9 @@ def main():
     avg_boxes_per_order = total_boxes / total_orders if total_orders > 0 else 0
     percent_paid = (total_paid / total_sales * 100) if total_sales > 0 else 0
     balance = total_sales - total_paid
+    
+    paper_percent_paid = (paper_paid / paper_sales * 100) if paper_sales > 0 else 0
+    paper_balance = paper_sales - paper_paid
     
     # Count unique scouts
     unique_scouts = orders['scoutName'].nunique() if 'scoutName' in orders.columns else 0
@@ -188,7 +196,7 @@ def main():
     # --------------------------------------------------
     # 🍪 COOKIES SOLD BY TYPE
     # --------------------------------------------------
-    st.markdown("### 🍪 Cookies Sold by Type")
+    st.markdown("### 🍪 Cookies Sales by Type")
 
     if cookie_totals:
         # Booth Pending row
@@ -234,16 +242,17 @@ def main():
     # --------------------------------------------------
     # 💵 FINANCIAL SUMMARY
     # --------------------------------------------------
-    st.markdown("### 💵 Financial Summary")
+    st.markdown("### 💵 Financial Summary for Paper Orders")
     
+    # Paper Orders row
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("💰 Total Sales", f"${total_sales:,.2f}")
+        st.metric("💰 Total Paper Order Sales", f"${paper_sales:,.2f}")
     with col2:
-        st.metric("✅ Paid", f"${total_paid:,.2f}")
-        st.caption(f"{percent_paid:.0f}% collected")
+        st.metric("✅ Paid", f"${paper_paid:,.2f}")
+        st.caption(f"{paper_percent_paid:.0f}% collected")
     with col3:
-        st.metric("⏳ Outstanding", f"${balance:,.2f}")
+        st.metric("⏳ Outstanding", f"${paper_balance:,.2f}")
 
 
 # --------------------------------------------------
