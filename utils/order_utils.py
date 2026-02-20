@@ -1334,6 +1334,12 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[st
     cookie_cols = cookie_cols or []
 
     for u in updates:
+        if u.get("orderStatus") == "PICKED_UP":
+            u["orderPickedup"] = True
+
+        if u.get("orderPickedup") is True and "orderStatus" not in u:
+            u["orderStatus"] = "PICKED_UP"
+
         oid = u.get("orderId")
         if not oid:
             continue

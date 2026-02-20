@@ -229,7 +229,7 @@ def main():
         status_filter = st.multiselect(
             "Status",
             options=status_vals,
-            default=["NEW"] if "NEW" in status_vals else status_vals,
+            default=["NEW","IMPORTED"] if "NEW" in status_vals else status_vals,
         )
 
     with c2:
