@@ -17,7 +17,7 @@ from utils.order_utils import (
 # -----------------------------
 # Configuration
 # -----------------------------
-STATUS_OPTIONS = ["NEW", "PRINTED", "PICKED_UP", "CANCELLED"]
+STATUS_OPTIONS = ["NEW", "PRINTED", "IMPORTED","PICKED_UP", "CANCELLED"]
 
 DEFAULT_COLUMNS = [
     "orderId",
@@ -229,7 +229,7 @@ def main():
         status_filter = st.multiselect(
             "Status",
             options=status_vals,
-            default=["NEW","IMPORTED"] if "NEW" in status_vals else status_vals,
+            default=["NEW","IMPORTED","PRINTED"] if "NEW" in status_vals else status_vals,
         )
 
     with c2:
