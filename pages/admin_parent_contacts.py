@@ -43,8 +43,8 @@ def main():
         columns={
             "parent_firstname": "First Name",
             "parent_lastname": "Last Name",
-            "parent_email": "Email",
             "parent_phone": "Phone",
+            "parent_email": "Email",
             "scouts": "Scouts",
         }
     )
