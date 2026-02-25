@@ -9,12 +9,21 @@ def get_parent_contacts():
     return fetch_all(
         """
         SELECT
-            parent_firstname,
-            parent_lastname,
-            parent_email,
-            parent_phone
-        FROM cookies_app.parents
-        ORDER BY parent_lastname, parent_firstname
+            p.parent_firstname,
+            p.parent_lastname,
+            p.parent_email,
+            p.parent_phone,
+            COALESCE(
+                STRING_AGG(
+                    TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')),
+                    ', ' ORDER BY s.last_name, s.first_name
+                ),
+                ''
+            ) AS scouts
+        FROM cookies_app.parents p
+        LEFT JOIN cookies_app.scouts s ON s.parent_id = p.parent_id
+        GROUP BY p.parent_id, p.parent_firstname, p.parent_lastname, p.parent_email, p.parent_phone
+        ORDER BY p.parent_lastname, p.parent_firstname
         """
     )
 
@@ -36,9 +45,10 @@ def main():
             "parent_lastname": "Last Name",
             "parent_email": "Email",
             "parent_phone": "Phone",
+            "scouts": "Scouts",
         }
     )
-    data = data[["First Name", "Last Name", "Email", "Phone"]]
+    data = data[["First Name", "Last Name", "Email", "Phone", "Scouts"]]
 
     st.dataframe(data, use_container_width=True, hide_index=True)
 
