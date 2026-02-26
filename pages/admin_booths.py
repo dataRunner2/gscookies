@@ -98,6 +98,19 @@ def get_draft_booth_orders():
     """)
 
 
+def get_booth_scout_names(booth_id):
+    rows = fetch_all("""
+        SELECT s.first_name, s.last_name
+        FROM cookies_app.booth_scouts bs
+        JOIN cookies_app.scouts s ON s.scout_id = bs.scout_id
+        WHERE bs.booth_id = :bid
+        ORDER BY s.last_name, s.first_name
+    """, {"bid": booth_id})
+    if not rows:
+        return "____________________________"
+    return ", ".join(f"{r.first_name} {r.last_name}" for r in rows)
+
+
 # Booth queries
 def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
     # Mark order verified - update both verification_status and status
@@ -465,10 +478,12 @@ def main():
                             AND cy.program_year = bip.program_year
                         WHERE bip.booth_id = :bid
                           AND bip.program_year = :year
+                                                    AND bip.cookie_code != 'DON'
                         ORDER BY cy.display_order
                         """, {"bid": booth_item.booth_id, "year": ss.current_year})
                         
                         total_boxes = sum(c.planned_quantity for c in cookies)
+                        scout_names = get_booth_scout_names(booth_item.booth_id)
                         
                         combined_html += f"""
                         <div class="booth-sheet">
@@ -476,12 +491,18 @@ def main():
                                 Girl Scout Cookie Booth Sheet
                             </h1>
                             
-                            <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
-                                <h2 style="margin-top: 0;">Booth Information</h2>
-                                <p><strong>Location:</strong> {booth_item.location}</p>
-                                <p><strong>Date:</strong> {booth_item.booth_date.strftime('%A, %B %d, %Y')}</p>
-                                <p><strong>Time:</strong> {booth_item.start_time.strftime('%I:%M %p')} - {booth_item.end_time.strftime('%I:%M %p')}</p>
-                                <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                            <div style="margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div style="padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                                    <h2 style="margin-top: 0;">Booth Information</h2>
+                                    <p><strong>Location:</strong> {booth_item.location}</p>
+                                    <p><strong>Date:</strong> {booth_item.booth_date.strftime('%A, %B %d, %Y')}</p>
+                                    <p><strong>Time:</strong> {booth_item.start_time.strftime('%I:%M %p')} - {booth_item.end_time.strftime('%I:%M %p')}</p>
+                                    <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                                </div>
+                                <div style="padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                                    <h2 style="margin-top: 0;">Scouts</h2>
+                                    <p>{scout_names}</p>
+                                </div>
                             </div>
 
                             <h2>Cookie Inventory</h2>
@@ -599,11 +620,13 @@ def main():
                 AND cy.program_year = bip.program_year
             WHERE bip.booth_id = :bid
               AND bip.program_year = :year
+                            AND bip.cookie_code != 'DON'
             ORDER BY cy.display_order
             """, {"bid": booth.booth_id, "year": ss.current_year})
 
             # Generate printable HTML
             total_boxes = sum(c.planned_quantity for c in cookies)
+            scout_names = get_booth_scout_names(booth.booth_id)
             
             html_content = f"""
             <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px;">
@@ -611,12 +634,18 @@ def main():
                     Girl Scout Cookie Booth Sheet
                 </h1>
                 
-                <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
-                    <h2 style="margin-top: 0;">Booth Information</h2>
-                    <p><strong>Location:</strong> {booth.location}</p>
-                    <p><strong>Date:</strong> {booth.booth_date.strftime('%A, %B %d, %Y')}</p>
-                    <p><strong>Time:</strong> {booth.start_time.strftime('%I:%M %p')} - {booth.end_time.strftime('%I:%M %p')}</p>
-                    <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                <div style="margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                        <h2 style="margin-top: 0;">Booth Information</h2>
+                        <p><strong>Location:</strong> {booth.location}</p>
+                        <p><strong>Date:</strong> {booth.booth_date.strftime('%A, %B %d, %Y')}</p>
+                        <p><strong>Time:</strong> {booth.start_time.strftime('%I:%M %p')} - {booth.end_time.strftime('%I:%M %p')}</p>
+                        <p><strong>Total Starting Boxes:</strong> {total_boxes}</p>
+                    </div>
+                    <div style="padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
+                        <h2 style="margin-top: 0;">Scouts</h2>
+                        <p>{scout_names}</p>
+                    </div>
                 </div>
 
                 <h2>Cookie Inventory</h2>
