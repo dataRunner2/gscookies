@@ -162,6 +162,153 @@ def main():
             - TT:Toffee-tastic
             - DON: Sweet Cookie Donation
         """)
+
+        st.subheader("💵 Cookie Math")
+        st.caption("Quick totals and change examples for booths and in-person sales.")
+
+        # st.markdown("**Standard Cookies ($6 each)**")
+        standard_totals = pd.DataFrame({
+            "Boxes": list(range(1, 11)),
+            "Total Due": [f"${boxes * 6}" for boxes in range(1, 11)],
+        })
+        # # st.table(standard_totals)
+
+        st.markdown("**Common Change Amounts (Standard $6 boxes)**")
+        standard_change_rows = []
+        for boxes in range(1, 9):
+            due = boxes * 6
+            standard_change_rows.append({
+                "Boxes": boxes,
+                "Total Due": f"${due}",
+                "$10": f"${10 - due}" if due <= 10 else "—",
+                "$20": f"${20 - due}" if due <= 20 else "—",
+                "$50": f"${50 - due}" if due <= 50 else "—",
+            })
+        st.table(pd.DataFrame(standard_change_rows))
+        st.caption("Example: If a customer gives $20 for 1 box, change is $14.")
+
+        st.markdown("---")
+        st.markdown("**Toffee-Tastic Math ($7 each)**")
+        tt_totals = pd.DataFrame({
+            "Toffee-Tastic Boxes": list(range(1, 9)),
+            "Total Due": [f"${boxes * 7}" for boxes in range(1, 9)],
+        })
+        st.table(tt_totals)
+
+        st.markdown("**Common Change Amounts (Toffee-Tastic $7 boxes)**")
+        tt_change_rows = []
+        for boxes in range(1, 7):
+            due = boxes * 7
+            tt_change_rows.append({
+                "TT Boxes": boxes,
+                "Total Due": f"${due}",
+                "$10": f"${10 - due}" if due <= 10 else "—",
+                "$20": f"${20 - due}" if due <= 20 else "—",
+                "$50": f"${50 - due}" if due <= 50 else "—",
+            })
+        tt_change_df = pd.DataFrame(tt_change_rows)
+        st.table(tt_change_df)
+
+        standard_change_df = pd.DataFrame(standard_change_rows)
+
+        cookie_math_html = f"""
+        <html>
+            <head>
+                <meta charset=\"utf-8\" />
+                <title>Cookie Math</title>
+                <style>
+                    body {{
+                        font-family: 'Trebuchet MS', Arial, sans-serif;
+                        background: #fff8f3;
+                        color: #2d2d2d;
+                        margin: 0;
+                        padding: 24px;
+                    }}
+                    .sheet {{
+                        max-width: 900px;
+                        margin: 0 auto;
+                    }}
+                    .title {{
+                        text-align: center;
+                        color: #8d3b72;
+                        font-size: 38px;
+                        margin: 0 0 8px 0;
+                    }}
+                    .subtitle {{
+                        text-align: center;
+                        color: #5c5c5c;
+                        margin: 0 0 24px 0;
+                    }}
+                    .card {{
+                        background: #ffffff;
+                        border: 2px solid #ffd5ec;
+                        border-radius: 14px;
+                        padding: 16px;
+                        margin-bottom: 16px;
+                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+                    }}
+                    .section-title {{
+                        color: #d65191;
+                        margin: 0 0 10px 0;
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 14px;
+                    }}
+                    th, td {{
+                        border: 1px solid #f1c3de;
+                        padding: 8px 10px;
+                        text-align: center;
+                    }}
+                    th {{
+                        background: #ffe6f4;
+                        color: #7f2d66;
+                    }}
+                    .note {{
+                        margin-top: 8px;
+                        color: #5c5c5c;
+                        font-style: italic;
+                    }}
+                    @media print {{
+                        body {{ background: white; padding: 0; }}
+                        .card {{ box-shadow: none; break-inside: avoid; }}
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class=\"sheet\">
+                    <h1 class=\"title\">🍪 Cookie Math</h1>
+                    <p class=\"subtitle\">Quick booth cash helper for totals and change.</p>
+
+                    <div class=\"card\">
+                        <h2 class=\"section-title\">Common Change Amounts (Standard $6 boxes)</h2>
+                        {standard_change_df.to_html(index=False, border=0)}
+                        <p class=\"note\">Example: Customer gives $20 for 1 box, change is $14.</p>
+                    </div>
+
+                    <div class=\"card\">
+                        <h2 class=\"section-title\">Toffee-Tastic ($7 each)</h2>
+                        {tt_totals.to_html(index=False, border=0)}
+                    </div>
+
+                    <div class=\"card\">
+                        <h2 class=\"section-title\">Common Change Amounts (Toffee-Tastic $7 boxes)</h2>
+                        {tt_change_df.to_html(index=False, border=0)}
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+
+        st.download_button(
+            label="🖨️ Download & Print Cookie Math",
+            data=cookie_math_html,
+            file_name="cookie_math_printable.html",
+            mime="text/html",
+            help="Downloads just the Cookie Math sheet with print-friendly formatting."
+        )
+        st.caption("Open the downloaded HTML in your browser and print.")
     with tabs[6]:
         st.subheader("Marketing")
         st.markdown('[Little Brownie Bakers Marketing Materials](https://www.littlebrowniebakers.com/ThemeGraphics)')

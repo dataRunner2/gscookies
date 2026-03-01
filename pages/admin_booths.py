@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from decimal import Decimal, ROUND_FLOOR
 from streamlit import session_state as ss
 from datetime import time, datetime, timedelta
@@ -7,7 +8,7 @@ import time as time_module
 import math
 from utils.app_utils import setup
 from utils.db_utils import require_admin, execute_sql, fetch_all
-from utils.order_utils import delete_booth_cascade
+from utils.order_utils import delete_booth_cascade, set_add_ebudde
 
 # --------------------------------------------------
 # Session init
@@ -113,6 +114,26 @@ def get_booth_scout_names(booth_id):
 
 # Booth queries
 def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
+    order_row = fetch_all("""
+        SELECT parent_id, scout_id, verification_status
+        FROM cookies_app.orders
+        WHERE order_id = :oid
+        LIMIT 1
+    """, {"oid": order_id})
+
+    if not order_row:
+        return
+
+    order_parent_id = order_row[0].parent_id
+    order_scout_id = order_row[0].scout_id
+    current_status = order_row[0].verification_status
+
+    # Safe fallbacks for required not-null ledger columns
+    if not order_parent_id:
+        order_parent_id = 'f056ec09-9273-4e2d-8532-3b2cf0c7b704'
+    if not order_scout_id:
+        order_scout_id = '7bcf1980-ccb7-4d0c-b0a0-521b542356fa'
+
     # Mark order verified - update both verification_status and status
     execute_sql("""
         UPDATE cookies_app.orders
@@ -131,6 +152,10 @@ def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
         "opc": opc_boxes,
     })
 
+    # If already verified, avoid duplicate inventory ledger writes
+    if current_status == 'VERIFIED':
+        return
+
     # Record inventory movements
     for i in items:
         if i.get('sold', 0) == 0:
@@ -139,6 +164,8 @@ def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
         execute_sql("""
             INSERT INTO cookies_app.inventory_ledger (
                 inventory_event_id,
+                parent_id,
+                scout_id,
                 program_year,
                 cookie_code,
                 quantity,
@@ -150,6 +177,8 @@ def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
             )
             VALUES (
                 gen_random_uuid(),
+                :pid,
+                :sid,
                 :year,
                 :cookie,
                 :qty,
@@ -160,6 +189,8 @@ def verify_booth(order_id, year, items, admin_name, notes, opc_boxes):
                 'Booth verified'
             )
         """, {
+            "pid": order_parent_id,
+            "sid": order_scout_id,
             "year": year,
             "cookie": i.get('cookie_code'),
             "qty": -i.get('sold', 0),
@@ -176,11 +207,12 @@ def main():
 
     st.subheader("Booth Administration")
 
-    tab_add, tab_view, tab_print, tab_verify, tab_delete = st.tabs([
+    tab_add, tab_view, tab_print, tab_verify, tab_ebudde, tab_delete = st.tabs([
         "➕ Add / Manage Booths",
         "📋 View All Booths",
         "🖨️ Print Booth Sheet",
         "✅ Verify Booth",
+        "📒 eBudde",
         "🗑️ Delete Booth",
     ])
 
@@ -752,6 +784,25 @@ def main():
     with tab_verify:
         st.markdown("## 🧾 Booth Verification")
 
+        # Reset verify-form widget state safely on next rerun
+        if ss.get("verify_reset_pending"):
+            reset_booth_id = ss.get("verify_reset_booth_id")
+            keys_to_clear = ["booth_verify_select"]
+
+            if reset_booth_id:
+                keys_to_clear.extend([
+                    f"verify_notes_{reset_booth_id}",
+                    f"verify_assigned_scouts_{reset_booth_id}",
+                ])
+
+            for key in keys_to_clear:
+                if key in ss:
+                    del ss[key]
+
+            ss["verify_reset_pending"] = False
+            if "verify_reset_booth_id" in ss:
+                del ss["verify_reset_booth_id"]
+
         # ----------------------------------
         # Load booths awaiting verification
         # ----------------------------------
@@ -760,6 +811,14 @@ def main():
                 o.order_id,
                 o.program_year,
                 o.booth_id,
+                o.verification_status,
+                o.verification_notes,
+                COALESCE((
+                    SELECT SUM(-il.quantity)
+                    FROM cookies_app.inventory_ledger il
+                    WHERE il.related_order_id = o.order_id
+                      AND il.event_type = 'BOOTH_SALE'
+                ), 0) AS total_boxes_sold,
                 b.location,
                 b.booth_date,
                 b.start_time,
@@ -770,178 +829,377 @@ def main():
             FROM cookies_app.orders o
             JOIN cookies_app.booths b ON b.booth_id = o.booth_id
             WHERE o.order_type = 'Booth'
-            AND o.verification_status = 'DRAFT'
-            ORDER BY b.booth_date DESC, b.start_time
+            ORDER BY b.booth_date ASC, b.start_time ASC
         """)
 
         if not booths:
             st.success("No booths awaiting verification.")
         else:
+            show_verified = st.checkbox("Show Verified", value=False, key="verify_show_verified")
+            filtered_verify_booths = [b for b in booths if b.verification_status == 'VERIFIED'] if show_verified else [b for b in booths if b.verification_status != 'VERIFIED']
+
+            if not filtered_verify_booths:
+                st.info("No booths match current filter.")
+                return
+
             booth = st.selectbox(
                 "Select Booth",
-                booths,
+                filtered_verify_booths,
                 format_func=lambda b: (
-                    f"{b.booth_date.strftime('%b %d')} "
-                    f"{b.start_time.strftime('%I:%M %p')}–{b.end_time.strftime('%I:%M %p')} "
+                    f"{b.booth_date.strftime('%b %d, %Y')} - "
+                    f"{b.start_time.strftime('%I:%M %p')} - "
                     f"{b.location}"
+                    + (f" - Sold: {int(b.total_boxes_sold)}" if b.verification_status == 'VERIFIED' else "")
                 ),
+                index=None,
+                placeholder="Select booth",
                 key='booth_verify_select'
             )
-
-            # ----------------------------------
-            # Load planned inventory (START)
-            # ----------------------------------
-            items = fetch_all("""
-                SELECT
-                    bip.cookie_code,
-                    cy.display_name,
-                    cy.price_per_box,
-                    bip.planned_quantity AS start_qty
-                FROM cookies_app.booth_inventory_plan bip
-                JOIN cookies_app.cookie_years cy
-                ON cy.cookie_code = bip.cookie_code
-                AND cy.program_year = bip.program_year
-                WHERE bip.booth_id = :bid
-                AND bip.program_year = :year
-                AND bip.cookie_code != 'DON'
-                ORDER BY cy.display_order
-            """, {
-                "bid": booth.booth_id,
-                "year": booth.program_year
-            })
-
-            if not items:
-                st.warning("No planned inventory found for this booth.")
+            if booth is None:
+                st.info("Select booth to verify.")
             else:
-                st.markdown(f"### Booth: {booth.location} on {booth.booth_date.strftime('%b %d, %Y')}")
-                # ----------------------------------
-                # Cookie Count Table (Admin Editable)
-                # ----------------------------------
-                st.markdown("### 🍪 Cookie Counts")
+                all_scouts = fetch_all("""
+                    SELECT scout_id, first_name, last_name
+                    FROM cookies_app.scouts
+                    ORDER BY last_name, first_name
+                """)
 
-                header = st.columns([3, 2, 2, 2, 2])
-                header[0].markdown("**Cookie**")
-                header[1].markdown("**Start**")
-                header[2].markdown("**End**")
-                header[3].markdown("**Sold**")
-                header[4].markdown("**Revenue**")
+                assigned_scout_rows = fetch_all("""
+                    SELECT s.scout_id, s.first_name, s.last_name
+                    FROM cookies_app.booth_scouts bs
+                    JOIN cookies_app.scouts s ON s.scout_id = bs.scout_id
+                    WHERE bs.booth_id = :bid
+                    ORDER BY s.last_name, s.first_name
+                """, {"bid": booth.booth_id})
 
-                total_sold = 0
-                expected_revenue = Decimal("0.00")
+                scout_name_by_id = {
+                    s.scout_id: f"{s.first_name} {s.last_name}" for s in all_scouts
+                }
+                assigned_scout_ids = [s.scout_id for s in assigned_scout_rows]
+                is_verified = booth.verification_status == 'VERIFIED'
+                allow_edit_verified = st.checkbox(
+                    "Edit Booth",
+                    value=False,
+                    key=f"edit_verified_booth_{booth.booth_id}",
+                ) if is_verified else True
+                fields_disabled = is_verified and not allow_edit_verified
 
-                verified_items = []
+                scout_key = f"verify_assigned_scouts_{booth.booth_id}"
+                notes_key = f"verify_notes_{booth.booth_id}"
 
-                for i in items:
-                    row = st.columns([3, 2, 2, 2, 2])
-
-                    row[0].markdown(f"**{i.display_name}**  \n${Decimal(i.price_per_box):.2f}")
-
-                    start_qty = int(i.start_qty)
-
-                    end_qty = row[2].number_input(
-                        label="",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key=f"end_{i.cookie_code}"
-                    )
-
-                    row[1].markdown(f"{start_qty}")
-
-                    sold = start_qty - end_qty
-                    sold = max(sold, 0)
-
-                    revenue = Decimal(sold) * Decimal(i.price_per_box)
-
-                    row[3].markdown(f"{sold}")
-                    row[4].markdown(f"${revenue:.2f}")
-
-                    total_sold += sold
-                    expected_revenue += revenue
-
-                    verified_items.append({
-                        "cookie_code": i.cookie_code,
-                        "sold": sold
-                    })
-
-                # ----------------------------------
-                # Totals
-                # ----------------------------------
-                st.markdown("---")
-                col1, col2 = st.columns(2)
-                col1.metric("Total Boxes Sold", total_sold)
-                col2.metric("Expected Revenue", f"${expected_revenue:.2f}")
-
-                # ----------------------------------
-                # Money Reconciliation
-                # ----------------------------------
-                st.markdown("---")
-                st.markdown("### 💵 Money Reconciliation")
-
-                c1, c2, c3 = st.columns(3)
-
-                starting_cash = Decimal(c1.number_input(
-                    "Starting Cash", 
-                    value=float(booth.starting_cash or 0), 
-                    step=1.0,
-                    key=f"verify_starting_{booth.booth_id}"
-                ))
-                ending_cash = Decimal(c2.number_input(
-                    "Ending Cash", 
-                    value=float(booth.ending_cash or 0), 
-                    step=1.0,
-                    key=f"verify_ending_{booth.booth_id}"
-                ))
-                square_total = Decimal(c3.number_input(
-                    "Square / Credit", 
-                    value=float(booth.square_total or 0), 
-                    step=1.0,
-                    key=f"verify_square_{booth.booth_id}"
-                ))
-
-                # Always calculate and display the money reconciliation
-                ending_money = ending_cash + square_total
-                actual_revenue = ending_money - starting_cash
-                diff = actual_revenue - expected_revenue
-
-                st.markdown("---")
-                st.markdown("### 🧮 Calculations")
-
-                st.write(f"**(1) Ending Money:** ${ending_money:.2f}")
-                st.write(f"**(2) Starting Cash:** ${starting_cash:.2f}")
-                st.write(f"**(3) Revenue:** ${actual_revenue:.2f}")
-                st.write(f"**(4) Expected Revenue:** ${expected_revenue:.2f}")
-                st.write(f"**(5) Sweet Acts of Kindness Boxes:** {math.floor(diff/6):.0f} boxes")
-
-                # Calculate OPC boxes for verification
-                opc_boxes = int(
-                    (diff / Decimal("6")).to_integral_value(rounding=ROUND_FLOOR)
-                    if diff > 0 else 0
+                st.markdown("### 👧 Scout Assignment")
+                edited_scout_ids = st.multiselect(
+                    "Select/Verify Assigned Scouts",
+                    options=list(scout_name_by_id.keys()),
+                    default=assigned_scout_ids,
+                    format_func=lambda sid: scout_name_by_id[sid],
+                    max_selections=4,
+                    key=scout_key,
+                    disabled=fields_disabled,
                 )
 
+                sold_rows = fetch_all("""
+                    SELECT cookie_code, SUM(-quantity) AS sold_qty
+                    FROM cookies_app.inventory_ledger
+                    WHERE related_order_id = :oid
+                      AND event_type = 'BOOTH_SALE'
+                    GROUP BY cookie_code
+                """, {"oid": booth.order_id})
+                sold_by_code = {r.cookie_code: int(r.sold_qty or 0) for r in sold_rows}
+
                 # ----------------------------------
-                # Verification Controls
+                # Load planned inventory (START)
                 # ----------------------------------
-                st.markdown("---")
-                st.markdown("### ✅ Verification")
+                items = fetch_all("""
+                    SELECT
+                        bip.cookie_code,
+                        cy.display_name,
+                        cy.price_per_box,
+                        bip.planned_quantity AS start_qty
+                    FROM cookies_app.booth_inventory_plan bip
+                    JOIN cookies_app.cookie_years cy
+                    ON cy.cookie_code = bip.cookie_code
+                    AND cy.program_year = bip.program_year
+                    WHERE bip.booth_id = :bid
+                    AND bip.program_year = :year
+                    AND bip.cookie_code != 'DON'
+                    ORDER BY cy.display_order
+                """, {
+                    "bid": booth.booth_id,
+                    "year": booth.program_year
+                })
 
-                verify_cookies = st.checkbox("I verify cookie counts")
-                verify_money = st.checkbox("I verify money totals")
+                if not items:
+                    st.warning("No planned inventory found for this booth.")
+                else:
+                    st.markdown(f"### Booth: {booth.location} on {booth.booth_date.strftime('%b %d, %Y')}")
+                    # ----------------------------------
+                    # Cookie Count Table (Admin Editable)
+                    # ----------------------------------
+                    st.markdown("### 🍪 Cookie Counts")
 
-                notes = st.text_area("Admin Notes (required)", height=80)
+                    header = st.columns([3, 2, 2, 2])
+                    header[0].markdown("**Cookie**")
+                    header[1].markdown("**Starting**")
+                    header[2].markdown("**Ending**")
+                    header[3].markdown("**Total Due**")
 
-                admin_name = ss.get("user_name", "Admin")
+                    total_start_boxes = 0
+                    total_sold = 0
+                    expected_revenue = Decimal("0.00")
 
-                if st.button("Booth Verified"):
-                    if not verify_cookies or not verify_money:
-                        st.error("Both verification checkboxes must be checked.")
-                    elif not notes.strip():
-                        st.error("Verification notes are required.")
-                    else:
-                        verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
-                        st.success(f"Booth verified by {admin_name}. Inventory updated.")
-                        time_module.sleep(3)
-                        if st.button("Clear", key="clear_after_verify"):
+                    verified_items = []
+                    row_entries = []
+
+                    for i in items:
+                        row = st.columns([3, 2, 2, 2])
+
+                        row[0].markdown(f"**{i.display_name}**  \n${Decimal(i.price_per_box):.2f}")
+
+                        row_entries.append({
+                            "item": i,
+                            "start_ph": row[1].empty(),
+                            "end_ph": row[2].empty(),
+                            "revenue_ph": row[3].empty(),
+                        })
+
+                    # Render END inputs first so Tab moves straight down this column
+                    for entry in row_entries:
+                        item = entry["item"]
+                        default_end_qty = 0
+                        if is_verified:
+                            default_end_qty = max(int(item.start_qty) - int(sold_by_code.get(item.cookie_code, 0)), 0)
+                        entry["end_qty"] = entry["end_ph"].number_input(
+                            label="",
+                            min_value=0,
+                            value=default_end_qty,
+                            step=1,
+                            key=f"verify_end_{booth.booth_id}_{item.cookie_code}",
+                            disabled=fields_disabled,
+                        )
+
+                    # Render START inputs second (still editable)
+                    for entry in row_entries:
+                        item = entry["item"]
+                        entry["start_qty"] = entry["start_ph"].number_input(
+                            label="",
+                            min_value=0,
+                            value=int(item.start_qty),
+                            step=1,
+                            key=f"verify_startqty_{booth.booth_id}_{item.cookie_code}",
+                            disabled=fields_disabled,
+                        )
+
+                    for entry in row_entries:
+                        i = entry["item"]
+                        start_qty = entry["start_qty"]
+                        end_qty = entry["end_qty"]
+
+                        sold = start_qty - end_qty
+                        sold = max(sold, 0)
+
+                        revenue = Decimal(sold) * Decimal(i.price_per_box)
+
+                        entry["revenue_ph"].markdown(f"${revenue:.2f}")
+
+                        total_start_boxes += start_qty
+                        total_sold += sold
+                        expected_revenue += revenue
+
+                        verified_items.append({
+                            "cookie_code": i.cookie_code,
+                            "start_qty": start_qty,
+                            "sold": sold
+                        })
+
+                    # ----------------------------------
+                    # Totals
+                    # ----------------------------------
+                    st.markdown("---")
+                    col1, col2 = st.columns(2)
+                    col1.metric("Total Start Boxes", total_start_boxes)
+                    col2.metric("Expected Revenue", f"${expected_revenue:.2f}")
+                    st.caption(f"Total Boxes Sold: {total_sold}")
+
+                    # ----------------------------------
+                    # Money Reconciliation
+                    # ----------------------------------
+                    st.markdown("---")
+                    st.markdown("### 💵 Money Reconciliation")
+
+                    c1, c2, c3 = st.columns(3)
+
+                    starting_cash = Decimal(c1.number_input(
+                        "Starting Cash", 
+                        value=float(booth.starting_cash or 0), 
+                        step=1.0,
+                        key=f"verify_starting_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    ))
+                    ending_cash = Decimal(c2.number_input(
+                        "Ending Cash", 
+                        value=float(booth.ending_cash or 0), 
+                        step=1.0,
+                        key=f"verify_ending_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    ))
+                    square_total = Decimal(c3.number_input(
+                        "Square / Credit", 
+                        value=float(booth.square_total or 0), 
+                        step=1.0,
+                        key=f"verify_square_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    ))
+
+                    # Always calculate and display the money reconciliation
+                    ending_money = ending_cash + square_total
+                    actual_revenue = ending_money - starting_cash
+                    diff = actual_revenue - expected_revenue
+
+                    st.markdown("---")
+                    st.markdown("### 🧮 Calculations")
+
+                    st.write(f"**(1) Ending Money:** ${ending_money:.2f}")
+                    st.write(f"**(2) Starting Cash:** ${starting_cash:.2f}")
+                    st.write(f"**(3) Revenue:** ${actual_revenue:.2f}")
+                    st.write(f"**(4) Expected Revenue:** ${expected_revenue:.2f}")
+                    st.write(f"**(5) Sweet Acts of Kindness Boxes:** {math.floor(diff/6):.0f} boxes")
+
+                    # Calculate OPC boxes for verification
+                    opc_boxes = int(
+                        (diff / Decimal("6")).to_integral_value(rounding=ROUND_FLOOR)
+                        if diff > 0 else 0
+                    )
+
+                    # ----------------------------------
+                    # Verification Controls
+                    # ----------------------------------
+                    st.markdown("---")
+                    st.markdown("### ✅ Verification")
+
+                    verify_cookies = st.checkbox(
+                        "I verify cookie counts",
+                        value=is_verified,
+                        key=f"verify_cookie_check_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    )
+                    verify_money = st.checkbox(
+                        "I verify money totals",
+                        value=is_verified,
+                        key=f"verify_money_check_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    )
+                    verify_scouts = st.checkbox(
+                        "I verify assigned scouts",
+                        value=is_verified,
+                        key=f"verify_scout_check_{booth.booth_id}",
+                        disabled=fields_disabled,
+                    )
+
+                    notes = st.text_area(
+                        "Admin Notes (required)",
+                        height=80,
+                        value=booth.verification_notes or "",
+                        key=notes_key,
+                        disabled=fields_disabled,
+                    )
+
+                    admin_name = ss.get("user_name", "Admin")
+
+                    if fields_disabled:
+                        st.info("This booth is verified. Check 'Edit Booth' to make changes.")
+
+                    button_label = "Save Booth Edits" if is_verified else "Booth Verified"
+                    if st.button(button_label, disabled=fields_disabled):
+                        if not verify_cookies or not verify_money or not verify_scouts:
+                            st.error("All verification checkboxes must be checked.")
+                        elif not notes.strip():
+                            st.error("Verification notes are required.")
+                        elif len(edited_scout_ids) == 0:
+                            st.error("Please assign at least one scout before verifying.")
+                        else:
+                            for item in verified_items:
+                                execute_sql("""
+                                    UPDATE cookies_app.booth_inventory_plan
+                                    SET planned_quantity = :qty
+                                    WHERE booth_id = :bid
+                                      AND cookie_code = :code
+                                      AND program_year = :year
+                                """, {
+                                    "qty": item["start_qty"],
+                                    "bid": booth.booth_id,
+                                    "code": item["cookie_code"],
+                                    "year": booth.program_year,
+                                })
+
+                                existing_item = fetch_all("""
+                                    SELECT 1 FROM cookies_app.order_items
+                                    WHERE order_id = :oid AND cookie_code = :code
+                                """, {
+                                    "oid": booth.order_id,
+                                    "code": item["cookie_code"],
+                                })
+
+                                if existing_item:
+                                    execute_sql("""
+                                        UPDATE cookies_app.order_items
+                                        SET quantity = :qty
+                                        WHERE order_id = :oid AND cookie_code = :code
+                                    """, {
+                                        "qty": item["start_qty"],
+                                        "oid": booth.order_id,
+                                        "code": item["cookie_code"],
+                                    })
+                                else:
+                                    execute_sql("""
+                                        INSERT INTO cookies_app.order_items
+                                        (order_item_id, order_id, parent_id, scout_id, program_year, cookie_code, quantity)
+                                        SELECT gen_random_uuid(), :oid, parent_id, scout_id, program_year, :code, :qty
+                                        FROM cookies_app.orders
+                                        WHERE order_id = :oid
+                                    """, {
+                                        "oid": booth.order_id,
+                                        "code": item["cookie_code"],
+                                        "qty": item["start_qty"],
+                                    })
+
+                            execute_sql("""
+                                UPDATE cookies_app.orders
+                                SET order_qty_boxes = :boxes,
+                                    order_amount = :amount,
+                                    starting_cash = :starting_cash,
+                                    ending_cash = :ending_cash,
+                                    square_total = :square_total
+                                WHERE order_id = :oid
+                            """, {
+                                "boxes": total_start_boxes,
+                                "amount": total_start_boxes * 6,
+                                "starting_cash": float(starting_cash),
+                                "ending_cash": float(ending_cash),
+                                "square_total": float(square_total),
+                                "oid": booth.order_id,
+                            })
+
+                            execute_sql("""
+                                DELETE FROM cookies_app.booth_scouts
+                                WHERE booth_id = :bid
+                            """, {"bid": booth.booth_id})
+
+                            for scout_id in edited_scout_ids:
+                                execute_sql("""
+                                    INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
+                                    VALUES (:bid, :sid)
+                                """, {
+                                    "bid": booth.booth_id,
+                                    "sid": scout_id,
+                                })
+
+                            verify_booth(booth.order_id, booth.program_year, verified_items, admin_name, notes, opc_boxes)
+
+                            ss["verify_reset_pending"] = True
+                            ss["verify_reset_booth_id"] = f"{booth.booth_id}"
+
+                            st.success(f"Booth verified by {admin_name}. Inventory updated.")
                             st.rerun()
 
     # ==================================================
@@ -1038,10 +1296,44 @@ def main():
         if not booths:
             st.info("No booths have been created yet.")
         else:
-            st.write(f"**Total Booths:** {len(booths)}")
-            
-            for booth in booths:
-                with st.expander(f"{booth.location} - {booth.booth_date.strftime('%b %d, %Y')} {booth.start_time.strftime('%I:%M %p')}–{booth.end_time.strftime('%I:%M %p')}"):
+            unique_dates = sorted({b.booth_date for b in booths}, reverse=True)
+            unique_locations = sorted({b.location for b in booths})
+
+            filter_col1, filter_col2 = st.columns(2)
+            with filter_col1:
+                selected_date = st.selectbox(
+                    "Filter by Date",
+                    options=["All"] + unique_dates,
+                    format_func=lambda d: "All Dates" if d == "All" else d.strftime('%b %d, %Y'),
+                    key="view_booth_date_filter",
+                )
+            with filter_col2:
+                selected_location = st.selectbox(
+                    "Filter by Location",
+                    options=["All"] + unique_locations,
+                    format_func=lambda loc: "All Locations" if loc == "All" else loc,
+                    key="view_booth_location_filter",
+                )
+
+            filtered_booths = booths
+            if selected_date != "All":
+                filtered_booths = [b for b in filtered_booths if b.booth_date == selected_date]
+            if selected_location != "All":
+                filtered_booths = [b for b in filtered_booths if b.location == selected_location]
+
+            st.write(f"**Showing:** {len(filtered_booths)} of {len(booths)} booths")
+
+            all_scouts = fetch_all("""
+                SELECT scout_id, first_name, last_name
+                FROM cookies_app.scouts
+                ORDER BY last_name, first_name
+            """)
+            scout_name_by_id = {
+                s.scout_id: f"{s.first_name} {s.last_name}" for s in all_scouts
+            }
+
+            for booth in filtered_booths:
+                with st.expander(f"{booth.location} - {booth.booth_date.strftime('%b %d, %Y')} ({booth.booth_date.strftime('%A')}) {booth.start_time.strftime('%I:%M %p')}–{booth.end_time.strftime('%I:%M %p')}"):
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -1194,7 +1486,7 @@ def main():
                     
                     # Get assigned scouts
                     scouts = fetch_all("""
-                        SELECT s.first_name, s.last_name
+                        SELECT s.scout_id, s.first_name, s.last_name
                         FROM cookies_app.booth_scouts bs
                         JOIN cookies_app.scouts s ON bs.scout_id = s.scout_id
                         WHERE bs.booth_id = :bid
@@ -1205,6 +1497,165 @@ def main():
                         st.markdown("**Assigned Scouts:**")
                         scout_names = ", ".join([f"{s.first_name} {s.last_name}" for s in scouts])
                         st.write(scout_names)
+                    else:
+                        st.markdown("**Assigned Scouts:**")
+                        st.write("None assigned")
+
+                    assigned_ids = [s.scout_id for s in scouts]
+                    edited_scout_ids = st.multiselect(
+                        "Edit Assigned Scouts",
+                        options=list(scout_name_by_id.keys()),
+                        default=assigned_ids,
+                        format_func=lambda sid: scout_name_by_id[sid],
+                        max_selections=4,
+                        key=f"edit_scouts_{booth.booth_id}",
+                    )
+
+                    if st.button("💾 Save Scout Assignments", key=f"save_scouts_{booth.booth_id}"):
+                        execute_sql("""
+                            DELETE FROM cookies_app.booth_scouts
+                            WHERE booth_id = :bid
+                        """, {"bid": booth.booth_id})
+
+                        for scout_id in edited_scout_ids:
+                            execute_sql("""
+                                INSERT INTO cookies_app.booth_scouts (booth_id, scout_id)
+                                VALUES (:bid, :sid)
+                            """, {
+                                "bid": booth.booth_id,
+                                "sid": scout_id,
+                            })
+
+                        st.success("✅ Scout assignments updated")
+                        st.rerun()
+
+                    st.markdown("---")
+                    st.markdown("**Danger Zone**")
+                    confirm_delete = st.checkbox(
+                        "Confirm delete this booth",
+                        key=f"confirm_delete_view_{booth.booth_id}"
+                    )
+                    if st.button("🗑️ Delete Booth", key=f"delete_view_{booth.booth_id}"):
+                        if not confirm_delete:
+                            st.warning("Please check 'Confirm delete this booth' first.")
+                        else:
+                            success = delete_booth_cascade(str(booth.booth_id))
+                            if success:
+                                st.success(f"✓ Deleted: {booth.location} on {booth.booth_date.strftime('%b %d')}", icon="🗑️")
+                                time_module.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete booth. Check logs for details.")
+
+    # ==================================================
+    # TAB 6 — EBUDDE
+    # ==================================================
+    with tab_ebudde:
+        st.markdown("## 📒 eBudde")
+
+        booth_rows = fetch_all("""
+            SELECT
+                o.order_id,
+                b.booth_date,
+                b.start_time,
+                COALESCE(o.add_ebudde, false) AS add_ebudde,
+                COALESCE(o.opc_boxes, 0) AS donation_boxes,
+                COALESCE(
+                    STRING_AGG(
+                        DISTINCT TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')),
+                        ', '
+                    ),
+                    ''
+                ) AS scouts
+            FROM cookies_app.orders o
+            JOIN cookies_app.booths b ON b.booth_id = o.booth_id
+            LEFT JOIN cookies_app.booth_scouts bs ON bs.booth_id = b.booth_id
+            LEFT JOIN cookies_app.scouts s ON s.scout_id = bs.scout_id
+            WHERE o.order_type = 'Booth'
+            GROUP BY o.order_id, b.booth_date, b.start_time, o.add_ebudde, o.opc_boxes
+            ORDER BY b.booth_date, b.start_time
+        """)
+
+        if not booth_rows:
+            st.info("No booth orders found.")
+        else:
+            cookie_codes = [r.cookie_code for r in fetch_all("""
+                SELECT cookie_code
+                FROM cookies_app.cookie_years
+                WHERE program_year = :year
+                  AND active = TRUE
+                  AND cookie_code <> 'DON'
+                ORDER BY display_order
+            """, {"year": int(ss.current_year)})]
+
+            sold_rows = fetch_all("""
+                SELECT
+                    o.order_id,
+                    il.cookie_code,
+                    SUM(-il.quantity) AS sold_qty
+                FROM cookies_app.orders o
+                LEFT JOIN cookies_app.inventory_ledger il
+                    ON il.related_order_id = o.order_id
+                   AND il.event_type = 'BOOTH_SALE'
+                WHERE o.order_type = 'Booth'
+                  AND il.cookie_code IS NOT NULL
+                GROUP BY o.order_id, il.cookie_code
+            """)
+
+            sold_lookup = {}
+            for r in sold_rows:
+                sold_lookup[(str(r.order_id), r.cookie_code)] = int(r.sold_qty or 0)
+
+            table_rows = []
+            for r in booth_rows:
+                sold_total = 0
+                row = {
+                    "order_id": str(r.order_id),
+                    "Date": r.booth_date,
+                    "Time": r.start_time.strftime('%I:%M %p'),
+                    "Donation Boxes": int(r.donation_boxes or 0),
+                    "Scouts": r.scouts,
+                    "eBudde Verified": bool(r.add_ebudde),
+                }
+                for code in cookie_codes:
+                    qty = sold_lookup.get((str(r.order_id), code), 0)
+                    row[code] = qty
+                    sold_total += qty
+                row["Total Boxes"] = sold_total + row["Donation Boxes"]
+                table_rows.append(row)
+
+            df = pd.DataFrame(table_rows)
+            ordered_cols = ["Date", "Time"] + cookie_codes + ["Donation Boxes", "Total Boxes", "Scouts", "eBudde Verified", "order_id"]
+            df = df[ordered_cols]
+
+            edited = st.data_editor(
+                df,
+                width='stretch',
+                hide_index=True,
+                num_rows="fixed",
+                disabled=[c for c in df.columns if c not in {"eBudde Verified"}],
+                column_config={
+                    "eBudde Verified": st.column_config.CheckboxColumn("eBudde Verified"),
+                    "order_id": st.column_config.TextColumn("order_id", disabled=True),
+                },
+                key="booth_ebudde_editor",
+            )
+
+            if st.button("💾 Save eBudde Updates", key="save_booth_ebudde"):
+                changes = 0
+                for _, row in edited.iterrows():
+                    order_id = str(row["order_id"])
+                    new_val = bool(row["eBudde Verified"])
+                    old_val = bool(df.loc[df["order_id"] == order_id, "eBudde Verified"].iloc[0])
+                    if new_val != old_val:
+                        set_add_ebudde(order_id, new_val)
+                        changes += 1
+
+                if changes:
+                    st.success(f"✅ Updated {changes} booth eBudde flag(s).")
+                    st.rerun()
+                else:
+                    st.info("No eBudde changes to save.")
 
 # --------------------------------------------------
 if __name__ == "__main__":
