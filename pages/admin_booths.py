@@ -938,11 +938,12 @@ def main():
                     # ----------------------------------
                     st.markdown("### 🍪 Cookie Counts")
 
-                    header = st.columns([3, 2, 2, 2])
+                    header = st.columns([3, 2, 2, 2, 2])
                     header[0].markdown("**Cookie**")
                     header[1].markdown("**Starting**")
                     header[2].markdown("**Ending**")
-                    header[3].markdown("**Total Due**")
+                    header[3].markdown("**Total Sold**")
+                    header[4].markdown("**Total $**")
 
                     total_start_boxes = 0
                     total_sold = 0
@@ -952,7 +953,7 @@ def main():
                     row_entries = []
 
                     for i in items:
-                        row = st.columns([3, 2, 2, 2])
+                        row = st.columns([3, 2, 2, 2, 2])
 
                         row[0].markdown(f"**{i.display_name}**  \n${Decimal(i.price_per_box):.2f}")
 
@@ -960,7 +961,8 @@ def main():
                             "item": i,
                             "start_ph": row[1].empty(),
                             "end_ph": row[2].empty(),
-                            "revenue_ph": row[3].empty(),
+                            "sold_ph": row[3].empty(),
+                            "revenue_ph": row[4].empty(),
                         })
 
                     # Render END inputs first so Tab moves straight down this column
@@ -1000,6 +1002,7 @@ def main():
 
                         revenue = Decimal(sold) * Decimal(i.price_per_box)
 
+                        entry["sold_ph"].markdown(f"{sold}")
                         entry["revenue_ph"].markdown(f"${revenue:.2f}")
 
                         total_start_boxes += start_qty
@@ -1393,7 +1396,8 @@ def main():
                         SELECT
                             bip.cookie_code,
                             cy.display_name,
-                            bip.planned_quantity
+                            bip.planned_quantity,
+                            bip.program_year
                         FROM cookies_app.booth_inventory_plan bip
                         JOIN cookies_app.cookie_years cy
                         ON cy.cookie_code = bip.cookie_code
@@ -1408,6 +1412,7 @@ def main():
                         
                         # Create editable inventory form
                         updated_inventory = {}
+                        inventory_year_by_code = {}
                         inv_cols = st.columns(3)
                         
                         for idx, item in enumerate(inventory):
@@ -1420,6 +1425,7 @@ def main():
                                 key=f"booth_{booth.booth_id}_{item.cookie_code}"
                             )
                             updated_inventory[item.cookie_code] = new_qty
+                            inventory_year_by_code[item.cookie_code] = int(item.program_year)
                         
                         total_boxes = sum(updated_inventory.values())
                         st.write(f"**Total Boxes:** {total_boxes}")
@@ -1438,7 +1444,7 @@ def main():
                                     "qty": new_qty,
                                     "bid": booth.booth_id,
                                     "code": cookie_code,
-                                    "year": ss.current_year
+                                    "year": inventory_year_by_code[cookie_code]
                                 })
                             
                             # Also update order_items for this booth
@@ -1558,6 +1564,7 @@ def main():
                 o.order_id,
                 b.booth_date,
                 b.start_time,
+                b.location,
                 COALESCE(o.add_ebudde, false) AS add_ebudde,
                 COALESCE(o.opc_boxes, 0) AS donation_boxes,
                 COALESCE(
@@ -1572,7 +1579,7 @@ def main():
             LEFT JOIN cookies_app.booth_scouts bs ON bs.booth_id = b.booth_id
             LEFT JOIN cookies_app.scouts s ON s.scout_id = bs.scout_id
             WHERE o.order_type = 'Booth'
-            GROUP BY o.order_id, b.booth_date, b.start_time, o.add_ebudde, o.opc_boxes
+            GROUP BY o.order_id, b.booth_date, b.start_time, b.location, o.add_ebudde, o.opc_boxes
             ORDER BY b.booth_date, b.start_time
         """)
 
@@ -1613,6 +1620,7 @@ def main():
                     "order_id": str(r.order_id),
                     "Date": r.booth_date,
                     "Time": r.start_time.strftime('%I:%M %p'),
+                    "Location": r.location,
                     "Donation Boxes": int(r.donation_boxes or 0),
                     "Scouts": r.scouts,
                     "eBudde Verified": bool(r.add_ebudde),
@@ -1625,7 +1633,7 @@ def main():
                 table_rows.append(row)
 
             df = pd.DataFrame(table_rows)
-            ordered_cols = ["Date", "Time"] + cookie_codes + ["Donation Boxes", "Total Boxes", "Scouts", "eBudde Verified", "order_id"]
+            ordered_cols = ["Date", "Time", "Location"] + cookie_codes + ["Donation Boxes", "Total Boxes", "Scouts", "eBudde Verified", "order_id"]
             df = df[ordered_cols]
 
             edited = st.data_editor(
