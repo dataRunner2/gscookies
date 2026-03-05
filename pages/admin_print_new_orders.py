@@ -44,7 +44,7 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         return y - 0.35 * inch
 
     def table_header(y, cookie_cols, widths):
-        headers = ["Order Date", "Comments"] + cookie_cols
+        headers = ["Order Date", "Comments", "Tot."] + cookie_cols
 
         c.setFont("Helvetica-Bold", 10)
         x = LEFT
@@ -62,7 +62,7 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         x = LEFT
         h = 0.30 * inch
 
-        for v, w in zip(values, widths):
+        for idx, (v, w) in enumerate(zip(values, widths)):
             c.rect(x, y - h, w, h)
             txt = "" if v is None else str(v)
 
@@ -72,13 +72,17 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
             else:
                 txt = txt[:12]
 
-            c.drawString(x + 4, y - h + 0.10 * inch, txt)
+            # Right-align Total Qty column (index 2)
+            if idx == 2:
+                c.drawRightString(x + w - 4, y - h + 0.10 * inch, txt)
+            else:
+                c.drawString(x + 4, y - h + 0.10 * inch, txt)
             x += w
 
         return y - h
 
 
-    def table_totals_row(y, cookie_cols, totals, widths):
+    def table_totals_row(y, cookie_cols, totals, widths, total_qty_sum):
         c.setFont("Helvetica-Bold", 10)
         x = LEFT
         h = 0.30 * inch
@@ -92,8 +96,13 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         c.rect(x, y - h, widths[1], h)
         x += widths[1]
 
+        # total qty sum
+        c.rect(x, y - h, widths[2], h)
+        c.drawRightString(x + widths[2] - 4, y - h + 0.10 * inch, str(int(total_qty_sum or 0)))
+        x += widths[2]
+
         # cookie totals
-        for code, w in zip(cookie_cols, widths[2:]):
+        for code, w in zip(cookie_cols, widths[3:]):
             val = int(totals.get(code, 0) or 0)
             c.rect(x, y - h, w, h)
             c.drawString(x + 4, y - h + 0.10 * inch, str(val) if val else "")
@@ -112,7 +121,24 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         c.drawString(LEFT, y, "Signature: _______________________________   Date: _______________")
         return y - 0.35 * inch
 
-    def render_receipt(y, scout, parent, phone, title, scout_orders, scout_items, cookie_cols, totals, widths, include_reminder=False, include_signature=False, force_render=False):
+    def render_receipt(
+        y,
+        scout,
+        parent,
+        phone,
+        title,
+        scout_orders,
+        scout_items,
+        cookie_cols,
+        totals,
+        widths,
+        include_reminder=False,
+        include_signature=False,
+        force_render=False,
+        show_total_due=False,
+        total_due=0,
+        total_qty_sum=0,
+    ):
         """Render one receipt (parent or admin). Returns final y position or None if needs new page."""
         # Handle None input
         if y is None:
@@ -143,6 +169,11 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         
         c.setFont("Helvetica-Bold", 13)
         c.drawString(LEFT, y, title)
+
+        if show_total_due:
+            c.setFont("Helvetica-Bold", 12)
+            c.drawRightString(RIGHT, y, f"Total Due to Date: ${float(total_due):,.2f}")
+
         y -= title_space
 
         y = table_header(y, cookie_cols, widths)
@@ -151,16 +182,23 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
             items = scout_items[scout_items["order_id"] == o["orderId"]]
             qty = items.set_index("cookie_code")["quantity"].to_dict()
 
+            order_date = o["Date"]
+            date_txt = order_date.strftime("%m/%d/%Y") if hasattr(order_date, "strftime") else str(order_date)
+            order_type = str(o.get("orderType") or "").strip().lower()
+            if order_type == "paper":
+                date_txt = f"{date_txt}-p"
+
             row = [
-                o["Date"],
+                date_txt,
                 o["comments"] or "",
+                int(o.get("orderQtyBoxes", 0) or 0),
             ] + [qty.get(c, "") for c in cookie_cols]
 
             y = table_row(y, row, widths)
 
         # Only show totals row if we have totals to display
         if totals:
-            y = table_totals_row(y, cookie_cols, totals, widths)
+            y = table_totals_row(y, cookie_cols, totals, widths, total_qty_sum)
 
         if include_reminder:
             y -= 0.2 * inch
@@ -193,17 +231,25 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
         cookie_cols = sorted(scout_items["cookie_code"].unique())
         
         # Calculate widths once
-        date_w = 1.2 * inch
-        comments_w = 2.8 * inch
-        available = (RIGHT - LEFT) - (date_w + comments_w)
+        date_w = 0.9 * inch
+        comments_w = 2.9 * inch
+        total_qty_w = 0.7 * inch
+        available = (RIGHT - LEFT) - (date_w + comments_w + total_qty_w)
         cookie_w = available / max(len(cookie_cols), 1)  # distribute evenly, no minimum
-        widths = [date_w, comments_w] + [cookie_w] * len(cookie_cols)
+        widths = [date_w, comments_w, total_qty_w] + [cookie_w] * len(cookie_cols)
 
         totals = (
             scout_items.groupby("cookie_code")["quantity"]
             .sum()
             .to_dict()
         )
+        scout_total_qty = pd.to_numeric(scout_orders.get("orderQtyBoxes", 0), errors="coerce").fillna(0).sum()
+        order_amounts = pd.to_numeric(scout_orders.get("orderAmount", 0), errors="coerce").fillna(0)
+        paid_amounts = pd.to_numeric(scout_orders.get("paidAmount", 0), errors="coerce").fillna(0)
+        order_types = scout_orders.get("orderType", "").astype(str).str.strip().str.lower()
+        paper_mask = order_types == "paper"
+        outstanding = (order_amounts - paid_amounts).clip(lower=0)
+        scout_total_due = outstanding[paper_mask].sum()
 
         # Split orders into chunks of maximum 20 orders per receipt
         MAX_ORDERS_PER_PAGE = 20
@@ -229,7 +275,11 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
                 y, scout, parent, phone, 
                 f"Packing + Pickup (Parent Receipt){page_suffix}",
                 chunk_orders, scout_items, cookie_cols, totals if is_last_chunk else {}, widths,
-                include_reminder=is_last_chunk, include_signature=False
+                include_reminder=is_last_chunk,
+                include_signature=False,
+                show_total_due=True,
+                total_due=scout_total_due,
+                total_qty_sum=scout_total_qty,
             )
             
             if y is None:
@@ -244,7 +294,10 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
                     f"Packing + Pickup (Parent Receipt){page_suffix}",
                     chunk_orders, scout_items, cookie_cols, totals if is_last_chunk else {}, widths,
                     include_reminder=is_last_chunk, include_signature=False,
-                    force_render=True
+                    force_render=True,
+                    show_total_due=True,
+                    total_due=scout_total_due,
+                    total_qty_sum=scout_total_qty,
                 )
 
             # ----- ADMIN RECEIPT -----
@@ -252,7 +305,9 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
                 y, scout, parent, phone, 
                 f"Packing + Pickup (Cookie Crew Receipt){page_suffix}",
                 chunk_orders, scout_items, cookie_cols, totals if is_last_chunk else {}, widths,
-                include_reminder=False, include_signature=is_last_chunk
+                include_reminder=False,
+                include_signature=is_last_chunk,
+                total_qty_sum=scout_total_qty,
             )
             
             if admin_y is None:
@@ -265,7 +320,8 @@ def build_pdf(df_orders: pd.DataFrame, df_items: pd.DataFrame) -> bytes:
                     f"Packing + Pickup (Cookie Crew Receipt){page_suffix}",
                     chunk_orders, scout_items, cookie_cols, totals if is_last_chunk else {}, widths,
                     include_reminder=False, include_signature=is_last_chunk,
-                    force_render=True
+                    force_render=True,
+                    total_qty_sum=scout_total_qty,
                 )
 
             c.showPage()
@@ -300,7 +356,7 @@ def main():
     df_orders = (
         df[[
             "order_id", "scout_name", "guardian_name", "guardian_phone",
-            "order_qty_boxes", "comments", "Date"
+            "order_qty_boxes", "order_amount", "paid_amount", "order_type", "comments", "Date"
         ]]
         .drop_duplicates("order_id")
         .rename(columns={
@@ -309,6 +365,9 @@ def main():
             "guardian_name": "guardianNm",
             "guardian_phone": "guardianPh",
             "order_qty_boxes": "orderQtyBoxes",
+            "order_amount": "orderAmount",
+            "paid_amount": "paidAmount",
+            "order_type": "orderType",
         })
     )
 

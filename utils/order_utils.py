@@ -1176,6 +1176,13 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None, initial_only:bo
     where_sql = " AND ".join(where)
 
     return fetch_all(f"""
+        WITH paid AS (
+            SELECT
+                related_order_id AS order_id,
+                COALESCE(SUM(amount), 0) AS paid_amount
+            FROM cookies_app.money_ledger
+            GROUP BY related_order_id
+        )
         SELECT
             o.order_id,
             o.order_type,
@@ -1185,6 +1192,7 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None, initial_only:bo
             o.comments,
             o.initial_order,
             o.submit_dt::date AS submit_date,
+            COALESCE(paid.paid_amount, 0) AS paid_amount,
 
             s.scout_id,
             (s.first_name || ' ' || s.last_name) AS scout_name,
@@ -1208,6 +1216,8 @@ def get_admin_print_orders(statuses: Optional[list[str]] = None, initial_only:bo
         LEFT JOIN cookies_app.cookie_years cy
           ON cy.cookie_code = oi.cookie_code
          AND cy.program_year = oi.program_year
+                LEFT JOIN paid
+                    ON paid.order_id = o.order_id
         WHERE {where_sql}
         ORDER BY s.last_name, s.first_name, o.submit_dt, cy.display_order
     """, params)

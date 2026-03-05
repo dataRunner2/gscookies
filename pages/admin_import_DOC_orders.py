@@ -15,6 +15,8 @@ from utils.order_utils import (
     update_scout_gsusa_id
 )
 
+DOC_IMPORT_TYPES = ["In-Person Delivery", "In-Person Delivery with Donation"]
+
 # --------------------------------------------------
 # Session init
 # --------------------------------------------------
@@ -128,6 +130,18 @@ def rename_cookie_columns(order_df: pd.DataFrame, program_year: int) -> pd.DataF
 
     return order_df.rename(columns=valid_map), rename_map
 
+
+def build_filter_exclusion_reason(row: pd.Series) -> str:
+    reasons = []
+    allowed_types = set(DOC_IMPORT_TYPES)
+
+    if row.get("order_type") not in allowed_types:
+        reasons.append("Order type not eligible")
+    if row.get("order_status") != "PROCESSING":
+        reasons.append("Order status not PROCESSING")
+
+    return "; ".join(reasons) if reasons else "Filtered out"
+
     
 
 
@@ -156,16 +170,128 @@ def main():
     # st.write(raw_dat.columns.tolist())
     st.dataframe(raw_dat.head())
     uploaded_df = normalize_columns(pd.read_excel(uploaded_file))
-    
+    uploaded_df["external_order_id"] = uploaded_df["external_order_id"].astype(str)
 
-    filtered_df = uploaded_df[
-        (uploaded_df["order_type"].isin(["In-Person Delivery", "In-Person Delivery with Donation"]))
-        & (uploaded_df["order_status"] == "PROCESSING")
+    existing_ids = fetch_existing_external_orders(
+        order_source="Digital Cookie Import",
+    )
+
+    completed_candidates = uploaded_df[
+        uploaded_df["order_type"].isin(DOC_IMPORT_TYPES)
+        & (uploaded_df["order_status"] == "COMPLETED")
     ].copy()
+    completed_missing_in_db = completed_candidates[
+        ~completed_candidates["external_order_id"].isin(existing_ids)
+    ].copy()
+    
+    eligible_mask = (
+        uploaded_df["order_type"].isin(DOC_IMPORT_TYPES)
+        & (uploaded_df["order_status"] == "PROCESSING")
+    )
+    processing_df = uploaded_df[eligible_mask].copy()
+    excluded_by_filter = uploaded_df[~eligible_mask].copy()
 
-    st.metric("Eligible Orders After Filtering", len(filtered_df))
+    if not excluded_by_filter.empty:
+        excluded_by_filter["exclusion_reason"] = excluded_by_filter.apply(
+            build_filter_exclusion_reason,
+            axis=1,
+        )
+
+    st.markdown("### Audit: Completed Digital Orders Missing in DB")
+    st.metric("Completed Missing", len(completed_missing_in_db))
+
+    force_include_ids = []
+    force_include_df = pd.DataFrame(columns=uploaded_df.columns)
+
+    if not completed_missing_in_db.empty:
+        audit_cols = [
+            "external_order_id",
+            "submit_dt",
+            "scout_first_name",
+            "scout_last_name",
+            "order_type",
+            "order_status",
+            "order_total",
+            "customer_first_name",
+            "customer_last_name",
+        ]
+        display_audit_cols = [c for c in audit_cols if c in completed_missing_in_db.columns]
+        st.dataframe(
+            completed_missing_in_db[display_audit_cols],
+            width='stretch',
+            hide_index=True,
+        )
+
+        select_all_completed = st.checkbox(
+            "Select all completed-missing orders for force import",
+            key="doc_force_import_all_completed",
+        )
+
+        completed_options = completed_missing_in_db["external_order_id"].dropna().astype(str).tolist()
+
+        existing_selected = ss.get("doc_force_import_ids", [])
+        if not isinstance(existing_selected, list):
+            existing_selected = []
+
+        # Keep only IDs that still exist in this uploaded file's completed set
+        sanitized_selected = [oid for oid in existing_selected if oid in completed_options]
+        ss["doc_force_import_ids"] = sanitized_selected
+
+        # Critical: checkbox should truly select all for import even after reruns
+        if select_all_completed:
+            ss["doc_force_import_ids"] = completed_options
+
+        force_include_ids = st.multiselect(
+            "Force import these completed orders",
+            options=completed_options,
+            key="doc_force_import_ids",
+            help="Selected COMPLETED orders will be included in this import run.",
+        )
+
+        # Ensure checkbox alone always includes all, even if widget state was stale
+        if select_all_completed:
+            force_include_ids = completed_options
+
+        if force_include_ids:
+            force_include_df = completed_missing_in_db[
+                completed_missing_in_db["external_order_id"].isin(force_include_ids)
+            ].copy()
+            st.info(f"Force-selected completed orders: {len(force_include_df)}")
+    else:
+        st.success("No completed in-person digital orders are missing from the database.")
+
+    filtered_df = processing_df.copy()
+    if not force_include_df.empty:
+        filtered_df = pd.concat([filtered_df, force_include_df], ignore_index=True)
+        filtered_df = filtered_df.drop_duplicates(subset=["external_order_id"], keep="first")
+
+    if force_include_ids and not excluded_by_filter.empty:
+        excluded_by_filter = excluded_by_filter[
+            ~excluded_by_filter["external_order_id"].isin(force_include_ids)
+        ].copy()
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Eligible PROCESSING", len(processing_df))
+    m2.metric("Force-Selected COMPLETED", len(force_include_df))
+    m3.metric("Total Orders to Process", len(filtered_df))
 
     if filtered_df.empty:
+        if not excluded_by_filter.empty:
+            st.markdown("### Orders Excluded from Import")
+            st.dataframe(
+                excluded_by_filter[
+                    [
+                        "external_order_id",
+                        "scout_first_name",
+                        "scout_last_name",
+                        "order_type",
+                        "order_status",
+                        "exclusion_reason",
+                    ]
+                ],
+                width='stretch',
+                hide_index=True,
+            )
         st.success("No eligible orders found.")
         return
 
@@ -205,6 +331,7 @@ def main():
 
     unmatched = updated_df[updated_df["scout_id"].isna()].copy()
     matched = updated_df[updated_df["scout_id"].notna()].copy()
+    still_unmatched = pd.DataFrame(columns=updated_df.columns)
     # st.write('matched:\n')
     # st.dataframe(matched)
     # ----------------------------------
@@ -298,15 +425,15 @@ def main():
     matched, cookie_nm_map = rename_cookie_columns(matched, int(ss.current_year))
     # st.write(cookie_nm_map)
     # st.write(matched.columns.tolist())
-    
-    # Get existing orders as to not create duplicates
-    existing_ids = fetch_existing_external_orders(
-        order_source="Digital Cookie Import",
-    )
+
     if len(existing_ids) == 0:
         st.write('There are no existing DOC orders, importing all of them.')
 
     matched["external_order_id"] = matched["external_order_id"].astype(str)
+
+    duplicate_orders = matched[
+        matched["external_order_id"].isin(existing_ids)
+    ].copy()
 
     new_orders = matched[
         ~matched["external_order_id"].isin(existing_ids)
@@ -319,6 +446,41 @@ def main():
     # ----------------------------------
 
     st.metric("New Orders to Import", len(new_orders))
+
+    excluded_frames = []
+    if not excluded_by_filter.empty:
+        excluded_frames.append(excluded_by_filter.copy())
+    if not still_unmatched.empty:
+        tmp_unmatched = still_unmatched.copy()
+        tmp_unmatched["exclusion_reason"] = "Unmatched scout"
+        excluded_frames.append(tmp_unmatched)
+    if not duplicate_orders.empty:
+        tmp_duplicate = duplicate_orders.copy()
+        tmp_duplicate["exclusion_reason"] = "Already imported (duplicate external order id)"
+        excluded_frames.append(tmp_duplicate)
+
+    if excluded_frames:
+        excluded_report = pd.concat(excluded_frames, ignore_index=True, sort=False)
+        st.markdown("### Orders Excluded from Import")
+        st.metric("Excluded Orders", len(excluded_report))
+
+        excluded_cols = [
+            "external_order_id",
+            "scout_first_name",
+            "scout_last_name",
+            "order_type",
+            "order_status",
+            "submit_dt",
+            "order_total",
+            "exclusion_reason",
+        ]
+        display_cols = [c for c in excluded_cols if c in excluded_report.columns]
+        st.dataframe(
+            excluded_report[display_cols],
+            width='stretch',
+            hide_index=True,
+        )
+
     # st.write(new_orders.columns.tolist())
     cols_to_import = ["parent_id","scout_id","program_year","order_ref",
         "order_type","submit_dt","initial_order","comments","order_qty_boxes","order_amount",
