@@ -101,6 +101,32 @@ def _to_bool(v) -> bool:
     return bool(v)
 
 
+def _build_total_row(df: pd.DataFrame) -> dict:
+    total_row: dict = {}
+
+    for col in df.columns:
+        if col == "orderId":
+            total_row[col] = "TOTAL"
+            continue
+
+        if col in BOOLEAN_COLUMNS:
+            total_row[col] = False
+            continue
+
+        if col == "program_year":
+            total_row[col] = ""
+            continue
+
+        numeric_series = pd.to_numeric(df[col], errors="coerce")
+        if numeric_series.notna().any():
+            summed = numeric_series.fillna(0).sum()
+            total_row[col] = int(summed) if float(summed).is_integer() else round(float(summed), 2)
+        else:
+            total_row[col] = ""
+
+    return total_row
+
+
 def diff_updates(original: pd.DataFrame, edited: pd.DataFrame, cookie_cols: list[str]):
     """
     Compare original and edited dataframes to find changes.
@@ -256,7 +282,7 @@ def main():
     # Get all cookie columns BEFORE filtering (to include DON and other codes)
     meta_cols = {'orderId', 'program_year', 'scoutName', 'orderType', 'orderStatus', 'paymentStatus', 
                  'addEbudde', 'initialOrder', 'comments', 'orderAmount', 'orderQtyBoxes',
-                 'submit_dt', 'submitDate', 'boothId', 'verifiedDigitalCookie', 'orderPickedup', 'scoutId', 'totalQty'}
+                 'submit_dt', 'submitDate', 'boothId', 'verifiedDigitalCookie', 'orderPickedup', 'scoutId', 'paidAmount', 'totalQty'}
     actual_cookie_cols = [c for c in df.columns if c not in meta_cols]
     cookie_codes = get_cookie_codes_for_year(int(ss.current_year)) or []
     # Include configured cookies (even if not in current data) + actual data columns
@@ -285,6 +311,8 @@ def main():
         column_choices.insert(0, "orderId")
 
     df_view = df[column_choices].copy()
+    total_row = _build_total_row(df_view)
+    df_view_with_total = pd.concat([df_view, pd.DataFrame([total_row])], ignore_index=True)
 
     # ---------------- Editor ----------------
     st.subheader("Orders")
@@ -294,7 +322,7 @@ def main():
     disabled_cols = [c for c in df_view.columns if c not in editable_cols]
 
     edited = st.data_editor(
-        df_view,
+        df_view_with_total,
         width='stretch',
         hide_index=True,
         num_rows="fixed",
@@ -349,7 +377,8 @@ def main():
     # st.write(edited)
 
     if st.button("Save Changes", type="primary"):
-        updates, diffs = diff_updates(df_view, edited, cookie_cols)
+        edited_no_total = edited[edited["orderId"].astype(str) != "TOTAL"].copy()
+        updates, diffs = diff_updates(df_view, edited_no_total, cookie_cols)
         st.write(diffs)
         if updates:
             try:

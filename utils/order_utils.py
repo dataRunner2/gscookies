@@ -1362,8 +1362,10 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[st
             execute_sql(sql, params)
         
         # Update cookie quantities in order_items
+        cookie_changed = False
         for cookie_code in cookie_cols:
             if cookie_code in u:
+                cookie_changed = True
                 new_qty = u[cookie_code]
                 
                 # Get program_year for this order
@@ -1416,6 +1418,34 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[st
                                 "pid": order_info.parent_id,
                                 "sid": order_info.scout_id
                             })
+
+        # Recompute order header totals from current order_items + cookie prices
+        # so Order Management amount/qty always matches edited cookie rows.
+        if cookie_changed:
+            totals = fetch_one("""
+                SELECT
+                    COALESCE(SUM(oi.quantity), 0) AS total_qty,
+                    COALESCE(SUM(oi.quantity * cy.price_per_box), 0) AS total_amount
+                FROM cookies_app.orders o
+                LEFT JOIN cookies_app.order_items oi
+                  ON oi.order_id = o.order_id
+                 AND oi.program_year = o.program_year
+                LEFT JOIN cookies_app.cookie_years cy
+                  ON cy.cookie_code = oi.cookie_code
+                 AND cy.program_year = oi.program_year
+                WHERE o.order_id = :oid
+            """, {"oid": oid})
+
+            execute_sql("""
+                UPDATE cookies_app.orders
+                SET order_qty_boxes = :qty,
+                    order_amount = :amt
+                WHERE order_id = :oid
+            """, {
+                "oid": oid,
+                "qty": int(totals.total_qty or 0),
+                "amt": int(totals.total_amount or 0),
+            })
 
 def fetch_existing_external_orders(order_source: str) -> set:
     rows = fetch_all("""

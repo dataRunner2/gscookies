@@ -1223,6 +1223,10 @@ def main():
                     b.start_time,
                     b.end_time
                 FROM cookies_app.booths b
+                LEFT JOIN cookies_app.orders o
+                    ON o.booth_id = b.booth_id
+                   AND o.order_type = 'Booth'
+                WHERE COALESCE(o.verification_status, 'DRAFT') <> 'VERIFIED'
                 ORDER BY b.booth_date DESC, b.start_time
             """)
             
@@ -1629,12 +1633,23 @@ def main():
                     qty = sold_lookup.get((str(r.order_id), code), 0)
                     row[code] = qty
                     sold_total += qty
+                row["Total Cookies"] = sold_total
                 row["Total Boxes"] = sold_total + row["Donation Boxes"]
                 table_rows.append(row)
 
             df = pd.DataFrame(table_rows)
-            ordered_cols = ["Date", "Time", "Location"] + cookie_codes + ["Donation Boxes", "Total Boxes", "Scouts", "eBudde Verified", "order_id"]
+            ordered_cols = ["Date", "Time", "Location"] + cookie_codes + ["Total Cookies", "Donation Boxes", "Total Boxes", "Scouts", "eBudde Verified", "order_id"]
             df = df[ordered_cols]
+
+            grand_total_cookies = int(df["Total Cookies"].sum())
+            grand_total_donations = int(df["Donation Boxes"].sum())
+            grand_total_boxes = int(df["Total Boxes"].sum())
+
+            st.markdown("### Totals (All Booths)")
+            t1, t2, t3 = st.columns(3)
+            t1.metric("All Cookies", grand_total_cookies)
+            t2.metric("All Donations", grand_total_donations)
+            t3.metric("All Cookies + Donations", grand_total_boxes)
 
             edited = st.data_editor(
                 df,

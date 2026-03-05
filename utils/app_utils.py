@@ -83,7 +83,7 @@ class setup:
         st.sidebar.page_link('pages/girl_order_summary.py',label='Order Summary')
         st.sidebar.page_link('pages/girl_orders.py',label='Order Cookies :cookie:')
         st.sidebar.page_link('pages/delete_order.py',label='Delete Cookie Order')
-        st.sidebar.page_link('pages/booth.py',label='Booth Entry')
+        # st.sidebar.page_link('pages/booth.py',label='Booth Entry')
         
         
         st.sidebar.divider()
