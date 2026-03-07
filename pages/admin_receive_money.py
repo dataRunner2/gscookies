@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit import session_state as ss
 from datetime import datetime
 from decimal import Decimal
-
+import pandas as pd
 from sqlalchemy import text
 
 from utils.app_utils import setup
@@ -118,6 +118,48 @@ def get_parents_with_balances(year):
         return conn.execute(sql, {"year": year}).fetchall()
 
 
+def get_money_due_by_parent_scout(year):
+        """Get outstanding paper-order balances grouped by parent and scout."""
+        sql = text("""
+                WITH order_paid AS (
+                        SELECT
+                                o.order_id,
+                                o.parent_id,
+                                o.scout_id,
+                                COALESCE(o.order_amount, 0) AS order_amount,
+                                COALESCE(SUM(m.amount), 0) AS paid_amount
+                        FROM cookies_app.orders o
+                        LEFT JOIN cookies_app.money_ledger m
+                            ON m.related_order_id = o.order_id
+                        WHERE o.program_year = :year
+                            AND o.order_type ILIKE '%paper%'
+                        GROUP BY o.order_id, o.parent_id, o.scout_id, o.order_amount
+                ),
+                order_due AS (
+                        SELECT
+                                order_id,
+                                parent_id,
+                                scout_id,
+                                GREATEST(order_amount - paid_amount, 0) AS amount_due
+                        FROM order_paid
+                )
+                SELECT
+                        p.parent_firstname || ' ' || p.parent_lastname AS parent_name,
+                        COALESCE(s.first_name || ' ' || s.last_name, '(No Scout)') AS scout_name,
+                        SUM(od.amount_due) AS amount_due
+                FROM order_due od
+                JOIN cookies_app.parents p
+                    ON p.parent_id = od.parent_id
+                LEFT JOIN cookies_app.scouts s
+                    ON s.scout_id = od.scout_id
+                WHERE od.amount_due > 0
+                GROUP BY parent_name, scout_name
+                ORDER BY parent_name, scout_name
+        """)
+        with engine.connect() as conn:
+                return conn.execute(sql, {"year": year}).fetchall()
+
+
 def insert_money_received(
     parent_id,
     scout_id,
@@ -206,6 +248,32 @@ def main():
     # ---- Year ----
     year = datetime.now().year
     st.subheader(f"Receive Money for year {year}")
+
+    # ---- Money Due List ----
+    st.markdown("### Money Due (Paper Orders)")
+    due_rows = get_money_due_by_parent_scout(year)
+
+    if due_rows:
+        due_df = pd.DataFrame(due_rows)
+        due_df["amount_due"] = pd.to_numeric(due_df["amount_due"], errors="coerce").fillna(0)
+        st.metric("Total Money Due", f"${due_df['amount_due'].sum():.2f}")
+
+        due_display = due_df.rename(columns={
+            "parent_name": "Parent",
+            "scout_name": "Scout",
+            "amount_due": "Amount Due",
+        })
+        due_display["Amount Due"] = due_display["Amount Due"].map(lambda x: f"${x:,.2f}")
+
+        st.dataframe(
+            due_display,
+            width='stretch',
+            hide_index=True,
+        )
+    else:
+        st.info("No outstanding paper balances by parent/scout.")
+
+    st.divider()
     
 
     # ---- Parent ----
