@@ -254,10 +254,11 @@ def main():
 
     with c1:
         status_vals = sorted(df_all["orderStatus"].dropna().unique())  if "orderStatus" in df_all.columns else []
+        default_statuses = [s for s in ["NEW","IMPORTED","PRINTED"] if s in status_vals]
         status_filter = st.multiselect(
             "Status",
             options=status_vals,
-            default=["NEW","IMPORTED","PRINTED"] if "NEW" in status_vals else status_vals,
+            default=default_statuses if default_statuses else status_vals,
         )
 
     with c2:
