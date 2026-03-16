@@ -222,240 +222,292 @@ def update_order_status_if_paid(order_id):
         conn.execute(sql, {"order_id": order_id})
 
 
+def get_payments_by_scout(year):
+    """Get all non-digital payments grouped by scout for the given year."""
+    sql = text("""
+        SELECT
+            COALESCE(s.first_name || ' ' || s.last_name, '(No Scout)') AS scout_name,
+            m.received_dt AS payment_date,
+            m.amount AS payment_amount,
+            m.payment_method
+        FROM cookies_app.money_ledger m
+        LEFT JOIN cookies_app.scouts s ON s.scout_id = m.scout_id
+        LEFT JOIN cookies_app.orders o ON o.order_id = m.related_order_id
+        WHERE m.program_year = :year
+          AND (o.order_type IS NULL OR o.order_type NOT ILIKE '%digital%')
+        ORDER BY scout_name, m.received_dt DESC
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"year": year}).fetchall()
+
+
 # --------------------------------------------------
 # UI
 # --------------------------------------------------
 def main():
     require_admin()
 
-    # ---- Persistent confirmation ----
-    if ss.payment_success:
-        st.success(
-            f"Payment recorded successfully.\n\n"
-            f"Amount: ${ss.payment_success['amount']:.2f}\n"
-            f"Method: {ss.payment_success['method']}\n"
-            f"Orders: {', '.join(ss.payment_success['orders'])}"
-        )
+    year = datetime.now().year
 
-        if st.button("Record another payment"):
-            ss.payment_success = None
-            st.rerun()
+    tab_receive, tab_payments = st.tabs(["Receive Money", "Payments Made"])
+
+    with tab_payments:
+        st.subheader(f"Payments Made — {year}")
+        payments = get_payments_by_scout(year)
+        if payments:
+            df = pd.DataFrame(payments)
+            
+            # Build summary by scout
+            summary = df.groupby("scout_name")["payment_amount"].sum().reset_index()
+            summary = summary.rename(columns={"scout_name": "Scout", "payment_amount": "Total Paid"})
+            summary = summary.sort_values("Total Paid", ascending=False)
+            summary["Total Paid"] = summary["Total Paid"].apply(lambda x: f"${x:,.2f}")
+            
+            st.markdown("### Summary by Scout")
+            st.dataframe(summary, hide_index=True, use_container_width=True)
+            
+            st.markdown("### Payment Details")
+            # Group and display by scout with expanders
+            for scout_name in df["scout_name"].unique():
+                scout_payments = df[df["scout_name"] == scout_name].copy()
+                total = scout_payments["payment_amount"].sum()
+                
+                with st.expander(f"{scout_name} — ${total:,.2f} ({len(scout_payments)} payments)"):
+                    scout_payments["payment_date"] = pd.to_datetime(scout_payments["payment_date"]).dt.strftime("%Y-%m-%d %H:%M")
+                    scout_payments["payment_amount"] = scout_payments["payment_amount"].apply(lambda x: f"${x:,.2f}")
+                    display_df = scout_payments[["payment_date", "payment_amount", "payment_method"]].rename(columns={
+                        "payment_date": "Date",
+                        "payment_amount": "Amount",
+                        "payment_method": "Method",
+                    })
+                    st.dataframe(display_df, hide_index=True, use_container_width=True)
+        else:
+            st.info("No payments recorded for this year.")
+
+    with tab_receive:
+        # ---- Persistent confirmation ----
+        if ss.payment_success:
+            st.success(
+                f"Payment recorded successfully.\n\n"
+                f"Amount: ${ss.payment_success['amount']:.2f}\n"
+                f"Method: {ss.payment_success['method']}\n"
+                f"Orders: {', '.join(ss.payment_success['orders'])}"
+            )
+
+            if st.button("Record another payment"):
+                ss.payment_success = None
+                st.rerun()
+
+            st.divider()
+
+        st.subheader(f"Receive Money for year {year}")
+
+        # ---- Money Due List ----
+        st.markdown("### Money Due (Paper Orders)")
+        due_rows = get_money_due_by_parent_scout(year)
+
+        if due_rows:
+            due_df = pd.DataFrame(due_rows)
+            due_df["amount_due"] = pd.to_numeric(due_df["amount_due"], errors="coerce").fillna(0)
+            st.metric("Total Money Due", f"${due_df['amount_due'].sum():.2f}")
+
+            due_display = due_df.rename(columns={
+                "parent_name": "Parent",
+                "scout_name": "Scout",
+                "amount_due": "Amount Due",
+            })
+            due_display["Amount Due"] = due_display["Amount Due"].map(lambda x: f"${x:,.2f}")
+
+            st.dataframe(
+                due_display,
+                width='stretch',
+                hide_index=True,
+            )
+        else:
+            st.info("No outstanding paper balances by parent/scout.")
 
         st.divider()
 
-    
+        # ---- Parent ----
+        parents_with_balance = get_parents_with_balances(year)
 
-    # ---- Year ----
-    year = datetime.now().year
-    st.subheader(f"Receive Money for year {year}")
+        if not parents_with_balance:
+            st.success("No parents have outstanding balances for paper orders.")
+            return
 
-    # ---- Money Due List ----
-    st.markdown("### Money Due (Paper Orders)")
-    due_rows = get_money_due_by_parent_scout(year)
-
-    if due_rows:
-        due_df = pd.DataFrame(due_rows)
-        due_df["amount_due"] = pd.to_numeric(due_df["amount_due"], errors="coerce").fillna(0)
-        st.metric("Total Money Due", f"${due_df['amount_due'].sum():.2f}")
-
-        due_display = due_df.rename(columns={
-            "parent_name": "Parent",
-            "scout_name": "Scout",
-            "amount_due": "Amount Due",
-        })
-        due_display["Amount Due"] = due_display["Amount Due"].map(lambda x: f"${x:,.2f}")
-
-        st.dataframe(
-            due_display,
-            width='stretch',
-            hide_index=True,
+        parent = st.selectbox(
+            "Parent (with outstanding balance)",
+            parents_with_balance,
+            format_func=lambda p: p.parent_name
         )
-    else:
-        st.info("No outstanding paper balances by parent/scout.")
 
-    st.divider()
-    
+        # ---- Orders (multiselect) ----
+        all_orders = get_orders_for_parent(parent.parent_id, year)
+        if not all_orders:
+            st.info("No orders for this parent.")
+            return
 
-    # ---- Parent ----
-    parents_with_balance = get_parents_with_balances(year)
-    
-    if not parents_with_balance:
-        st.success("No parents have outstanding balances for paper orders.")
-        return
+        # Get all money received data in one query
+        order_ids = [o.order_id for o in all_orders]
+        money_received_cache = get_money_received_bulk(order_ids)
 
-    parent = st.selectbox(
-        "Parent (with outstanding balance)",
-        parents_with_balance,
-        format_func=lambda p: p.parent_name
-    )
+        # Calculate total owed for PAPER orders only
+        total_all_orders = Decimal("0.00")
+        total_all_received = Decimal("0.00")
+        for o in all_orders:
+            # Only count paper orders in the summary
+            if o.order_type and 'paper' in o.order_type.lower():
+                total_all_orders += Decimal(o.order_amount)
+                total_all_received += money_received_cache.get(o.order_id, Decimal("0.00"))
 
-    # ---- Orders (multiselect) ----
-    all_orders = get_orders_for_parent(parent.parent_id, year)
-    if not all_orders:
-        st.info("No orders for this parent.")
-        return
+        total_owed = total_all_orders - total_all_received
 
-    # Get all money received data in one query
-    order_ids = [o.order_id for o in all_orders]
-    money_received_cache = get_money_received_bulk(order_ids)
-
-    # Calculate total owed for PAPER orders only
-    total_all_orders = Decimal("0.00")
-    total_all_received = Decimal("0.00")
-    for o in all_orders:
-        # Only count paper orders in the summary
-        if o.order_type and 'paper' in o.order_type.lower():
-            total_all_orders += Decimal(o.order_amount)
-            total_all_received += money_received_cache.get(o.order_id, Decimal("0.00"))
-    
-    total_owed = total_all_orders - total_all_received
-    
-    # Display summary for paper orders
-    st.markdown("### Parent Summary (Paper Orders)")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Orders", f"${total_all_orders:.2f}")
-    with col2:
-        st.metric("Total Paid", f"${total_all_received:.2f}")
-    with col3:
-        st.metric("**Total Owed**", f"${total_owed:.2f}", delta=None if total_owed == 0 else f"-${total_owed:.2f}")
-    
-    st.divider()
-
-    # Filter to paper orders only
-    orders = [o for o in all_orders if o.order_type and 'paper' in o.order_type.lower()]
-    if not orders:
-        st.info("No paper orders found for this parent.")
-        return
-
-    order_choices = st.multiselect(
-        "Paper Orders",
-        orders,
-        format_func=lambda o: (
-            f"{o.order_ref} — {o.scout_name} "
-            f"(${o.order_amount:.2f}, {o.status})"
-        )
-    )
-
-    if not order_choices:
-        st.info("Select one or more orders to receive payment.")
-        return
-
-    # ---- Totals ----
-    total_due = Decimal("0.00")
-    total_received = Decimal("0.00")
-    
-    # Track totals by scout
-    scout_totals = {}
-
-    for o in order_choices:
-        rec = money_received_cache.get(o.order_id, Decimal("0.00"))
-        total_due += Decimal(o.order_amount)
-        total_received += rec
-        
-        # Track by scout
-        scout_name = o.scout_name
-        if scout_name not in scout_totals:
-            scout_totals[scout_name] = {
-                'due': Decimal("0.00"),
-                'received': Decimal("0.00"),
-                'orders': []
-            }
-        scout_totals[scout_name]['due'] += Decimal(o.order_amount)
-        scout_totals[scout_name]['received'] += rec
-        scout_totals[scout_name]['orders'].append(o)
-
-    balance = total_due - total_received
-
-    st.markdown("### Selected Orders Summary")
-    st.write(f"**Orders Selected:** {len(order_choices)}")
-    st.write(f"**Total Amount Due:** ${total_due:.2f}")
-    st.write(f"**Total Received:** ${total_received:.2f}")
-    st.write(f"**Balance Remaining:** ${balance:.2f}")
-
-    # Show breakdown by scout
-    st.markdown("#### Breakdown by Scout")
-    for scout_name, totals in scout_totals.items():
-        scout_balance = totals['due'] - totals['received']
-        col1, col2, col3, col4 = st.columns(4)
+        # Display summary for paper orders
+        st.markdown("### Parent Summary (Paper Orders)")
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.write(f"**{scout_name}**")
+            st.metric("Total Orders", f"${total_all_orders:.2f}")
         with col2:
-            st.write(f"Due: ${totals['due']:.2f}")
+            st.metric("Total Paid", f"${total_all_received:.2f}")
         with col3:
-            st.write(f"Paid: ${totals['received']:.2f}")
-        with col4:
-            st.write(f"Balance: ${scout_balance:.2f}")
+            st.metric("**Total Owed**", f"${total_owed:.2f}", delta=None if total_owed == 0 else f"-${total_owed:.2f}")
 
-    with st.expander("Order breakdown"):
+        st.divider()
+
+        # Filter to paper orders only
+        orders = [o for o in all_orders if o.order_type and 'paper' in o.order_type.lower()]
+        if not orders:
+            st.info("No paper orders found for this parent.")
+            return
+
+        order_choices = st.multiselect(
+            "Paper Orders",
+            orders,
+            format_func=lambda o: (
+                f"{o.order_ref} — {o.scout_name} "
+                f"(${o.order_amount:.2f}, {o.status})"
+            )
+        )
+
+        if not order_choices:
+            st.info("Select one or more orders to receive payment.")
+            return
+
+        # ---- Totals ----
+        total_due = Decimal("0.00")
+        total_received = Decimal("0.00")
+
+        # Track totals by scout
+        scout_totals = {}
+
         for o in order_choices:
             rec = money_received_cache.get(o.order_id, Decimal("0.00"))
-            st.write(
-                f"{o.order_ref} ({o.scout_name}) — "
-                f"Due: ${o.order_amount:.2f}, "
-                f"Received: ${rec:.2f}"
-            )
+            total_due += Decimal(o.order_amount)
+            total_received += rec
 
-    if balance <= 0:
-        st.success("All selected orders are fully paid.")
-        return
+            # Track by scout
+            scout_name = o.scout_name
+            if scout_name not in scout_totals:
+                scout_totals[scout_name] = {
+                    'due': Decimal("0.00"),
+                    'received': Decimal("0.00"),
+                    'orders': []
+                }
+            scout_totals[scout_name]['due'] += Decimal(o.order_amount)
+            scout_totals[scout_name]['received'] += rec
+            scout_totals[scout_name]['orders'].append(o)
 
-    # ---- Payment form ----
-    with st.form("receive_money"):
-        amount = Decimal(
-            str(
-                st.number_input(
-                    "Amount Received",
-                    min_value=0.0,
-                    max_value=float(balance),
-                    step=1.0
-                )
-            )
-        )
+        balance = total_due - total_received
 
-        method = st.selectbox(
-            "Payment Method",
-            ["Cash", "Check", "Digital Cookie"]
-        )
+        st.markdown("### Selected Orders Summary")
+        st.write(f"**Orders Selected:** {len(order_choices)}")
+        st.write(f"**Total Amount Due:** ${total_due:.2f}")
+        st.write(f"**Total Received:** ${total_received:.2f}")
+        st.write(f"**Balance Remaining:** ${balance:.2f}")
 
-        notes = st.text_area("Notes (optional)")
+        # Show breakdown by scout
+        st.markdown("#### Breakdown by Scout")
+        for scout_name, totals in scout_totals.items():
+            scout_balance = totals['due'] - totals['received']
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.write(f"**{scout_name}**")
+            with col2:
+                st.write(f"Due: ${totals['due']:.2f}")
+            with col3:
+                st.write(f"Paid: ${totals['received']:.2f}")
+            with col4:
+                st.write(f"Balance: ${scout_balance:.2f}")
 
-        if st.form_submit_button("Record Payment"):
-            remaining = Decimal(amount)
-
+        with st.expander("Order breakdown"):
             for o in order_choices:
-                if remaining <= 0:
-                    break
-
-                already_received = get_money_received(o.order_id)
-                order_balance = Decimal(o.order_amount) - already_received
-
-                if order_balance <= 0:
-                    continue
-
-                apply_amt = min(order_balance, remaining)
-
-                insert_money_received(
-                    parent_id=parent.parent_id,
-                    scout_id=o.scout_id,
-                    order_id=o.order_id,
-                    program_year=year,
-                    amount=apply_amt,
-                    method=method,
-                    notes=notes
+                rec = money_received_cache.get(o.order_id, Decimal("0.00"))
+                st.write(
+                    f"{o.order_ref} ({o.scout_name}) — "
+                    f"Due: ${o.order_amount:.2f}, "
+                    f"Received: ${rec:.2f}"
                 )
 
-                update_order_status_if_paid(o.order_id)
+        if balance <= 0:
+            st.success("All selected orders are fully paid.")
+            return
 
-                remaining -= apply_amt
+        # ---- Payment form ----
+        with st.form("receive_money"):
+            amount = Decimal(
+                str(
+                    st.number_input(
+                        "Amount Received",
+                        min_value=0.0,
+                        max_value=float(balance),
+                        step=1.0
+                    )
+                )
+            )
 
-            ss.payment_success = {
-                "orders": [o.order_ref for o in order_choices],
-                "amount": float(amount),
-                "method": method
-            }
+            method = st.selectbox(
+                "Payment Method",
+                ["Cash", "Check", "Digital Cookie"]
+            )
 
-            st.rerun()
+            notes = st.text_area("Notes (optional)")
+
+            if st.form_submit_button("Record Payment"):
+                remaining = Decimal(amount)
+
+                for o in order_choices:
+                    if remaining <= 0:
+                        break
+
+                    already_received = get_money_received(o.order_id)
+                    order_balance = Decimal(o.order_amount) - already_received
+
+                    if order_balance <= 0:
+                        continue
+
+                    apply_amt = min(order_balance, remaining)
+
+                    insert_money_received(
+                        parent_id=parent.parent_id,
+                        scout_id=o.scout_id,
+                        order_id=o.order_id,
+                        program_year=year,
+                        amount=apply_amt,
+                        method=method,
+                        notes=notes
+                    )
+
+                    update_order_status_if_paid(o.order_id)
+
+                    remaining -= apply_amt
+
+                ss.payment_success = {
+                    "orders": [o.order_ref for o in order_choices],
+                    "amount": float(amount),
+                    "method": method
+                }
+
+                st.rerun()
 
 
 # --------------------------------------------------

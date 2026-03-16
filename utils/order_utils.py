@@ -28,6 +28,17 @@ def _is_digital(order_type: str | None) -> bool:
     return "digital" in order_type.lower()
 
 
+def _to_bool(v) -> bool:
+    """Convert various types to boolean."""
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in {"1", "true", "t", "yes", "y"}
+    return bool(v)
+
+
 def _initial_order_window_sql() -> str:
     """
     Initial Order (IO) window rule:
@@ -337,7 +348,8 @@ def get_all_orders_wide(program_year: Optional[int] = None) -> pd.DataFrame:
             
             COALESCE(o.add_ebudde, false) AS "addEbudde",
             COALESCE(o.verified_digital, false) AS "verifiedDigitalCookie",
-            COALESCE(o.order_pickedup, false) AS "orderPickedup",
+            -- Treat order_pickedup as true if either the flag is set OR status is PICKED_UP
+            (COALESCE(o.order_pickedup, false) OR o.status = 'PICKED_UP') AS "orderPickedup",
             COALESCE(
                 o.initial_order,
                 (o.submit_dt >= make_date(o.program_year, 1, 5)
@@ -1344,11 +1356,33 @@ def admin_update_orders_bulk(updates: list[dict[str, Any]], cookie_cols: list[st
     cookie_cols = cookie_cols or []
 
     for u in updates:
+        # Sync orderStatus -> orderPickedup
         if u.get("orderStatus") == "PICKED_UP":
             u["orderPickedup"] = True
+        elif u.get("orderStatus") not in (None, "PICKED_UP") and "orderPickedup" not in u:
+            # Explicit non-PICKED_UP status change: clear the flag
+            u["orderPickedup"] = False
 
-        if u.get("orderPickedup") is True and "orderStatus" not in u:
-            u["orderStatus"] = "PICKED_UP"
+        # Sync orderPickedup -> orderStatus
+        if "orderPickedup" in u:
+            picked = _to_bool(u["orderPickedup"])
+            if picked and "orderStatus" not in u:
+                u["orderStatus"] = "PICKED_UP"
+            elif not picked:
+                # Unchecking picked-up: check if current status is PICKED_UP
+                # and revert to PRINTED if so
+                if u.get("orderStatus") == "PICKED_UP":
+                    u["orderStatus"] = "PRINTED"
+                elif "orderStatus" not in u:
+                    # Need to check current status in database
+                    oid_check = u.get("orderId")
+                    if oid_check:
+                        current = fetch_one(
+                            "SELECT status FROM cookies_app.orders WHERE order_id = :oid",
+                            {"oid": oid_check}
+                        )
+                        if current and current.status == "PICKED_UP":
+                            u["orderStatus"] = "PRINTED"
 
         oid = u.get("orderId")
         if not oid:

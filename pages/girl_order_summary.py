@@ -20,6 +20,7 @@ def decimal_sum(series):
 def main():
     require_login()
     apputils.get_last_digital_import()
+    st.warning('Note: The totals on here do not include shipped orders or booth sales.  There is a several day lag, but your total numbers will show up in Digital Cookie. ')
 
     # ---- Scout ----
     rows = get_scouts_byparent(ss.parent_id)

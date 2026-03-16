@@ -17,7 +17,9 @@ from utils.order_utils import (
 # -----------------------------
 # Configuration
 # -----------------------------
-STATUS_OPTIONS = ["NEW", "PRINTED", "IMPORTED","PICKED_UP", "CANCELLED"]
+# PICKED_UP is intentionally excluded — use the "Picked Up" checkbox to set that state.
+# The checkbox drives the status; removing it here prevents the two from getting out of sync.
+STATUS_OPTIONS = ["NEW", "PRINTED", "IMPORTED", "CANCELLED"]
 
 DEFAULT_COLUMNS = [
     "orderId",
